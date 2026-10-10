@@ -1570,7 +1570,9 @@ install_sddm() {
 #     Another theme the user picked stays
 # Only for the real home of this user (never a test's or a chroot's) and never on the author's
 # own machine. FOLLOW_SYSTEM=0 skips it.
-FOLLOW_SYSTEM="${FOLLOW_SYSTEM:-1}"
+# TrollOS: off unless asked for (FOLLOW_SYSTEM=1) — an update never changes the login shell,
+# installs packages or swaps the login screen by itself
+FOLLOW_SYSTEM="${FOLLOW_SYSTEM:-0}"
 follow_system() {
   [[ "$FOLLOW_SYSTEM" == 1 && -z "$SYSROOT" && "$OWNER_HOME" == 0 && "$DESKTOP_SHELL" == angelos ]] || return 0
   [[ "$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f6)" == "$HOME_DIR" ]] || return 0
