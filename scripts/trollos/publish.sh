@@ -46,6 +46,8 @@ for p in "${plugins[@]}"; do
   [[ -d "$PLUGINS/$p" ]] || { say "плагина $p нет в $PLUGINS — пропускаю"; continue; }
   rsync -a --delete "${skip[@]}" "$PLUGINS/$p/" "$ROOT/.config/quickshell/angelos/plugins/$p/"
 done
+# the installer expands @HOME@ in the live templates — put the placeholder back
+grep -rlF -- "$HOME/" "$ROOT/.config/quickshell/angelos/templates" | xargs -r sed -i "s#$HOME/#@HOME@/#g"
 for b in "${bins[@]}"; do
   [[ -f "$HOME/.local/bin/$b" ]] && cp -p "$HOME/.local/bin/$b" "$ROOT/.local/bin/$b"
 done
