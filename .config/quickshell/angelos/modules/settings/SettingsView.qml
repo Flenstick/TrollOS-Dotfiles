@@ -806,6 +806,19 @@ Item {
         sequences: ["Ctrl+]", "Alt+Right"]
         onActivated: win.forward()
     }
+    // TrollOS: the mouse's side buttons too, like a browser (Mouse4 back, Mouse5 forward); only
+    // those two buttons are taken, clicks and the wheel go through to the page
+    MouseArea {
+        anchors.fill: parent
+        z: 1000
+        acceptedButtons: Qt.BackButton | Qt.ForwardButton
+        onPressed: m => {
+            if (m.button === Qt.BackButton)
+                win.back();
+            else
+                win.forward();
+        }
+    }
     Shortcut {
         sequence: "Alt+Up"
         onActivated: win.goUp()
