@@ -62,7 +62,7 @@ Shape {
     ShapePath {
         fillColor: "transparent"
         strokeColor: fig.ring ? fig.tint : "transparent"
-        strokeGradient: fig.shaded && fig.ring ? fig.bands : null
+        // TrollOS: no strokeGradient — Qt 6.12 only (on 6.11 the shell failed to load)
         strokeWidth: fig.stroke
         PathAngleArc {
             centerX: fig.cx
@@ -75,7 +75,7 @@ Shape {
     ShapePath {
         fillColor: "transparent"
         strokeColor: fig.ring ? fig.tint : "transparent"
-        strokeGradient: fig.shaded && fig.ring ? fig.bands : null
+        // TrollOS: no strokeGradient — Qt 6.12 only (on 6.11 the shell failed to load)
         strokeWidth: Math.max(1, fig.stroke / 2.4)
         PathAngleArc {
             centerX: fig.cx
@@ -88,7 +88,7 @@ Shape {
     ShapePath {
         fillColor: "transparent"
         strokeColor: fig.tint
-        strokeGradient: fig.shaded ? fig.bands : null
+        // TrollOS: no strokeGradient — Qt 6.12 only (on 6.11 the shell failed to load)
         strokeWidth: fig.stroke
         joinStyle: ShapePath.MiterJoin
         capStyle: ShapePath.RoundCap

@@ -109,7 +109,7 @@ Item {
                     again.restart()
                 // a new file or new loops: from the start
                 onSourceChanged: again.stop()
-                onLoopsChanged: root.replay()
+                // TrollOS: onLoopsChanged needs Qt 6.12 (on 6.11 the widget would not load)
                 // cache before the source: the picture loads once, the right way
                 Component.onCompleted: {
                     cache = root.cached;

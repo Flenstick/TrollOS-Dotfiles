@@ -75,7 +75,7 @@ Item {
         ShapePath {
             fillColor: "transparent"
             strokeColor: root.shown > 0.002 ? root.color : "transparent"
-            strokeGradient: root.shaded && root.shown > 0.002 ? sweep : null
+            // TrollOS: no strokeGradient — it needs Qt 6.12 and on Qt 6.11 the whole shell failed to load
             strokeWidth: root.lineWidth
             capStyle: ShapePath.RoundCap
             PathAngleArc {

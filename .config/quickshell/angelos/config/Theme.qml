@@ -668,6 +668,10 @@ Singleton {
     readonly property int normal: 220
     readonly property int slow: 380
 
+    // TrollOS: Qt.escapeHtml is Qt 6.12; the same for Qt 6.11 (text into a StyledText/RichText label)
+    function escapeHtml(t) {
+        return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
     function mix(a, b, t) {
         // accepts colors or "#rrggbb" strings
         a = typeof a === "string" ? Qt.color(a) : a;

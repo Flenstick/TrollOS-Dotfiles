@@ -95,9 +95,17 @@ PanelWindow {
         id: shown
         model: rows
         filters: [
-            RegExpFilter {
-                roleName: "hay"
-                regExp: new RegExp(win.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")
+            // TrollOS: Qt 6.11 has no RegExpFilter (Qt 6.12) — the same case-insensitive match by hand
+            FunctionFilter {
+                property string q: win.query.toLowerCase()
+                onQChanged: if (typeof invalidate === "function")
+                    invalidate()
+                component RoleData: QtObject {
+                    property string hay
+                }
+                function filter(data: RoleData): bool {
+                    return q === "" || String(data.hay).toLowerCase().indexOf(q) >= 0;
+                }
             },
             ValueFilter {
                 roleName: "kind"

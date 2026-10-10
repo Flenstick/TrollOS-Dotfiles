@@ -361,7 +361,7 @@ Item {
             textFormat: Text.StyledText
             color: root.hell ? (Lyrics.current === "" || !Lyrics.playing ? (root.burning ? "#b0b0b0" : Theme.hellTextDim) : (root.burning ? "white" : Theme.hellText)) : root.barInk ? (Lyrics.current === "" || !Lyrics.playing ? Theme.hellTextDim : Theme.hellText) : (root.lyricsMode && Lyrics.current === "") || !Lyrics.playing ? Theme.textDim : Theme.text
             text: {
-                const esc = s => Qt.escapeHtml(s);
+                const esc = s => Theme.escapeHtml(s);
                 const t = root.shown;
                 return esc(t.slice(0, root.typed)) + (root.typed < t.length ? "<font color='" + Theme.hex(Theme.accent) + "'>▌</font>" : "");
             }
