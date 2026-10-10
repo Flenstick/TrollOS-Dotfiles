@@ -155,12 +155,13 @@ JsonAdapter {
         property int liveFps: 24            // 0: every frame of the screen
         property var liveOverrides: ({})   // path -> {sky, water: "on"|"off", axis: 0..1}
         // the release's name, small and see-through in a free corner (widgets/ReleaseMark)
-        property bool releaseMark: true
+        property bool releaseMark: false    // TrollOS: off (it names the angelOS release)
         property string releaseMarkCorner: "auto"   // auto | bottom-right | bottom-left | top-right | top-left
         property int releaseMarkOpacity: 35         // 10 … 80
     }
 
     property JsonObject workspaces: JsonObject {
+        property bool barNames: false       // TrollOS: the names of named workspaces under the hearts on the bar
         property string popupMode: "bar"    // bar (flash next to the hearts) | window | off
         property string popupPosition: "bottom-center"
         property bool indicator: false      // heart strip on the right edge

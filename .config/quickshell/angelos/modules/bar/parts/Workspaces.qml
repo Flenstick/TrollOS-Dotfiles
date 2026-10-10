@@ -142,7 +142,7 @@ Item {
                     }
                 }
                 PxText {
-                    visible: !!cell.modelData.name
+                    visible: Config.workspaces.barNames && !!cell.modelData.name
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: heart.bottom
                     text: cell.modelData.name || ""
