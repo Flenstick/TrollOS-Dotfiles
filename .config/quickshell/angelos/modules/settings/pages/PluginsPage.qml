@@ -21,6 +21,7 @@ PxPage {
     property string removeLog: ""
     property string confirmId: ""           // the card whose bin was clicked once ("details:<id>" — its details open)
     property string confirmUpdateId: ""
+    property string openId: ""              // TrollOS: the plugin row that is opened
     property string search: ""
     property string filter: "all"           // all | installed | updates | available
     readonly property var updateIds: CommunityPlugins.updates.map(e => e.id)
@@ -74,35 +75,38 @@ PxPage {
         icon: "package"
         width: parent.width
 
-        PxText {
+        // TrollOS: search and the filters in one row, the actions in another, the fine print short
+        Item {
             width: parent.width
-            wrapMode: Text.Wrap
-            dim: true
-            text: I18n.t("Каталог — только одобренные плагины из официального registry. Плагины работают с твоими правами; без SHA-256 в записи registry неизменность архива не подтверждена. Перед обновлением старая версия сохраняется, и если новая не загрузится, angelOS сам вернёт прежнюю.", "The catalog holds only approved plugins of the official registry. Plugins run with your user permissions; without a SHA-256 in the registry the archive cannot be verified. Before an update the old version is saved, and if the new one does not load angelOS puts the old one back by itself.")
-        }
-        PxField {
-            width: parent.width
-            icon: "search"
-            placeholder: I18n.t("Поиск по названию, автору, описанию, тегам", "Search name, author, description, tags")
-            text: page.search
-            onEdited: page.search = text
-        }
-        Flow {
-            width: parent.width
-            spacing: Theme.u * 2
-            Repeater {
-                model: [
-                    {key: "all", ru: "Все", en: "All"},
-                    {key: "installed", ru: "Установленные", en: "Installed"},
-                    {key: "updates", ru: "Обновления", en: "Updates"},
-                    {key: "available", ru: "Доступные", en: "Available"}
-                ]
-                PxButton {
-                    required property var modelData
-                    compact: true
-                    text: I18n.label({ru: modelData.ru, en: modelData.en}) + (modelData.key === "updates" && page.updateIds.length ? " (" + page.updateIds.length + ")" : "")
-                    checked: page.filter === modelData.key
-                    onClicked: page.filter = modelData.key
+            height: Math.max(searchField.height, filterRow.height)
+            PxField {
+                id: searchField
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.max(Theme.u * 80, parent.width - filterRow.width - Theme.u * 4)
+                icon: "search"
+                placeholder: I18n.t("Найти плагин", "Find a plugin")
+                text: page.search
+                onEdited: page.search = text
+            }
+            Row {
+                id: filterRow
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.u * 2
+                Repeater {
+                    model: [
+                        {key: "all", ru: "Все", en: "All"},
+                        {key: "installed", ru: "Установленные", en: "Installed"},
+                        {key: "updates", ru: "Обновления", en: "Updates"},
+                        {key: "available", ru: "Каталог", en: "Catalog"}
+                    ]
+                    PxButton {
+                        required property var modelData
+                        compact: true
+                        text: I18n.label({ru: modelData.ru, en: modelData.en}) + (modelData.key === "updates" && page.updateIds.length ? " (" + page.updateIds.length + ")" : "")
+                        checked: page.filter === modelData.key
+                        onClicked: page.filter = modelData.key
+                    }
                 }
             }
         }
@@ -110,6 +114,7 @@ PxPage {
             width: parent.width
             spacing: Theme.u * 3
             PxButton {
+                compact: true
                 icon: "refresh"
                 text: I18n.t("Проверить обновления", "Check for updates")
                 enabled: !CommunityPlugins.busy
@@ -117,26 +122,31 @@ PxPage {
             }
             PxButton {
                 visible: page.updateIds.length > 0
+                compact: true
                 accent: true
                 icon: "download"
                 text: I18n.t("Обновить все (", "Update all (") + page.updateIds.length + ")"
                 enabled: !CommunityPlugins.busy
                 onClicked: CommunityPlugins.updateAll()
             }
-            PxButton {
-                compact: true
-                icon: "external"
-                text: I18n.t("Опубликовать плагин", "Publish a plugin")
-                onClicked: Quickshell.execDetached(["xdg-open", "https://github.com/futureUnd1ground/angelos-community-registry/blob/main/CONTRIBUTING.md"])
-            }
-        }
-        SettingRow {
-            label: I18n.t("Проверять обновления раз в день", "Check for updates once a day")
-            hint: I18n.t("Придёт уведомление; обновление — по кнопке в нём или здесь", "A notification tells you; update from it or here")
             PxToggle {
+                text: I18n.t("проверять раз в день", "check once a day")
                 checked: Config.plugins.autoCheck
                 onToggled: v => Config.plugins.autoCheck = v
             }
+            PxButton {
+                compact: true
+                icon: "external"
+                text: I18n.t("Опубликовать", "Publish")
+                onClicked: Quickshell.execDetached(["xdg-open", "https://github.com/futureUnd1ground/angelos-community-registry/blob/main/CONTRIBUTING.md"])
+            }
+        }
+        PxText {
+            width: parent.width
+            wrapMode: Text.Wrap
+            kind: "tiny"
+            dim: true
+            text: (CommunityPlugins.entries.length ? I18n.t("В каталоге ", "In the catalog: ") + CommunityPlugins.entries.length + (Config.plugins.lastCheck ? I18n.t(", проверено ", ", checked ") + new Date(Config.plugins.lastCheck).toLocaleString(Qt.locale(), "d MMM HH:mm") : "") + ". " : "") + I18n.t("Только одобренные плагины; они работают с твоими правами, а при неудачном обновлении сама вернётся прежняя версия.", "Approved plugins only; they run with your permissions, and a failed update puts the old version back by itself.")
         }
         PxText {
             visible: CommunityPlugins.busy
@@ -160,14 +170,6 @@ PxPage {
             wrapMode: Text.Wrap
             text: CommunityPlugins.message + " ♡"
         }
-        PxText {
-            width: parent.width
-            wrapMode: Text.Wrap
-            kind: "tiny"
-            dim: true
-            text: (CommunityPlugins.entries.length ? I18n.t("В каталоге: ", "In the catalog: ") + CommunityPlugins.entries.length : I18n.t("Каталог ещё не загружен", "The catalog is not loaded yet"))
-                + (Config.plugins.lastCheck ? I18n.t(" · проверено ", " · checked ") + new Date(Config.plugins.lastCheck).toLocaleString(Qt.locale(), "d MMM HH:mm") : "")
-        }
     }
 
     PxGroup {
@@ -187,6 +189,8 @@ PxPage {
         Repeater {
             model: page.installedShown
             // a card: the pixel box, or a rounded group in the Mac look (SkinCard, the Theme API)
+            // TrollOS: one row per plugin — icon, name, one line about it, ⚙ and the switch on the
+            // right; a click opens the rest (the whole description, what it adds, the buttons with words)
             SkinCard {
                 id: card
                 required property var modelData
@@ -196,179 +200,248 @@ PxPage {
                 readonly property bool core: Plugins.isCore(modelData)
                 readonly property var entry: CommunityPlugins.entry(modelData.id)
                 readonly property bool canUpdate: page.updateIds.includes(modelData.id)
+                readonly property bool open: page.openId === modelData.id
+                readonly property bool failed: CommunityPlugins.failed.includes(modelData.id)
+                readonly property string warning: Plugins.themeWarning(modelData)
                 width: parent.width
-                height: cardCol.implicitHeight + Theme.u * 10
-                pixelColor: on ? Theme.mix(Theme.face, Theme.accent, 0.08) : Theme.face
+                height: head.height + (open ? more.implicitHeight + Theme.u * 4 : 0) + Theme.u * 4
+                pixelColor: rowMouse.containsMouse && !open ? Theme.mix(Theme.face, Theme.accent, 0.12) : on ? Theme.mix(Theme.face, Theme.accent, 0.06) : Theme.face
+                opacity: on || core ? 1 : 0.75
 
-                Row {
+                MouseArea {
+                    id: rowMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: page.openId = card.open ? "" : card.modelData.id
+                }
+
+                Item {
+                    id: head
                     x: Theme.u * 4
-                    y: Theme.u * 4
+                    y: Theme.u * 2
                     width: parent.width - Theme.u * 8
-                    spacing: Theme.u * 5
+                    height: Math.max(Theme.u * 16, headText.implicitHeight)
                     // its icon: the pixel one, a line icon in the Mac look
                     Item {
                         id: cardIcon
                         readonly property bool mac: Skin.mac && !Skin.hell
-                        width: mac ? GoldenGate.px(24) : pxIcon.width
-                        height: mac ? GoldenGate.px(24) : pxIcon.height
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Theme.u * 14
+                        height: Theme.u * 14
                         PxIcon {
-                            id: pxIcon
                             visible: !cardIcon.mac
+                            anchors.centerIn: parent
                             name: card.modelData.icon || "plug"
-                            pixel: Theme.u * 2
                         }
                         MacIcon {
                             visible: cardIcon.mac
+                            anchors.centerIn: parent
                             name: MacIcons.fromPixel(card.modelData.icon || "") || "puzzle"
-                            size: GoldenGate.px(24)
+                            size: GoldenGate.px(20)
                             color: Theme.accent
                         }
                     }
                     Column {
-                        id: cardCol
-                        width: parent.width - cardIcon.width - cardSide.width - parent.spacing * 2
-                        spacing: Theme.u
-                        PxText {
+                        id: headText
+                        anchors.left: cardIcon.right
+                        anchors.leftMargin: Theme.u * 4
+                        anchors.right: side.left
+                        anchors.rightMargin: Theme.u * 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.u / 2
+                        Row {
                             width: parent.width
-                            wrapMode: Text.Wrap
-                            text: I18n.label(card.modelData.name) + "  v" + (card.modelData.version || "0") + "  · " + page.originText(card.modelData)
-                            font.bold: true
-                        }
-                        // which themes it draws (manifest "themes"), and a word when not this one
-                        PluginThemeBadge {
-                            plugin: card.modelData
-                        }
-                        PxText {
-                            visible: text !== ""
-                            width: parent.width
-                            wrapMode: Text.Wrap
-                            text: Plugins.themeWarning(card.modelData)
-                            color: Theme.danger
-                            kind: "tiny"
-                        }
-                        PxText {
-                            visible: card.canUpdate
-                            text: I18n.t("Доступна версия ", "Version available: ") + (card.entry ? card.entry.version : "")
-                            color: Theme.accent
-                            kind: "tiny"
-                        }
-                        PxText {
-                            visible: CommunityPlugins.failed.includes(card.modelData.id)
-                            width: parent.width
-                            wrapMode: Text.Wrap
-                            text: I18n.t("Последнее обновление не загрузилось — оставлена прежняя версия", "The last update did not load — the earlier version stays")
-                            color: Theme.danger
-                            kind: "tiny"
+                            spacing: Theme.u * 3
+                            PxText {
+                                text: I18n.label(card.modelData.name)
+                                font.bold: true
+                                elide: Text.ElideRight
+                                width: Math.min(implicitWidth, parent.width - tags.width - parent.spacing)
+                            }
+                            PxText {
+                                id: tags
+                                anchors.verticalCenter: parent.verticalCenter
+                                kind: "tiny"
+                                color: card.canUpdate || card.failed || card.warning ? Theme.accent : Theme.textDim
+                                text: card.canUpdate ? I18n.t("есть обновление", "update available") : card.failed ? I18n.t("обновление не загрузилось", "the update failed") : card.warning ? I18n.t("не для этой темы", "not for this theme") : page.originText(card.modelData)
+                            }
                         }
                         PxText {
                             width: parent.width
                             text: I18n.label(card.modelData.description || "")
-                            wrapMode: Text.Wrap
+                            elide: Text.ElideRight
+                            maximumLineCount: 1
+                            kind: "tiny"
                             dim: true
+                            visible: !card.open && text !== ""
+                        }
+                    }
+                    Row {
+                        id: side
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.u * 3
+                        PxButton {
+                            visible: !!card.modelData.settings && card.on
+                            anchors.verticalCenter: parent.verticalCenter
+                            compact: true
+                            icon: "gear"
+                            onClicked: page.nav.settingsPage = "plugin:" + card.modelData.id
+                        }
+                        PxToggle {
+                            visible: !card.core
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: card.on
+                            onToggled: c => Plugins.setEnabled(card.modelData.id, c)
                         }
                         PxText {
-                            width: parent.width
-                            wrapMode: Text.Wrap
-                            text: page.capabilities(card.modelData) + (card.modelData.author ? "  —  " + card.modelData.author : "")
+                            visible: card.core
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: I18n.t("всегда вкл.", "always on")
                             kind: "tiny"
                             dim: true
                         }
                     }
-                    Column {
-                        id: cardSide
-                        spacing: Theme.u * 3
-                        PxToggle {
-                            visible: !card.core
-                            checked: card.on
-                            onToggled: c => Plugins.setEnabled(card.modelData.id, c)
+                }
+
+                // ---- opened: everything else ----
+                Column {
+                    id: more
+                    visible: card.open
+                    x: head.x + cardIcon.width + Theme.u * 4
+                    y: head.y + head.height + Theme.u * 2
+                    width: head.width - cardIcon.width - Theme.u * 4
+                    spacing: Theme.u * 2
+                    PxText {
+                        width: parent.width
+                        text: I18n.label(card.modelData.description || "")
+                        wrapMode: Text.Wrap
+                        dim: true
+                    }
+                    PluginThemeBadge {
+                        plugin: card.modelData
+                    }
+                    PxText {
+                        visible: card.warning !== ""
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        text: card.warning
+                        color: Theme.danger
+                        kind: "tiny"
+                    }
+                    PxText {
+                        visible: card.canUpdate
+                        text: I18n.t("Доступна версия ", "Version available: ") + (card.entry ? card.entry.version : "")
+                        color: Theme.accent
+                        kind: "tiny"
+                    }
+                    PxText {
+                        visible: card.failed
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        text: I18n.t("Последнее обновление не загрузилось — оставлена прежняя версия", "The last update did not load — the earlier version stays")
+                        color: Theme.danger
+                        kind: "tiny"
+                    }
+                    PxText {
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        kind: "tiny"
+                        dim: true
+                        text: "v" + (card.modelData.version || "0") + "  ·  " + page.originText(card.modelData) + (page.capabilities(card.modelData) ? "  ·  " + page.capabilities(card.modelData) : "") + (card.modelData.author ? "  ·  " + card.modelData.author : "")
+                    }
+                    Flow {
+                        width: parent.width
+                        spacing: Theme.u * 2
+                        PxButton {
+                            visible: card.canUpdate
+                            compact: true
+                            accent: true
+                            icon: "download"
+                            text: page.confirmUpdateId === card.modelData.id ? I18n.t("Точно?", "Sure?") : I18n.t("Обновить", "Update")
+                            enabled: !CommunityPlugins.busy
+                            onClicked: {
+                                if (page.confirmUpdateId !== card.modelData.id) {
+                                    page.confirmUpdateId = card.modelData.id;
+                                    confirmReset.restart();
+                                    return;
+                                }
+                                page.confirmUpdateId = "";
+                                CommunityPlugins.update(card.modelData.id);
+                            }
                         }
-                        Row {
-                            spacing: Theme.u * 2
-                            PxButton {
-                                visible: card.canUpdate
-                                compact: true
-                                accent: true
-                                icon: "download"
-                                text: page.confirmUpdateId === card.modelData.id ? I18n.t("Точно?", "Sure?") : I18n.t("Обновить", "Update")
-                                enabled: !CommunityPlugins.busy
-                                onClicked: {
-                                    if (page.confirmUpdateId !== card.modelData.id) {
-                                        page.confirmUpdateId = card.modelData.id;
-                                        confirmReset.restart();
-                                        return;
-                                    }
-                                    page.confirmUpdateId = "";
-                                    CommunityPlugins.update(card.modelData.id);
+                        PxButton {
+                            visible: !!card.modelData.settings && card.on
+                            compact: true
+                            icon: "gear"
+                            text: I18n.t("Настройки", "Settings")
+                            onClicked: page.nav.settingsPage = "plugin:" + card.modelData.id
+                        }
+                        PxButton {
+                            compact: true
+                            icon: "folder"
+                            text: I18n.t("Папка", "Folder")
+                            onClicked: Shell.openPath(card.modelData.dir)
+                        }
+                        PxButton {
+                            visible: !!card.entry && !!card.entry.repository
+                            compact: true
+                            icon: "external"
+                            text: I18n.t("Исходники", "Source")
+                            onClicked: Quickshell.execDetached(["xdg-open", card.entry.repository])
+                        }
+                        // your own plugins: load the files again, or improve them in Plugin Studio
+                        PxButton {
+                            visible: !card.modelData.bundled
+                            compact: true
+                            icon: "refresh"
+                            text: I18n.t("Перезагрузить", "Reload")
+                            enabled: !PluginStudio.busy
+                            onClicked: PluginStudio.reloadPlugin(card.modelData.id)
+                        }
+                        PxButton {
+                            visible: !card.modelData.bundled && Config.developer.enabled
+                            compact: true
+                            icon: "sparkle"
+                            text: I18n.t("Доработать", "Improve")
+                            onClicked: {
+                                PluginStudio.editRequest = card.modelData.id;
+                                Shell.settingsGo(page, "studio");
+                            }
+                        }
+                        // its desktop widget only knows heaven: Studio draws its hell (offered while the demon rules)
+                        PxButton {
+                            visible: Angel.hellShown && Config.developer.enabled && PluginStudio.needsHell(card.modelData)
+                            compact: true
+                            icon: "fire"
+                            text: I18n.t("Адская версия", "Hell version")
+                            enabled: !PluginStudio.busy
+                            onClicked: {
+                                PluginStudio.hellRequest = card.modelData.id;
+                                PluginStudio.editRequest = card.modelData.id;
+                                Shell.settingsGo(page, "studio");
+                            }
+                        }
+                        // remove (a second click confirms): yours go to the trash, bundled ones hide;
+                        // angelOS's own part (core) stays
+                        PxButton {
+                            readonly property bool asking: page.confirmId === card.modelData.id
+                            visible: !card.core
+                            compact: true
+                            danger: true
+                            icon: "trash"
+                            text: asking ? I18n.t("Точно удалить?", "Remove for sure?") : I18n.t("Удалить", "Remove")
+                            checked: asking
+                            onClicked: {
+                                if (!asking) {
+                                    page.confirmId = card.modelData.id;
+                                    confirmReset.restart();
+                                    return;
                                 }
-                            }
-                            PxButton {
-                                visible: !!card.modelData.settings && card.on
-                                compact: true
-                                icon: "gear"
-                                onClicked: page.nav.settingsPage = "plugin:" + card.modelData.id
-                            }
-                            PxButton {
-                                compact: true
-                                icon: "folder"
-                                onClicked: Shell.openPath(card.modelData.dir)
-                            }
-                            PxButton {
-                                visible: !!card.entry && !!card.entry.repository
-                                compact: true
-                                icon: "external"
-                                onClicked: Quickshell.execDetached(["xdg-open", card.entry.repository])
-                            }
-                            // remove (a second click confirms): yours go to the trash, bundled ones hide;
-                            // angelOS's own part (core) stays
-                            PxButton {
-                                readonly property bool asking: page.confirmId === card.modelData.id
-                                visible: !card.core
-                                compact: true
-                                danger: true
-                                icon: "trash"
-                                text: asking ? I18n.t("Точно?", "Sure?") : ""
-                                checked: asking
-                                onClicked: {
-                                    if (!asking) {
-                                        page.confirmId = card.modelData.id;
-                                        confirmReset.restart();
-                                        return;
-                                    }
-                                    page.confirmId = "";
-                                    page.removeLog = "";
-                                    Plugins.remove(card.modelData.id);
-                                }
-                            }
-                            // your own plugins: load the files again, or improve them in Plugin Studio
-                            PxButton {
-                                visible: !card.modelData.bundled
-                                compact: true
-                                icon: "refresh"
-                                enabled: !PluginStudio.busy
-                                onClicked: PluginStudio.reloadPlugin(card.modelData.id)
-                            }
-                            PxButton {
-                                visible: !card.modelData.bundled && Config.developer.enabled
-                                compact: true
-                                icon: "sparkle"
-                                text: I18n.t("Доработать", "Improve")
-                                onClicked: {
-                                    PluginStudio.editRequest = card.modelData.id;
-                                    Shell.settingsGo(page, "studio");
-                                }
-                            }
-                            // its desktop widget only knows heaven: Studio draws its hell (offered while the demon rules)
-                            PxButton {
-                                visible: Angel.hellShown && Config.developer.enabled && PluginStudio.needsHell(card.modelData)
-                                compact: true
-                                icon: "fire"
-                                text: I18n.t("Адская версия", "Hell version")
-                                enabled: !PluginStudio.busy
-                                onClicked: {
-                                    PluginStudio.hellRequest = card.modelData.id;
-                                    PluginStudio.editRequest = card.modelData.id;
-                                    Shell.settingsGo(page, "studio");
-                                }
+                                page.confirmId = "";
+                                page.removeLog = "";
+                                Plugins.remove(card.modelData.id);
                             }
                         }
                     }
