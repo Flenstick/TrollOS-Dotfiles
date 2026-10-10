@@ -72,6 +72,38 @@ Singleton {
         runner.command = ["bash", script, "--rollback"].concat(repo ? [repo] : []);
         runner.running = true;
     }
+    // TrollOS: angelOS (the original) — only where the repository has an "upstream" remote (the author's)
+    property bool hasUpstream: false
+    property int upstreamBehind: 0
+    property var upstreamIncoming: []
+    property bool upstreamChecking: false
+    function checkUpstream() {
+        if (!repo || upstreamReader.running)
+            return;
+        upstreamChecking = true;
+        upstreamReader.command = ["bash", script, "--upstream", repo];
+        upstreamReader.running = true;
+    }
+    Process {
+        id: upstreamReader
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const inc = [];
+                let has = false, n = 0;
+                for (const l of text.split("\n")) {
+                    if (l.startsWith("BEHIND ")) {
+                        has = true;
+                        n = parseInt(l.slice(7)) || 0;
+                    } else if (l.startsWith("IN "))
+                        inc.push(l.slice(3));
+                }
+                root.hasUpstream = has;
+                root.upstreamBehind = n;
+                root.upstreamIncoming = inc;
+            }
+        }
+        onExited: root.upstreamChecking = false
+    }
     function readLast() {
         if (!lastReader.running)
             lastReader.running = true;
@@ -142,6 +174,7 @@ Singleton {
             }
         }
         onExited: code => {
+            root.checkUpstream();
             root.state = code === 0 ? "idle" : "failed";
             if (code !== 0 && !root.error)
                 root.error = I18n.t("не удалось связаться с репозиторием", "could not reach the repository");

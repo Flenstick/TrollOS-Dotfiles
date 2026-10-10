@@ -12,6 +12,8 @@ PxScroll {
     default property alias items: col.data
     readonly property int innerWidth: col.width
     readonly property bool fluent: WinExtras.fluentSettings && !!Window.window && Window.window === Shell.fluentWindow
+    // TrollOS Settings: the page name is in the header next to «назад»
+    readonly property bool chrome: !fluent && !!Window.window && Window.window === Shell.settingsWindow
 
     contentHeight: col.implicitHeight + Theme.u * 10
 
@@ -23,12 +25,12 @@ PxScroll {
         spacing: root.fluent ? 28 : Theme.u * 8
 
         Column {
-            visible: root.heading !== ""
+            visible: root.heading !== "" && (!root.chrome || root.subtitle !== "")
             width: parent.width
             spacing: Theme.u
             PxText {
-                // Windows shows the page name in the window header instead
-                visible: !root.fluent
+                // Windows and the TrollOS sidebar show the page name in the window header instead
+                visible: !root.fluent && !root.chrome
                 text: root.heading
                 kind: "big"
                 color: Theme.dark ? Theme.accent : Theme.edge

@@ -10,6 +10,7 @@ Singleton {
     id: root
 
     property var settingsView: null
+    property var settingsWindow: null        // the Settings window while it has the TrollOS sidebar (not the Windows 11 skin)
     property var barViews: ({})
     property bool setupOpen: false
     signal setupStepRequested(int step)

@@ -5,6 +5,22 @@
 //   'y' accent3 (yellow)   'w' white highlight   'f' face / body
 //   'r' danger             '.' transparent
 const icons = {
+    // TrollOS: the red paint splat (logo, default avatar)
+    splat: [
+        ".rr..........",
+        ".rrr....r..rr",
+        "..rr......rrr",
+        "...rr..r.rr..",
+        ".r..rrrrrr...",
+        "..rrrrrrrr.r.",
+        "rr.rrrrrrrrr.",
+        "rrrrrrrrrrr..",
+        "...rrrrrrrr..",
+        "..rrrrrrrrrrr",
+        "..r..rrr.r.rr",
+        ".....r...r...",
+        "....rr......."
+    ],
     document: [
         "#######..",
         "#wwwww##.",

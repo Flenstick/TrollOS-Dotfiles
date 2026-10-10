@@ -41,6 +41,8 @@ Singleton {
     property alias system: adapter.system
     property alias developer: adapter.developer
     property alias settingsUi: adapter.settingsUi
+    property alias profile: adapter.profile
+    property alias screenTime: adapter.screenTime
     property alias y2k: adapter.y2k
     property alias cursor: adapter.cursor
     property alias updates: adapter.updates
@@ -338,7 +340,19 @@ Singleton {
             }
 
             property JsonObject settingsUi: JsonObject {
-                property bool expert: false         // false: home tiles, main settings only; true: every page in a sidebar
+                property bool expert: false         // false: advanced groups folded; true: every setting shown
+            }
+
+            // TrollOS: screen time per day and per app (services/ScreenTime, Settings → Экранное время)
+            property JsonObject screenTime: JsonObject {
+                property bool track: true           // count the time at the computer
+                property bool apps: true            // and which app was in focus
+            }
+
+            // TrollOS: the user's card at the top of Settings (and the Start menu avatar)
+            property JsonObject profile: JsonObject {
+                property string avatar: ""          // picture copied to ~/.config/angelos/avatar.*; "" = the splat
+                property string name: ""            // "" = the account's full name, else the login
             }
 
             property JsonObject developer: JsonObject {

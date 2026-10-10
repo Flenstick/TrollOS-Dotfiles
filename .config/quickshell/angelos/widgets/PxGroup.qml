@@ -2,7 +2,8 @@ import QtQuick
 import qs.config
 import qs.services
 
-// Win98 group box: etched frame with the title cut into the top edge.
+// Settings block (TrollOS): a raised pixel box with a hard shadow and a small
+// accent caption inside — macOS-style grouping in the system's own look.
 // `advanced` groups fold into a "▸ Дополнительно" header in the simple settings
 // view (Settings → Эксперт off); clicking the header unfolds them.
 Item {
@@ -19,28 +20,15 @@ Item {
     readonly property bool fluent: WinExtras.fluentSettings && !!Window.window && Window.window === Shell.fluentWindow
 
     implicitWidth: col.implicitWidth + Theme.pad * 2
-    implicitHeight: fluent ? (folded ? fhead.height : fhead.height + 8 + col.implicitHeight) : folded ? head.height + Theme.u * 4 : col.implicitHeight + head.height + Theme.pad * 2
+    readonly property bool hasHead: title !== "" || icon !== ""
+    readonly property int headGap: hasHead && !folded ? Theme.u * 4 : 0
+    implicitHeight: fluent ? (folded ? fhead.height : fhead.height + 8 + col.implicitHeight) : Theme.pad * 2 + (hasHead ? head.height : 0) + headGap + (folded ? 0 : col.implicitHeight)
 
-    readonly property int lineY: head.height / 2
-    readonly property int b: Math.max(1, Theme.u / 2)
-
-    // etched frame: lo line + hi line offset by one
-    Repeater {
-        model: root.fluent ? 0 : 2
-        Item {
-            required property int index
-            readonly property color c: index === 0 ? Theme.lo : Theme.hi
-            readonly property int o: index * root.b
-            x: o
-            y: root.lineY + o
-            width: root.width - root.b
-            height: root.height - root.lineY - root.b
-            Rectangle { x: 0; y: 0; width: Theme.u * 4; height: root.b; color: parent.c }
-            Rectangle { x: head.x + head.width + Theme.u * 2 - parent.o; y: 0; width: Math.max(0, parent.width - x); height: root.b; color: parent.c }
-            Rectangle { x: 0; y: 0; width: root.b; height: parent.height; color: parent.c }
-            Rectangle { x: parent.width - root.b; y: 0; width: root.b; height: parent.height; color: parent.c }
-            Rectangle { x: 0; y: parent.height - root.b; width: parent.width; height: root.b; color: parent.c }
-        }
+    PxBox {
+        visible: !root.fluent
+        anchors.fill: parent
+        color: Qt.alpha(Theme.face, Config.appearance.blur ? 0.9 : 1)
+        shadow: Config.appearance.shadows
     }
 
     Row {
@@ -83,11 +71,10 @@ Item {
     }
     Row {
         id: head
-        visible: !root.fluent
-        x: Theme.u * 6
+        visible: !root.fluent && root.hasHead
+        x: Theme.pad
+        y: Theme.pad
         spacing: Theme.u * 3
-        leftPadding: Theme.u * 2
-        rightPadding: Theme.u * 2
         PxIcon {
             visible: root.icon !== ""
             name: root.icon || "heart"
@@ -96,14 +83,13 @@ Item {
         PxText {
             visible: root.advanced && !Config.settingsUi.expert
             text: root.folded ? "▸" : "▾"
-            kind: "title"
             color: Theme.dark ? Theme.accent : Theme.edge
             anchors.verticalCenter: parent.verticalCenter
         }
         PxText {
-            text: root.title
-            kind: "title"
+            text: root.title.toUpperCase()
             color: Theme.dark ? Theme.accent : Theme.edge
+            font.letterSpacing: Theme.u / 2
             anchors.verticalCenter: parent.verticalCenter
         }
         PxText {
@@ -117,6 +103,7 @@ Item {
     MouseArea {
         visible: !root.fluent && root.advanced && !Config.settingsUi.expert
         x: head.x
+        y: head.y
         width: head.width
         height: head.height
         cursorShape: Qt.PointingHandCursor
@@ -127,7 +114,7 @@ Item {
         id: col
         visible: !root.folded
         x: root.fluent ? 0 : Theme.pad
-        y: root.fluent ? fhead.height + 8 : head.height + Theme.u * 4
+        y: root.fluent ? fhead.height + 8 : Theme.pad + (root.hasHead ? head.height : 0) + root.headGap
         width: root.width - (root.fluent ? 0 : Theme.pad * 2)
         spacing: root.fluent ? 4 : root.spacing
     }

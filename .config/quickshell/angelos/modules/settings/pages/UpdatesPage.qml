@@ -16,6 +16,7 @@ PxPage {
     Component.onCompleted: {
         Updates.find();
         Updates.readLast();
+        Updates.checkUpstream();
         if (Updates.repo && Updates.state === "idle")
             Updates.check();
     }
@@ -127,6 +128,54 @@ PxPage {
                 checked: Config.updates.autoCheck
                 onToggled: c => Config.updates.autoCheck = c
             }
+        }
+    }
+
+    // TrollOS: the original angelOS (the author's repository has it as "upstream")
+    PxGroup {
+        visible: Updates.hasUpstream
+        title: I18n.t("angelOS (оригинал)", "angelOS (the original)")
+        icon: "sparkle"
+        width: parent.width
+        SettingRow {
+            label: I18n.t("Новое у MixaDoDs", "New from MixaDoDs")
+            hint: "github.com/MixaDoDs/AngelOS-Dotfiles"
+            PxText {
+                width: parent.width
+                wrapMode: Text.Wrap
+                color: Updates.upstreamBehind ? Theme.accent : Theme.textDim
+                text: Updates.upstreamChecking ? I18n.t("проверяю…", "checking…") : Updates.upstreamBehind ? I18n.t("изменений: ", "changes: ") + Updates.upstreamBehind : I18n.t("всё уже влито ♡", "all merged ♡")
+            }
+        }
+        PxText {
+            visible: Updates.upstreamBehind > 0
+            width: parent.width
+            wrapMode: Text.Wrap
+            dim: true
+            kind: "tiny"
+            text: I18n.t("Сами они не ставятся: кнопка «Обновить» вернула бы ангела вместо TrollOS. Влить — scripts/trollos/upstream.sh merge в ~/Projects/TrollOS-Dotfiles (конфликты решаются руками).", "They are not installed by themselves: «Update» would bring the angel back. To merge: scripts/trollos/upstream.sh merge in ~/Projects/TrollOS-Dotfiles (conflicts by hand).")
+        }
+        Repeater {
+            model: Updates.upstreamIncoming.slice(0, 12)
+            PxText {
+                required property string modelData
+                width: parent.width
+                elide: Text.ElideRight
+                kind: "tiny"
+                text: "✧ " + modelData.replace(/^\S+\s/, "")
+            }
+        }
+        PxText {
+            visible: Updates.upstreamIncoming.length > 12
+            text: I18n.t("…и ещё ", "…and ") + (Updates.upstreamBehind - 12)
+            kind: "tiny"
+            dim: true
+        }
+        PxButton {
+            icon: "refresh"
+            text: I18n.t("Проверить angelOS", "Check angelOS")
+            enabled: !Updates.upstreamChecking
+            onClicked: Updates.checkUpstream()
         }
     }
 

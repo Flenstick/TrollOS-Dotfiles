@@ -9,7 +9,7 @@ PxPage {
     id: page
 
     heading: I18n.t("Что настроить?", "What would you like to change?")
-    subtitle: I18n.t("Нажми на плитку или напиши в поиске сверху своими словами — «сделать крупнее», «обои», «звук». Сложное спрятано под «Дополнительно» и кнопкой «Эксперт».", "Pick a tile or type in the search above in your own words — “bigger”, “wallpaper”, “sound”. Advanced things hide under “Advanced” and the Expert button.")
+    subtitle: I18n.t("Нажми на плитку или раздел слева, или напиши в поиске своими словами — «сделать крупнее», «обои», «звук». Сложное спрятано под «Дополнительно» и переключателем «Все настройки» внизу слева.", "Click a tile or a section on the left, or type in the search in your own words — “bigger”, “wallpaper”, “sound”. Advanced options hide under “Advanced” and the “Every setting” switch at the bottom left.")
 
     readonly property var tiles: [
         {

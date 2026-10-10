@@ -125,6 +125,10 @@ IpcHandler {
     function taskManager(): void {
         DesktopActions.launchMonitor();
     }
+    // TrollOS: today's screen time and the top apps
+    function screentime(): string {
+        return ScreenTime.status();
+    }
     function settingsPage(page: string): void {
         Shell.openSettings(page);
     }

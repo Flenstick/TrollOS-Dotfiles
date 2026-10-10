@@ -99,6 +99,14 @@ case "${1:-}" in
     touch "$d/.rolled-back"
     say "откат готов ♡ — перезапусти оболочку"
     exit 0 ;;
+  --upstream)
+    # TrollOS, the author's repository only: what MixaDoDs added to angelOS (remote "upstream")
+    cd "${2:?repo}"
+    git remote get-url upstream >/dev/null 2>&1 || { echo "NONE"; exit 0; }
+    git fetch --quiet upstream main 2>&1 || { echo "ERR fetch"; exit 1; }
+    echo "BEHIND $(git rev-list --count HEAD..upstream/main)"
+    git log --format='IN %h %cs %s' HEAD..upstream/main 2>/dev/null | cut -c1-140 | head -30 || true
+    exit 0 ;;
   --find)
     find_repo || exit 1
     exit 0 ;;

@@ -29,6 +29,8 @@ import qs.modules.bar.win
 
 // angelOS — pixel pink shell for niri.
 ShellRoot {
+    // TrollOS: screen time counts from the start, not only once its page is opened
+    readonly property bool screenTimeReady: ScreenTime.ready
     // no hot reload on save: edits land via `angelos reload` once they are checked
     settings.watchFiles: Quickshell.env("ANGELOS_DEV") === "1"
 

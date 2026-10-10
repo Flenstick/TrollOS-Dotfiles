@@ -150,6 +150,11 @@ Item {
             "title": I18n.t("Система", "System"),
             "pages": [
                 {
+                    "id": "screentime",
+                    "label": I18n.t("Экранное время", "Screen time"),
+                    "icon": "gauge"
+                },
+                {
                     "id": "defaults",
                     "label": I18n.t("По умолчанию", "Default apps"),
                     "icon": "star"
@@ -209,15 +214,10 @@ Item {
             })).filter(g => g.pages.length > 0)
     readonly property var allPages: visibleGroups.reduce((a, g) => a.concat(g.pages), [])
     readonly property var currentPage: allPages.find(p => p.id === Shell.settingsPage) || null
-    // simple view: home tiles + main settings (advanced groups folded); expert: every page in the sidebar
+    // simple view: advanced groups of a page folded; expert: every setting shown
     readonly property bool expert: Config.settingsUi.expert
-    readonly property bool atHome: !expert && (Shell.settingsPage === "home" || Shell.settingsPage === "more")
     function setExpert(on) {
         Config.settingsUi.expert = on;
-        if (on && (Shell.settingsPage === "home" || Shell.settingsPage === "more"))
-            Shell.settingsPage = "appearance";
-        else if (!on)
-            Shell.settingsPage = "home";
     }
 
     // ---- search (services/SettingsSearch) ----
@@ -368,14 +368,73 @@ Item {
         onActivated: search.focusField()
     }
 
+    // ================= TrollOS: macOS-style layout in the system's pixel look =================
+    // left: search, the profile card, every page with a coloured tile; right: a
+    // header with «назад» and the page name over the page itself.
+    Binding {
+        target: Shell
+        property: "settingsWindow"
+        value: win.Window.window
+        when: !win.fluent
+        restoreMode: Binding.RestoreValue
+    }
+    readonly property var tileColors: ({
+            "appearance": "#e8262f", "fonts": "#6a5f64", "wallpaper": "#3a7bff", "capture": "#20a8c0",
+            "cursor": "#6a5f64", "widgets": "#ff7a2f", "layouts": "#8f4dff", "bar": "#6a5f64",
+            "workspaces": "#8f4dff", "lyrics": "#ff3d7a", "y2k": "#ff4fb0",
+            "monitor": "#3a7bff", "keyboard": "#6a5f64", "shortcuts": "#6a5f64", "windows": "#3a7bff",
+            "sound": "#ff3d7a", "network": "#3a7bff", "bluetooth": "#3a7bff", "gamepad": "#2fbf6b",
+            "defaults": "#e0a020", "notifications": "#ff6a2f", "plugins": "#2fbf6b", "studio": "#8f4dff",
+            "dotfiles": "#6a5f64", "lock": "#6a5f64", "updates": "#6a5f64", "system": "#6a5f64",
+            "screentime": "#7b4dff"
+        })
+    function tileColor(id) {
+        return tileColors[id] || (String(id).startsWith("plugin:") ? "#2fbf6b" : "#6a5f64");
+    }
+    readonly property string pageTitle: Shell.settingsPage === "profile" ? I18n.t("Профиль", "Profile") : win.currentPage ? win.currentPage.label : Shell.settingsPage === "more" ? I18n.t("Все разделы", "All sections") : I18n.t("Главная", "Home")
+    // «назад»: the pages opened before, newest last
+    property var history: []
+    property string lastPage: Shell.settingsPage
+    property bool goingBack: false
+    Connections {
+        target: Shell
+        function onSettingsPageChanged() {
+            if (!win.goingBack && win.lastPage && win.lastPage !== Shell.settingsPage)
+                win.history = win.history.concat([win.lastPage]).slice(-30);
+            win.goingBack = false;
+            win.lastPage = Shell.settingsPage;
+        }
+    }
+    function back() {
+        const h = history.slice();
+        const p = h.pop() || "home";
+        goingBack = true;
+        history = h;
+        Shell.settingsPage = p;
+    }
+    // account name for the profile card: Settings → Профиль, else the passwd full name, else the login
+    property string accountName: WinStyle.userName
+    readonly property string displayName: Config.profile.name || accountName
+    Process {
+        running: true
+        command: ["getent", "passwd", WinStyle.userName]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const g = (text.split(":")[4] || "").split(",")[0].trim();
+                if (g)
+                    win.accountName = g;
+            }
+        }
+    }
+
     PxWindow {
         id: frame
         visible: !win.fluent
         anchors.fill: parent
         anchors.rightMargin: Config.appearance.shadows ? Theme.u * 2 : 0
         anchors.bottomMargin: Config.appearance.shadows ? Theme.u * 2 : 0
-        title: "angelOS · " + (win.currentPage ? win.currentPage.label : Shell.settingsPage === "more" ? I18n.t("Все разделы", "All sections") : I18n.t("Настройки", "Settings"))
-        icon: win.currentPage ? win.currentPage.icon : "gear"
+        title: "TrollOS · " + I18n.t("Настройки", "Settings")
+        icon: "splat"
         minimizable: false
         maximizable: true
         onCloseClicked: Shell.settingsOpen = false
@@ -383,32 +442,28 @@ Item {
             win.hostWindow.maximized = !win.hostWindow.maximized
         onTitlePressed: if (win.hostWindow)
             win.hostWindow.startSystemMove()
-        bodyPadding: Theme.u * 4
+        bodyPadding: 0
 
-        // sidebar (expert view)
-        PxBox {
+        // ---- sidebar ----
+        Rectangle {
             id: sidebar
-            visible: win.expert
-            width: Theme.u * 95
+            width: Theme.u * 118
             height: parent.height
-            sunken: true
-            color: Qt.alpha(Theme.sunken, 0.55)
-        }
-
-        // search box and results: in the sidebar (expert) or above the page (simple)
-        Item {
-            id: searchArea
-            parent: win.expert ? sidebar : pageBox
-            anchors.fill: parent
-            z: 5
+            color: Qt.alpha(Theme.sunken, Config.appearance.blur ? 0.6 : 1)
+            Rectangle {
+                anchors.right: parent.right
+                width: Theme.u
+                height: parent.height
+                color: Theme.edge
+            }
 
             PxField {
                 id: search
-                x: win.expert ? Theme.u * 2 : homeBtn.x + (homeBtn.visible ? homeBtn.width + Theme.u * 3 : 0)
-                y: Theme.u * 2
-                width: win.expert ? parent.width - Theme.u * 4 : expertBtn.x - x - Theme.u * 3
+                x: Theme.u * 5
+                y: Theme.u * 5
+                width: parent.width - Theme.u * 11
                 icon: "search"
-                placeholder: I18n.t("Поиск настроек…", "Search settings…")
+                placeholder: I18n.t("Поиск", "Search")
                 onEdited: {
                     win.query = text;
                     win.sel = 0;
@@ -441,37 +496,212 @@ Item {
                     opacity: 0.8
                 }
             }
-            PxText {
-                visible: win.ghost !== "" && search.input.activeFocus
-                anchors.top: search.bottom
-                anchors.right: search.right
-                anchors.topMargin: Theme.u
-                text: "Tab ↹ " + search.text + win.ghost
-                kind: "tiny"
-                dim: true
-                width: search.width
-                horizontalAlignment: Text.AlignRight
-                elide: Text.ElideLeft
+
+            // the user's card: avatar and name; opens Профиль
+            PxBox {
+                id: profileCard
+                readonly property bool sel: Shell.settingsPage === "profile"
+                x: Theme.u * 5
+                y: search.y + search.height + Theme.u * 5
+                width: parent.width - Theme.u * 11
+                height: Theme.u * 29
+                color: sel ? Theme.mix(Theme.face, Theme.accent, 0.25) : pm.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.12) : Theme.face
+                shadow: Config.appearance.shadows
+                TrollAvatar {
+                    id: avatar
+                    x: Theme.u * 3
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: Theme.u * 22
+                    // «+»: change the picture
+                    Rectangle {
+                        x: parent.width - width + Theme.u * 3
+                        y: parent.height - height + Theme.u * 3
+                        width: Theme.u * 8
+                        height: Theme.u * 8
+                        color: Theme.accent
+                        border.width: Theme.u
+                        border.color: Theme.edge
+                        PxIcon {
+                            anchors.centerIn: parent
+                            name: "plus"
+                            pixel: 1
+                            ink: "#ffffff"
+                            fill: "#ffffff"
+                        }
+                    }
+                }
+                Column {
+                    anchors.left: avatar.right
+                    anchors.leftMargin: Theme.u * 5
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.u * 2
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.u
+                    PxText {
+                        width: parent.width
+                        text: win.displayName
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+                    PxText {
+                        width: parent.width
+                        text: I18n.t("Профиль и аватарка", "Profile and picture")
+                        kind: "tiny"
+                        dim: true
+                        elide: Text.ElideRight
+                    }
+                }
+                MouseArea {
+                    id: pm
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Shell.settingsPage = "profile"
+                }
             }
 
-            // results
-            Rectangle {
-                visible: !win.expert && resultsBox.visible
-                anchors.fill: parent
-                anchors.topMargin: search.height + Theme.u * 6
-                color: Theme.face
+            // every page, the groups split by a gap (no headings, like macOS)
+            PxScroll {
+                id: navScroll
+                visible: win.query.trim() === ""
+                x: Theme.u * 4
+                y: profileCard.y + profileCard.height + Theme.u * 6
+                width: parent.width - Theme.u * 9
+                height: parent.height - y - Theme.u * 2
+                contentHeight: side.implicitHeight + Theme.u * 4
+
+                Column {
+                    id: side
+                    width: navScroll.width - Theme.u * 4
+                    spacing: Theme.u * 4
+
+                    Repeater {
+                        model: win.visibleGroups
+                        Column {
+                            id: grp
+                            required property var modelData
+                            width: side.width
+                            spacing: 0
+                            Repeater {
+                                model: grp.modelData.pages
+                                Item {
+                                    id: entry
+                                    required property var modelData
+                                    readonly property bool sel: Shell.settingsPage === modelData.id
+                                    width: grp.width
+                                    height: Theme.u * 18
+                                    PxBox {
+                                        anchors.fill: parent
+                                        visible: entry.sel
+                                        color: Theme.accent
+                                        hiColor: Theme.mix(Theme.accent, "#ffffff", 0.35)
+                                        loColor: Theme.mix(Theme.accent, "#000000", 0.45)
+                                        shadow: Config.appearance.shadows
+                                    }
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        visible: !entry.sel && em.containsMouse
+                                        color: Theme.mix(Theme.face, Theme.accent, 0.12)
+                                    }
+                                    PxBox {
+                                        id: tile
+                                        x: Theme.u * 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: Theme.u * 15
+                                        height: Theme.u * 15
+                                        readonly property color c: win.tileColor(entry.modelData.id)
+                                        color: c
+                                        hiColor: Theme.mix(c, "#ffffff", 0.3)
+                                        loColor: Theme.mix(c, "#000000", 0.35)
+                                        PxIcon {
+                                            anchors.centerIn: parent
+                                            name: entry.modelData.icon
+                                            // icons are drawn opaque: the fills are the tile tinted lighter
+                                            readonly property color soft: Theme.mix(tile.c, "#ffffff", 0.22)
+                                            ink: "#ffffff"
+                                            light: Theme.mix(tile.c, "#ffffff", 0.6)
+                                            fill: soft
+                                            fill2: soft
+                                            fill3: soft
+                                            body: soft
+                                            bad: soft
+                                        }
+                                    }
+                                    PxText {
+                                        anchors.left: tile.right
+                                        anchors.leftMargin: Theme.u * 4
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: Theme.u * 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        elide: Text.ElideRight
+                                        text: entry.modelData.label
+                                        color: entry.sel ? Theme.selectText : Theme.text
+                                        font.bold: entry.sel
+                                    }
+                                    MouseArea {
+                                        id: em
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: Shell.settingsPage = entry.modelData.id
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // simple/expert: advanced settings folded or all shown
+                    Item {
+                        width: side.width
+                        height: Theme.u * 18
+                        Rectangle {
+                            width: parent.width
+                            height: Theme.u
+                            color: Qt.alpha(Theme.edge, 0.6)
+                        }
+                        PxText {
+                            x: Theme.u * 3
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - expertToggle.width - Theme.u * 8
+                            text: I18n.t("Все настройки (эксперт)", "Every setting (expert)")
+                            kind: "tiny"
+                            dim: true
+                            elide: Text.ElideRight
+                        }
+                        PxToggle {
+                            id: expertToggle
+                            anchors.right: parent.right
+                            anchors.rightMargin: Theme.u * 2
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: Config.settingsUi.expert
+                            onToggled: c => win.setExpert(c)
+                        }
+                    }
+                }
             }
+
+            // search results in place of the page list
             PxScroll {
                 id: resultsBox
                 visible: win.query.trim() !== ""
-                anchors.fill: parent
-                anchors.margins: Theme.u * 2
-                anchors.topMargin: search.height + Theme.u * 10
+                x: Theme.u * 4
+                y: profileCard.y
+                width: parent.width - Theme.u * 9
+                height: parent.height - y - Theme.u * 2
                 contentHeight: resultCol.implicitHeight
                 Column {
                     id: resultCol
                     width: parent.width
                     spacing: Theme.u
+                    PxText {
+                        visible: win.ghost !== "" && search.input.activeFocus
+                        width: parent.width
+                        text: "Tab ↹ " + search.text + win.ghost
+                        kind: "tiny"
+                        dim: true
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideLeft
+                    }
                     PxText {
                         visible: win.results.length === 0
                         width: parent.width
@@ -533,152 +763,67 @@ Item {
             }
         }
 
-        // expert sidebar: every page
-        PxScroll {
-            parent: sidebar
-            visible: win.query.trim() === ""
-            anchors.fill: parent
-            anchors.margins: Theme.u * 2
-            anchors.topMargin: search.height + Theme.u * 4
-            contentHeight: side.implicitHeight
-
-            Column {
-                id: side
+        // ---- header: «назад» and the page name ----
+        Rectangle {
+            id: header
+            anchors.left: sidebar.right
+            anchors.right: parent.right
+            height: Theme.u * 20
+            color: Qt.alpha(Theme.sunken, Config.appearance.blur ? 0.45 : 1)
+            Rectangle {
+                anchors.bottom: parent.bottom
                 width: parent.width
-                spacing: Theme.u
-
-                // back to the simple view
-                Rectangle {
-                    width: side.width
-                    height: Theme.u * 15
-                    color: sm.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.15) : "transparent"
-                    Row {
-                        anchors.left: parent.left
-                        anchors.leftMargin: Theme.u * 4
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.u * 4
-                        PxIcon {
-                            name: "grid"
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        PxText {
-                            text: I18n.t("Простой вид", "Simple view")
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
-                    MouseArea {
-                        id: sm
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: win.setExpert(false)
-                    }
-                }
-
-                Repeater {
-                    model: win.visibleGroups
-                    Column {
-                        id: grp
-                        required property var modelData
-                        width: side.width
-                        spacing: Theme.u
-                        PxText {
-                            text: "✧ " + grp.modelData.title
-                            kind: "tiny"
-                            dim: true
-                            topPadding: Theme.u * 4
-                            leftPadding: Theme.u * 3
-                            bottomPadding: Theme.u
-                        }
-                        Repeater {
-                            model: grp.modelData.pages
-                            Rectangle {
-                                id: entry
-                                required property var modelData
-                                readonly property bool sel: Shell.settingsPage === modelData.id
-                                width: grp.width
-                                height: Theme.u * 15
-                                color: sel ? Theme.select : em.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.15) : "transparent"
-                                Row {
-                                    anchors.left: parent.left
-                                    anchors.leftMargin: Theme.u * 4
-                                    anchors.verticalCenter: parent ? parent.verticalCenter : undefined
-                                    spacing: Theme.u * 4
-                                    PxIcon {
-                                        name: entry.modelData.icon
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        ink: entry.sel ? Theme.selectText : (Theme.dark ? Theme.text : Theme.edge)
-                                    }
-                                    PxText {
-                                        width: entry.width - Theme.u * 24
-                                        elide: Text.ElideRight
-                                        text: entry.modelData.label
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        color: entry.sel ? Theme.selectText : Theme.text
-                                        font.bold: entry.sel
-                                    }
-                                }
-                                MouseArea {
-                                    id: em
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: Shell.settingsPage = entry.modelData.id
-                                }
-                            }
-                        }
-                    }
-                }
+                height: Theme.u
+                color: Theme.edge
+            }
+            PxButton {
+                id: hdrBack
+                x: Theme.u * 6
+                anchors.verticalCenter: parent.verticalCenter
+                compact: true
+                icon: "arrowLeft"
+                enabled: win.history.length > 0 || Shell.settingsPage !== "home"
+                onClicked: win.back()
+            }
+            PxText {
+                anchors.left: hdrBack.right
+                anchors.leftMargin: Theme.u * 5
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.u * 10
+                anchors.verticalCenter: parent.verticalCenter
+                text: win.pageTitle
+                kind: "title"
+                color: Theme.dark ? Theme.accent : Theme.edge
+                style: Theme.dark ? Text.Raised : Text.Normal
+                styleColor: Theme.edge
+                elide: Text.ElideRight
             }
         }
 
-        // page
-        PxBox {
+        // ---- page ----
+        Item {
             id: pageBox
-            anchors.left: win.expert ? sidebar.right : parent.left
-            anchors.leftMargin: win.expert ? Theme.u * 4 : 0
+            anchors.left: sidebar.right
             anchors.right: parent.right
-            height: parent.height
-            sunken: true
-            color: Qt.alpha(Theme.face, Config.appearance.blur ? 0.55 : 1)
-
-            // simple view header: home, (search), expert
-            PxButton {
-                id: homeBtn
-                visible: !win.expert && Shell.settingsPage !== "home"
-                x: Theme.u * 2
-                y: Theme.u * 2
-                height: search.height
-                compact: true
-                icon: "arrowLeft"
-                text: I18n.t("Главная", "Home")
-                onClicked: Shell.settingsPage = "home"
-            }
-            PxButton {
-                id: expertBtn
-                visible: !win.expert
-                x: parent.width - width - Theme.u * 2
-                y: Theme.u * 2
-                height: search.height
-                compact: true
-                icon: "gear"
-                text: I18n.t("Эксперт", "Expert")
-                onClicked: win.setExpert(true)
-            }
+            anchors.top: header.bottom
+            anchors.bottom: parent.bottom
 
             Loader {
                 id: page
                 parent: win.fluent ? fpage : pageBox
                 anchors.fill: parent
-                anchors.margins: win.fluent ? 0 : Theme.u * 3
-                anchors.topMargin: win.fluent ? 0 : win.expert ? Theme.u * 3 : search.height + Theme.u * 6
+                anchors.margins: win.fluent ? 0 : Theme.u * 4
                 active: win.hostWindow ? win.hostWindow.visible : true
                 onLoaded: if (win.pendingTarget)
                     targetTimer.restart()
                 source: {
                     const id = Shell.settingsPage;
-                    if (id === "home" || id === "more")
-                        return win.expert && !win.fluent ? "pages/AppearancePage.qml" : id === "home" ? "pages/HomePage.qml" : "pages/MorePage.qml";
+                    if (id === "home")
+                        return "pages/HomePage.qml";
+                    if (id === "more")
+                        return "pages/MorePage.qml";
+                    if (id === "profile")
+                        return "pages/ProfilePage.qml";
                     if (id.startsWith("plugin:"))
                         return "pages/PluginSettingsPage.qml";
                     if (id === "dotfiles")
