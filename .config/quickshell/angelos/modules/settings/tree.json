@@ -484,13 +484,13 @@
       ]
     },
     {
-      "id": "desktop",
-      "ru": "Рабочий стол",
-      "en": "Desktop",
+      "id": "layouts",
+      "ru": "Раскладки",
+      "en": "Layouts",
       "icon": "grid",
-      "tint": "#7a5ce0",
-      "hintRu": "панель задач, Пуск, виджеты, меню правой кнопки, лирика",
-      "hintEn": "the taskbar, Start, widgets, the right-click menu, lyrics",
+      "tint": "#8f4dff",
+      "hintRu": "система целиком как Windows 11, macOS, Ubuntu… (TrollOS)",
+      "hintEn": "the whole desktop like Windows 11, macOS, Ubuntu… (TrollOS)",
       "pages": [
         {
           "id": "layouts",
@@ -502,7 +502,18 @@
           "blocks": [
             "layouts"
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "desktop",
+      "ru": "Рабочий стол",
+      "en": "Desktop",
+      "icon": "grid",
+      "tint": "#7a5ce0",
+      "hintRu": "панель задач, Пуск, виджеты, меню правой кнопки, лирика",
+      "hintEn": "the taskbar, Start, widgets, the right-click menu, lyrics",
+      "pages": [
         {
           "id": "taskbar",
           "ru": "Панель задач",
