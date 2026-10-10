@@ -21,6 +21,8 @@ Singleton {
     readonly property bool ready: file.loaded || newConfig
     property alias appearance: adapter.appearance
     property alias bar: adapter.bar
+    property alias dock: adapter.dock
+    property alias win: adapter.win
     property alias wallpaper: adapter.wallpaper
     property alias workspaces: adapter.workspaces
     property alias lyrics: adapter.lyrics
@@ -110,7 +112,7 @@ Singleton {
             }
 
             property JsonObject bar: JsonObject {
-                property string style: "taskbar"    // taskbar | top | island
+                property string style: "taskbar"    // taskbar | top | island | windows
                 property var screens: []            // empty = every screen
                 property bool compactOnVertical: true
                 property bool showWindows: true
@@ -122,7 +124,7 @@ Singleton {
                 property bool allWindows: false     // taskbar: every window, not only current workspace
                 property bool showMedia: true
                 property bool showSeconds: false
-                property string startLabel: "angelOS"
+                property string startLabel: "TrollOS"
                 property string startStyle: "classic" // classic (Win98 list) | win11 (centred, pinned grid) | fullscreen (iPhone-like app grid)
                 property var startPinned: []        // desktop entry ids pinned in Start
                 property string startAlign: "auto" // auto (classic at the button, win11 centred) | left | center | right
@@ -139,11 +141,46 @@ Singleton {
                 property string taskRightClick: "menu" // menu (window menu with Close) | close (closes at once) | none
                 property bool taskMiddleClose: true // middle click on a window button closes the window
                 property bool taskHoverClose: false // × on the hovered window button
+                property bool floating: false       // taskbar: a floating panel with gaps around it
+                property string layoutPreset: "default" // Settings → Раскладки: default | macos | win11 | compact | ubuntu | classic | chromeos | elementary | cinnamon
+                property var layoutSaved: ({})      // the user's own layout, kept while a preset is on
+            }
+
+            // bar.style "windows" + bar.startStyle "windows": a Windows 11 look-alike (modules/bar/win)
+            property JsonObject win: JsonObject {
+                property string accent: "windows"   // windows (Windows blue) | theme (angelOS accent)
+                property string align: "center"     // center | left — taskbar icons and Start
+                property var pinned: []             // taskbar apps (desktop ids); empty = most used
+                property var order: []              // taskbar order (app keys), set by dragging icons
+                property var startPinned: []        // Start "Закреплено" (desktop ids); empty = most used
+                property bool search: true          // search button on the taskbar
+                property bool taskView: true        // task view button (niri overview)
+                property bool lyrics: false         // song line at the left, where Windows keeps Widgets
+                property bool recommended: true     // Start: recently opened files and new apps
+                property bool gradient: false       // Windows 11 "Bloom" gradient wallpaper (dark/light follows the theme)
+                property string icons: "angelos"    // windows (Win11 icon theme) | angelos (your icons)
+                property bool settingsSkin: false   // angelOS Settings drawn like Windows 11 "Параметры"
+                property bool snip: false           // screenshots like the Snipping Tool (angelos-snip)
+                property bool altTab: true          // Windows-style Alt+Tab instead of niri's (cfg/win-alttab.kdl)
+                property bool edgeResize: true      // drag the focused window's edges / corners to resize it
+                property bool offered: false        // the "make it like Windows?" question was answered
+                property var savedWallpaper: ({})   // what to put back when the layout is left
+                property string savedIconTheme: ""
+            }
+
+            property JsonObject dock: JsonObject {
+                property bool enabled: false
+                property string position: "bottom"  // bottom (floating, centred) | left (full height strip)
+                property var pinned: []             // desktop entry ids; empty = most used apps
+                property int size: 22               // icon size, art pixels
+                property bool magnify: true         // icons grow under the pointer (bottom dock)
+                property bool appsButton: true      // grid button that opens Start
+                property bool running: true         // also show running apps that are not pinned
             }
 
             property JsonObject wallpaper: JsonObject {
                 property string dir: "~/Pictures"
-                property string fallback: ""
+                property string fallback: "~/Pictures/wallpapers/TrollOS/trollos-dark.png"
                 property var outputs: ({})          // "DP-1" -> path
                 property var workspaces: ({})       // "DP-1:2" -> path
                 property string transition: "mosaic-dither" // mosaic-dither | mosaic | dither | none (only when the picture changes)

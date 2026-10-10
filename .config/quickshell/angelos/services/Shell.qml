@@ -43,6 +43,13 @@ Singleton {
     readonly property bool demo: Quickshell.env("ANGELOS_DEMO") === "1"
     property var desktopMenus: ({})   // screen name -> DesktopMenu
     property string launcherText: ""
+    // a plugin that opens from the lyrics line (dynamic-island): {toggle(item, screen), dragEnter(item, screen)}
+    property var lyricsHook: null
+    property var lyricsItems: ({})   // screen name -> BarLyrics, the island grows from it
+    // screen name -> Item inside the wallpaper surface, above the picture and below
+    // the desktop widgets: plugins parent their "live wallpaper" items here instead
+    // of opening their own background surface (which would cover the widgets)
+    property var wallpaperSlots: ({})
     // plays the workspace heart animation on the bars without switching (settings preview, `angelos heartDemo`)
     signal heartDemo(int from, int to)
 
@@ -54,6 +61,8 @@ Singleton {
     // ---- Start menu: a layer-shell overlay per screen (xdg popups opened without
     // a click are dismissed by the compositor, so Meta taps could not use them) ----
     property string startScreen: ""          // screen whose Start menu is open
+    property var fluentWindow: null          // the Settings window while it is drawn like Windows 11 (WinSettingsView)
+    property string startWarm: ""            // Windows copy: pointer on Start — map the menu's layer ahead of the click
     property var startButtons: ({})          // screen -> {item, window} of its Start button
     function registerStartButton(screen, item, window) {
         const m = Object.assign({}, startButtons);

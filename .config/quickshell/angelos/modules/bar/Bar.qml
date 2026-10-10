@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import qs.config
 import qs.services
+import qs.modules.bar.win
 
 // One bar per screen; style picks the window flavour.
 Variants {
@@ -28,6 +29,19 @@ Variants {
         LazyLoader {
             active: Config.bar.style === "island"
             IslandWindow {
+                modelData: scope.modelData
+            }
+        }
+        LazyLoader {
+            active: Config.bar.style === "windows"
+            WinTaskbar {
+                modelData: scope.modelData
+            }
+        }
+        // macOS / Ubuntu / elementary layouts (Settings → Раскладки)
+        LazyLoader {
+            active: Config.dock.enabled
+            DockWindow {
                 modelData: scope.modelData
             }
         }

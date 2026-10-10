@@ -10,7 +10,8 @@
 # *.bak.<date>; the current keyboard layouts are passed through so they survive.
 set -Eeuo pipefail
 say() { printf '» %s\n' "$*"; }
-OFFICIAL="https://github.com/MixaDoDs/PixelStreetArt_Dotfiles_Niri"
+# TrollOS: updates come from the TrollOS fork, not from upstream angelOS
+OFFICIAL="https://github.com/Flenstick/TrollOS-Dotfiles"
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/angelos"
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
 
@@ -34,7 +35,7 @@ find_repo() {
     r="$(sed -n 's/^repo=//p' "$marker" | head -1)"
     is_repo "$r" && { printf '%s\n' "$r"; return 0; }
   fi
-  for r in "$HOME/PixelStreetArt_Dotfiles_Niri" "${XDG_DATA_HOME:-$HOME/.local/share}/angelos/dotfiles" \
+  for r in "$HOME/TrollOS-Dotfiles" "$HOME/Projects/TrollOS-Dotfiles" "$HOME/PixelStreetArt_Dotfiles_Niri" "${XDG_DATA_HOME:-$HOME/.local/share}/angelos/dotfiles" \
            "$HOME/Projects/PixelStreetArt_Dotfiles_Niri" "$HOME/.dotfiles/PixelStreetArt_Dotfiles_Niri"; do
     is_repo "$r" && { printf '%s\n' "$r"; return 0; }
   done

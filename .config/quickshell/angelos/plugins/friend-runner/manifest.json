@@ -1,0 +1,17 @@
+{
+  "id": "friend-runner",
+  "name": "Друг в сети",
+  "version": "1.0.0",
+  "author": "flen",
+  "description": "Когда друг заходит в Discord, внизу экрана пробегает пиксельный человечек с его аватаркой и ником (и перепрыгивает остров). Клик по нему — открыть Discord. Сигнал присылает плагин AngelosFriends в Equicord (~/Projects/equicord). Застрелил из тира того, кто в войсе, — его кикает из голосового канала; IPC `friends voice` выпускает всех из твоего войса.",
+  "icon": "heart",
+  "enabledByDefault": true,
+  "main": "Main.qml",
+  "menu": [
+    {
+      "label": "Друг в сети: тестовый забег",
+      "icon": "heart",
+      "exec": "qs -c angelos ipc call friends test"
+    }
+  ]
+}

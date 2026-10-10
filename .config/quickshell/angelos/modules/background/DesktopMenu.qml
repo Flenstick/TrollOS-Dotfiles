@@ -6,6 +6,7 @@ import Quickshell.Wayland
 import qs.config
 import qs.services
 import qs.widgets
+import qs.modules.bar.win
 
 // Right-click desktop menu, laid out like Windows 11: signed quick actions on top
 // (terminal, files, task manager, wallpaper, settings), then Вид ▸ / Создать ▸ /
@@ -24,6 +25,22 @@ PopupWindow {
     // right-click shows the menu once, where it was asked for last.
     property bool reopening: false
     function openAt(x, y) {
+        // Windows 11 layout: the Windows desktop menu; "Показать дополнительные параметры" → this one
+        if (Config.bar.style === "windows" && !pixelOnce) {
+            close();
+            winMenu.anchor.rect.x = x;
+            winMenu.anchor.rect.y = y;
+            if (winMenu.visible) {
+                winMenu.visible = false;
+                Qt.callLater(() => {
+                    winMenu.anchor.updateAnchor();
+                    winMenu.visible = true;
+                });
+            } else
+                winMenu.visible = true;
+            return;
+        }
+        pixelOnce = false;
         px = x;
         py = y;
         sub.visible = false;
@@ -45,6 +62,7 @@ PopupWindow {
             visible = true;
         });
     }
+    property bool pixelOnce: false
     function close() {
         reopening = false;
         sub.visible = false;
@@ -229,6 +247,100 @@ PopupWindow {
         item: frame
     }
 
+    Timer {
+        id: subRetry
+        property string name: ""
+        interval: 200
+        onTriggered: if (winMenu.visible)
+            root.openSub(name)
+    }
+    readonly property string desktopDir: Quickshell.env("HOME") + "/Рабочий стол"
+    WinCascadeMenu {
+        id: winMenu
+        anchor.window: root.parentWindow
+        items: [
+            {
+                "label": I18n.t("Вид", "View"),
+                "icon": "grid-regular",
+                "sub": root.viewItems
+            },
+            {
+                "label": I18n.t("Обои", "Wallpaper"),
+                "icon": "image-regular",
+                "sub": root.wallpaperItems
+            },
+            {
+                "label": I18n.t("Обновить", "Refresh"),
+                "icon": "arrow_clockwise-regular",
+                "run": () => {
+                    Wallpapers.scan();
+                    Plugins.reload();
+                }
+            },
+            {
+                "separator": true
+            },
+            {
+                "label": I18n.t("Вставить", "Paste"),
+                "icon": "copy-regular",
+                // files copied in a file manager land on the Desktop folder
+                "run": () => Shell.exec(["sh", "-c", 'd="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"; mkdir -p "$d"; wl-paste -n -t text/uri-list 2>/dev/null | tr -d "\r" | sed -n "s#^file://##p" | while IFS= read -r f; do f="$(printf "%b" "${f//%/\\x}")"; cp -r -- "$f" "$d"/; done'])
+            },
+            {
+                "label": I18n.t("Открыть в Терминале", "Open in Terminal"),
+                "icon": "window_dev_tools-regular",
+                "run": () => Shell.exec(["sh", "-c", 'cd "$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME")" && exec "$1"', "sh", Config.launcher.terminal || "kitty"])
+            },
+            {
+                "separator": true
+            },
+            {
+                "label": I18n.t("Создать", "New"),
+                "icon": "add-regular",
+                "sub": [
+                    {
+                        "label": I18n.t("Папку", "Folder"),
+                        "icon": "folder-regular",
+                        "run": () => Shell.exec(["sh", "-c", 'd="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"; n="Новая папка"; i=2; while [ -e "$d/$n" ]; do n="Новая папка ($i)"; i=$((i+1)); done; mkdir -p "$d/$n" && xdg-open "$d"'])
+                    },
+                    {
+                        "label": I18n.t("Текстовый документ", "Text document"),
+                        "icon": "document-regular",
+                        "run": () => DesktopActions.newText()
+                    },
+                    {
+                        "separator": true
+                    }
+                ].concat(root.newItems.slice(1))
+            },
+            {
+                "separator": true
+            },
+            {
+                "label": I18n.t("Параметры экрана", "Display settings"),
+                "iconUrl": Qt.resolvedUrl("../bar/win/icons/c/desktop-4cc2ff.svg"),
+                "run": () => Shell.openSettings("monitor")
+            },
+            {
+                "label": I18n.t("Персонализация", "Personalize"),
+                "iconUrl": Qt.resolvedUrl("../bar/win/icons/c/paint_brush-f7a35c.svg"),
+                "run": () => Shell.openSettings("appearance")
+            },
+            {
+                "separator": true
+            },
+            {
+                "label": I18n.t("Показать дополнительные параметры", "Show more options"),
+                "icon": "apps-regular",
+                "hint": "Shift+F10",
+                "run": () => {
+                    root.pixelOnce = true;
+                    root.openAt(winMenu.anchor.rect.x, winMenu.anchor.rect.y);
+                }
+            }
+        ]
+    }
+
     DesktopSubmenu {
         id: sub
         parentMenu: root
@@ -245,6 +357,23 @@ PopupWindow {
     }
     // scripting: open a flyout by name ("view" | "new" | "wallpaper" | "open" | "more")
     function openSub(name) {
+        if (Config.bar.style === "windows" && !winMenu.visible) {
+            subRetry.name = name;
+            subRetry.restart();
+            return;
+        }
+        if (Config.bar.style === "windows") {
+            const i = {
+                "view": 0,
+                "wallpaper": 1,
+                "new": 7
+            }[name];
+            if (i !== undefined) {
+                const it = winMenu.items[i];
+                winMenu.openSub(winMenu.rowFor(it), it.sub);
+            }
+            return;
+        }
         const m = {
             "view": [viewItem, viewItems],
             "new": [newItem, newItems],

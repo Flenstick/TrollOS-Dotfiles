@@ -5,12 +5,14 @@ import qs.config
 import qs.services
 import qs.widgets
 
-// Win98 taskbar at the bottom.
+// Win98 taskbar at the bottom; `floating` lifts it off the edges (Compact layout).
 PanelWindow {
     id: win
 
     required property var modelData
     readonly property bool compact: Config.bar.compactOnVertical && modelData.width < 1300
+    readonly property bool floating: Config.bar.floating
+    readonly property int gap: floating ? Theme.u * 4 : 0
 
     screen: modelData
     anchors {
@@ -18,7 +20,10 @@ PanelWindow {
         left: true
         right: true
     }
-    implicitHeight: Theme.u * 20
+    margins.left: gap
+    margins.right: gap
+    margins.bottom: gap
+    implicitHeight: Theme.u * 20 + (floating ? Theme.u * 2 : 0)
     exclusionMode: Shell.dev ? ExclusionMode.Ignore : ExclusionMode.Auto
     color: "transparent"
     WlrLayershell.namespace: "angelos-bar"
@@ -32,12 +37,15 @@ PanelWindow {
 
     PxBox {
         id: box
-        anchors.fill: parent
+        width: parent.width - (win.floating ? Theme.u * 2 : 0)
+        height: parent.height - (win.floating ? Theme.u * 2 : 0)
         color: Theme.panel
-        outline: false
+        outline: win.floating
+        shadow: win.floating && Config.appearance.shadows
 
         Rectangle {
             // top highlight line like the original taskbar
+            visible: !win.floating
             width: parent.width
             height: Theme.u
             y: -box.inset

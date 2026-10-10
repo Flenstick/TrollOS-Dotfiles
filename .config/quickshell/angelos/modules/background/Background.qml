@@ -41,6 +41,24 @@ Variants {
                 screenName: scope.modelData.name
             }
 
+            // live-wallpaper plugins draw here (Shell.wallpaperSlots), under the widgets
+            Item {
+                id: wallSlot
+                anchors.fill: parent
+                Component.onCompleted: {
+                    const m = Object.assign({}, Shell.wallpaperSlots);
+                    m[scope.modelData.name] = wallSlot;
+                    Shell.wallpaperSlots = m;
+                }
+                Component.onDestruction: {
+                    if (Shell.wallpaperSlots[scope.modelData.name] !== wallSlot)
+                        return;
+                    const m = Object.assign({}, Shell.wallpaperSlots);
+                    delete m[scope.modelData.name];
+                    Shell.wallpaperSlots = m;
+                }
+            }
+
             // desktop widgets (built-in + plugins): pinned with the wallpaper
             Item {
                 id: widgetLayer

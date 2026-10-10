@@ -38,7 +38,7 @@ Singleton {
 
     function resolve(output, idx) {
         const w = Config.wallpaper;
-        const p = (w.workspaces || {})[key(output, idx)] || (w.outputs || {})[output] || w.fallback || images[0] || "";
+        const p = (w.workspaces || {})[key(output, idx)] || (w.outputs || {})[output] || Config.expand(w.fallback) || images[0] || "";
         return Config.expand(p);
     }
 

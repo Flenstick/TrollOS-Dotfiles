@@ -40,6 +40,7 @@ Singleton {
             "capture": ["скриншот", "снимок экрана", "запись экрана", "screenshot", "recording", "capture"],
             "cursor": ["курсор", "указатель", "cursor", "pointer"],
             "widgets": ["виджет", "часы", "визуализатор", "cava", "widget", "clock", "visualizer"],
+            "layouts": ["раскладка стола", "раскладки", "как macos", "как mac", "как windows", "как ubuntu", "док", "zorin", "layout", "layouts", "macos", "windows 11", "ubuntu", "chromeos", "elementary", "cinnamon", "dock"],
             "bar": ["панель", "таскбар", "пуск", "трей", "меню пуск", "кнопки окон", "taskbar", "panel", "start", "start menu", "tray", "dock"],
             "workspaces": ["рабочие столы", "воркспейсы", "столы", "сердечки", "переход", "desks", "virtual desktops", "workspaces", "transition"],
             "lyrics": ["лирика", "текст песни", "караоке", "песня", "музыка", "lyrics", "song", "karaoke", "music"],

@@ -12,4 +12,10 @@ include "./cfg/misc.kdl"
 
 include "angelos.kdl"
 
+// TrollOS: Alt+Tab — размеры и задержки переключателя (после angelos.kdl, чтобы не перетёрлось)
+include "./cfg/alt-tab.kdl"
+
 include "./cfg/game-mode.kdl"
+
+// TrollOS: раскладка Windows 11 — Alt+Tab идёт в переключатель angelOS (файл пишет сам шелл)
+include "./cfg/win-alttab.kdl"

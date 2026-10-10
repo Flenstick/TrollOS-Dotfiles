@@ -1,10 +1,14 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 import Quickshell
+import Quickshell.Io
 import qs.config
 import qs.services
 import qs.widgets
+import qs.modules.bar.win
+import "../bar/win/NavIcons.js" as Nav
 
 // Settings content (frame, sidebar, pages). Hosted by SettingsWindow.
 Item {
@@ -26,6 +30,16 @@ Item {
     }
     property var hostWindow: null
     readonly property alias frame: frame
+    // Windows 11 layout + "Параметры как в Windows": Fluent chrome around the same pages
+    readonly property bool fluent: WinExtras.fluentSettings
+    readonly property Item blurItem: fluent ? fchrome : frame
+    Binding {
+        target: Shell
+        property: "fluentWindow"
+        value: win.fluent ? win.Window.window : null
+        when: win.fluent
+        restoreMode: Binding.RestoreValue
+    }
     readonly property var groups: [
         {
             "title": I18n.t("Вид", "Appearance"),
@@ -59,6 +73,11 @@ Item {
                     "id": "widgets",
                     "label": I18n.t("Виджеты", "Widgets"),
                     "icon": "layers"
+                },
+                {
+                    "id": "layouts",
+                    "label": I18n.t("Раскладки", "Layouts"),
+                    "icon": "grid"
                 },
                 {
                     "id": "bar",
@@ -128,7 +147,7 @@ Item {
             ]
         },
         {
-            "title": "System",
+            "title": I18n.t("Система", "System"),
             "pages": [
                 {
                     "id": "defaults",
@@ -345,11 +364,13 @@ Item {
     }
     Shortcut {
         sequence: "Ctrl+F"
+        enabled: !win.fluent
         onActivated: search.focusField()
     }
 
     PxWindow {
         id: frame
+        visible: !win.fluent
         anchors.fill: parent
         anchors.rightMargin: Config.appearance.shadows ? Theme.u * 2 : 0
         anchors.bottomMargin: Config.appearance.shadows ? Theme.u * 2 : 0
@@ -647,16 +668,17 @@ Item {
 
             Loader {
                 id: page
+                parent: win.fluent ? fpage : pageBox
                 anchors.fill: parent
-                anchors.margins: Theme.u * 3
-                anchors.topMargin: win.expert ? Theme.u * 3 : search.height + Theme.u * 6
+                anchors.margins: win.fluent ? 0 : Theme.u * 3
+                anchors.topMargin: win.fluent ? 0 : win.expert ? Theme.u * 3 : search.height + Theme.u * 6
                 active: win.hostWindow ? win.hostWindow.visible : true
                 onLoaded: if (win.pendingTarget)
                     targetTimer.restart()
                 source: {
                     const id = Shell.settingsPage;
                     if (id === "home" || id === "more")
-                        return win.expert ? "pages/AppearancePage.qml" : id === "home" ? "pages/HomePage.qml" : "pages/MorePage.qml";
+                        return win.expert && !win.fluent ? "pages/AppearancePage.qml" : id === "home" ? "pages/HomePage.qml" : "pages/MorePage.qml";
                     if (id.startsWith("plugin:"))
                         return "pages/PluginSettingsPage.qml";
                     if (id === "dotfiles")
@@ -681,6 +703,494 @@ Item {
                 onPressed: if (win.hostWindow)
                     win.hostWindow.startSystemResize(Edges.Bottom | Edges.Right)
             }
+        }
+    }
+
+    // ================= Windows 11 "Параметры" chrome =================
+    Rectangle {
+        id: fchrome
+        visible: win.fluent
+        anchors.fill: parent
+        radius: 8
+        // Mica: the wallpaper's colour shows faintly through
+        color: WinStyle.dark ? Qt.rgba(0.125, 0.125, 0.125, 0.94) : Qt.rgba(0.953, 0.953, 0.953, 0.94)
+        border.width: 1
+        border.color: WinStyle.flyoutLine
+
+        readonly property var navPages: [{
+                "id": "home",
+                "label": I18n.t("Главная", "Home"),
+                "group": ""
+            }].concat(win.visibleGroups.reduce((a, g) => a.concat(g.pages.map(p => Object.assign({
+                    "group": g.title
+                }, p))), []))
+        readonly property var current: navPages.find(p => p.id === Shell.settingsPage) || navPages[0]
+        function navIcon(id) {
+            const k = id.startsWith("plugin:") ? "plugin" : id;
+            const e = Nav.nav[k] || Nav.nav.system;
+            return Qt.resolvedUrl("../bar/win/icons/c/" + e[0] + "-" + e[1].slice(1) + ".svg");
+        }
+        property var history: []
+        Connections {
+            target: Shell
+            function onSettingsPageChanged() {
+                if (!fchrome.goingBack && fchrome.lastPage && fchrome.lastPage !== Shell.settingsPage)
+                    fchrome.history = fchrome.history.concat([fchrome.lastPage]).slice(-30);
+                fchrome.goingBack = false;
+                fchrome.lastPage = Shell.settingsPage;
+            }
+        }
+        property string lastPage: Shell.settingsPage
+        property bool goingBack: false
+        function back() {
+            if (!history.length)
+                return;
+            goingBack = true;
+            const h = history.slice();
+            const p = h.pop();
+            history = h;
+            Shell.settingsPage = p;
+        }
+
+        // ---- title bar ----
+        MouseArea {
+            width: parent.width
+            height: 48
+            acceptedButtons: Qt.LeftButton
+            onPressed: if (win.hostWindow)
+                win.hostWindow.startSystemMove()
+            onDoubleClicked: if (win.hostWindow)
+                win.hostWindow.maximized = !win.hostWindow.maximized
+        }
+        Rectangle {
+            id: backBtn
+            visible: fchrome.history.length > 0
+            x: 6
+            y: 6
+            width: 40
+            height: 36
+            radius: 4
+            color: bma.pressed ? WinStyle.subtlePress : bma.containsMouse ? WinStyle.subtleHover : "transparent"
+            WinIcon {
+                anchors.centerIn: parent
+                name: "arrow_left-regular"
+                size: 16
+            }
+            MouseArea {
+                id: bma
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: fchrome.back()
+            }
+        }
+        WinText {
+            x: backBtn.visible ? 56 : 16
+            y: 0
+            height: 48
+            text: I18n.t("Параметры", "Settings")
+            font.pixelSize: 12
+        }
+        Row {
+            anchors.right: parent.right
+            anchors.rightMargin: 1
+            y: 1
+            Repeater {
+                model: ["min", "max", "close"]
+                Rectangle {
+                    id: cap
+                    required property string modelData
+                    width: 46
+                    height: 32
+                    radius: modelData === "close" ? 0 : 0
+                    color: cma.containsMouse ? (cap.modelData === "close" ? "#c42b1c" : WinStyle.subtleHover) : "transparent"
+                    // Windows caption glyphs, drawn
+                    Item {
+                        anchors.centerIn: parent
+                        width: 10
+                        height: 10
+                        Rectangle {
+                            visible: cap.modelData === "min"
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 10
+                            height: 1
+                            color: WinStyle.text
+                        }
+                        Rectangle {
+                            visible: cap.modelData === "max"
+                            anchors.fill: parent
+                            color: "transparent"
+                            radius: 1.5
+                            border.width: 1
+                            border.color: WinStyle.text
+                        }
+                        Repeater {
+                            model: cap.modelData === "close" ? [45, -45] : []
+                            Rectangle {
+                                required property int modelData
+                                anchors.centerIn: parent
+                                width: 13
+                                height: 1
+                                rotation: modelData
+                                antialiasing: true
+                                color: cma.containsMouse ? "#ffffff" : WinStyle.text
+                            }
+                        }
+                    }
+                    MouseArea {
+                        id: cma
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            if (cap.modelData === "close")
+                                Shell.settingsOpen = false;
+                            else if (cap.modelData === "max" && win.hostWindow)
+                                win.hostWindow.maximized = !win.hostWindow.maximized;
+                            else if (cap.modelData === "min")
+                                Shell.settingsOpen = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- navigation pane ----
+        Item {
+            id: nav
+            x: 0
+            y: 48
+            width: 312
+            height: parent.height - 48
+
+            // account
+            Item {
+                id: acct
+                x: 20
+                y: 6
+                width: parent.width - 40
+                height: 84
+                Item {
+                    id: avBox
+                    width: 64
+                    height: 64
+                    anchors.verticalCenter: parent.verticalCenter
+                    Image {
+                        id: fav
+                        anchors.fill: parent
+                        source: WinStyle.avatar
+                        sourceSize: Qt.size(128, 128)
+                        fillMode: Image.PreserveAspectCrop
+                        visible: false
+                    }
+                    Rectangle {
+                        id: favMask
+                        anchors.fill: parent
+                        radius: 32
+                        visible: false
+                        layer.enabled: true
+                    }
+                    MultiEffect {
+                        anchors.fill: parent
+                        source: fav
+                        maskEnabled: true
+                        maskSource: favMask
+                        maskThresholdMin: 0.5
+                        maskSpreadAtMin: 1
+                        visible: fav.status === Image.Ready
+                    }
+                }
+                Column {
+                    anchors.left: avBox.right
+                    anchors.leftMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - 80
+                    WinText {
+                        width: parent.width
+                        text: fchrome.fullName
+                        strong: true
+                    }
+                    WinText {
+                        width: parent.width
+                        text: I18n.t("Локальная учётная запись", "Local account")
+                        color: WinStyle.text2
+                        font.pixelSize: 12
+                    }
+                }
+            }
+
+            // search
+            PxField {
+                id: fsearch
+                x: 16
+                y: 104
+                width: parent.width - 32
+                icon: "search"
+                placeholder: I18n.t("Найти параметр", "Find a setting")
+                onEdited: {
+                    win.query = text;
+                    win.sel = 0;
+                }
+                onAccepted: {
+                    win.openResult(win.results[Math.min(win.sel, win.results.length - 1)]);
+                    fsearch.text = "";
+                }
+                onKeyPressed: e => {
+                    if (e.key === Qt.Key_Down) {
+                        win.sel = Math.min(win.results.length - 1, win.sel + 1);
+                        e.accepted = true;
+                    } else if (e.key === Qt.Key_Up) {
+                        win.sel = Math.max(0, win.sel - 1);
+                        e.accepted = true;
+                    } else if (e.key === Qt.Key_Escape && fsearch.text !== "") {
+                        fsearch.text = "";
+                        win.query = "";
+                        e.accepted = true;
+                    }
+                }
+            }
+
+            // pages
+            Flickable {
+                id: navList
+                x: 4
+                y: 148
+                width: parent.width - 8
+                height: parent.height - y - 8
+                contentHeight: navCol.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+
+                // the accent pill glides to the chosen page, like Windows
+                Rectangle {
+                    id: pill
+                    z: 2
+                    x: 12
+                    width: 3
+                    height: 16
+                    radius: 1.5
+                    color: WinStyle.accent
+                    readonly property Item target: {
+                        const i = fchrome.navPages.findIndex(p => p.id === Shell.settingsPage);
+                        return i >= 0 ? navRep.itemAt(i) : null;
+                    }
+                    visible: !!target
+                    y: target ? target.y + (target.height - height) / 2 : 0
+                    Behavior on y {
+                        NumberAnimation {
+                            duration: WinStyle.slow
+                            easing.type: Easing.BezierSpline
+                            easing.bezierCurve: WinStyle.decelerate
+                        }
+                    }
+                }
+                Column {
+                    id: navCol
+                    width: navList.width
+                    Repeater {
+                        id: navRep
+                        model: fchrome.navPages
+                        Item {
+                            id: ni
+                            required property var modelData
+                            readonly property bool sel: Shell.settingsPage === modelData.id
+                            width: navCol.width
+                            height: 40
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 8
+                                anchors.topMargin: 2
+                                anchors.bottomMargin: 2
+                                radius: 4
+                                color: nma.pressed ? WinStyle.subtlePress : ni.sel || nma.containsMouse ? WinStyle.subtleHover : "transparent"
+                            }
+                            Image {
+                                x: 28
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 16
+                                height: 16
+                                sourceSize: Qt.size(32, 32)
+                                source: ni.modelData.id === "home" ? Qt.resolvedUrl("../bar/win/icons/c/person_circle-60cdff.svg") : fchrome.navIcon(ni.modelData.id)
+                            }
+                            WinText {
+                                x: 60
+                                width: parent.width - 76
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: ni.modelData.label
+                            }
+                            MouseArea {
+                                id: nma
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: Shell.settingsPage = ni.modelData.id
+                            }
+                        }
+                    }
+                }
+            }
+
+            // search results under the box
+            Rectangle {
+                visible: win.query.trim() !== ""
+                z: 20
+                x: 16
+                y: fsearch.y + fsearch.height + 4
+                width: fsearch.width
+                height: Math.min(360, resList.contentHeight + 8)
+                radius: 8
+                color: WinStyle.menu
+                border.width: 1
+                border.color: WinStyle.flyoutLine
+                ListView {
+                    id: resList
+                    anchors.fill: parent
+                    anchors.margins: 4
+                    clip: true
+                    model: win.results
+                    boundsBehavior: Flickable.StopAtBounds
+                    delegate: Item {
+                        id: fr
+                        required property var modelData
+                        required property int index
+                        width: resList.width
+                        height: 40
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: 2
+                            radius: 4
+                            color: win.sel === fr.index || frm.containsMouse ? WinStyle.subtleHover : "transparent"
+                        }
+                        Image {
+                            x: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 16
+                            height: 16
+                            sourceSize: Qt.size(32, 32)
+                            source: fchrome.navIcon(fr.modelData.page || "system")
+                        }
+                        Column {
+                            x: 36
+                            width: parent.width - 44
+                            anchors.verticalCenter: parent.verticalCenter
+                            WinText {
+                                width: parent.width
+                                text: fr.modelData.title
+                                font.pixelSize: 13
+                            }
+                            WinText {
+                                visible: text !== ""
+                                width: parent.width
+                                text: fr.modelData.crumb || ""
+                                color: WinStyle.text2
+                                font.pixelSize: 11
+                            }
+                        }
+                        MouseArea {
+                            id: frm
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: win.sel = fr.index
+                            onClicked: {
+                                win.openResult(fr.modelData);
+                                fsearch.text = "";
+                            }
+                        }
+                    }
+                    WinText {
+                        visible: win.results.length === 0
+                        x: 10
+                        height: 36
+                        text: I18n.t("Ничего не найдено", "No results")
+                        color: WinStyle.text2
+                    }
+                }
+            }
+        }
+
+        // ---- content ----
+        Item {
+            id: content
+            anchors.left: nav.right
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.topMargin: 48
+
+            // breadcrumb title: "Group › Page"
+            Row {
+                id: crumb
+                x: 20
+                y: 8
+                spacing: 12
+                WinText {
+                    visible: !!fchrome.current.group
+                    text: fchrome.current.group || ""
+                    color: WinStyle.text2
+                    font.pixelSize: 28
+                    font.family: WinStyle.fontDisplay
+                    strong: true
+                }
+                WinIcon {
+                    visible: !!fchrome.current.group
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "chevron_right-regular"
+                    size: 16
+                }
+                WinText {
+                    text: fchrome.current.label
+                    font.pixelSize: 28
+                    font.family: WinStyle.fontDisplay
+                    strong: true
+                }
+            }
+            Item {
+                id: fpage
+                x: 20
+                y: 72
+                width: parent.width - 28
+                height: parent.height - y - 4
+                clip: true
+                // page change: slide up a little and fade in, like Windows
+                property real t: 1
+                opacity: t
+                transform: Translate {
+                    y: (1 - fpage.t) * 24
+                }
+                Connections {
+                    target: Shell
+                    function onSettingsPageChanged() {
+                        if (win.fluent)
+                            pageIn.restart();
+                    }
+                }
+                NumberAnimation {
+                    id: pageIn
+                    target: fpage
+                    property: "t"
+                    from: 0
+                    to: 1
+                    duration: WinStyle.slow
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: WinStyle.decelerate
+                }
+            }
+        }
+
+        property string fullName: WinStyle.userName
+        Process {
+            running: win.fluent
+            command: ["getent", "passwd", WinStyle.userName]
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    const g = (text.split(":")[4] || "").split(",")[0].trim();
+                    if (g)
+                        fchrome.fullName = g;
+                }
+            }
+        }
+        Shortcut {
+            sequence: "Ctrl+F"
+            enabled: win.fluent
+            onActivated: fsearch.focusField()
         }
     }
 }

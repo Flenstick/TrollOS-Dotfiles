@@ -1,5 +1,6 @@
 import QtQuick
 import qs.config
+import qs.services
 
 Item {
     id: root
@@ -7,14 +8,32 @@ Item {
     property bool checked: false
     property string text: ""
     signal toggled(bool checked)
+    readonly property bool fluent: WinExtras.fluentSettings && !!Window.window && Window.window === Shell.fluentWindow
 
     implicitWidth: box.width + (text !== "" ? label.implicitWidth + Theme.u * 4 : 0)
     implicitHeight: Math.max(box.height, label.implicitHeight)
     opacity: enabled ? 1 : 0.45
 
+    Rectangle {
+        visible: root.fluent
+        anchors.fill: box
+        radius: 4
+        color: root.checked ? WinStyle.accent : WinStyle.field
+        border.width: root.checked ? 0 : 1
+        border.color: WinStyle.text2
+        Text {
+            anchors.centerIn: parent
+            visible: root.checked
+            text: "✓"
+            color: WinStyle.onAccent
+            font.pixelSize: 14
+            font.bold: true
+        }
+    }
     PxBox {
         id: box
-        width: Theme.u * 10
+        opacity: root.fluent ? 0 : 1
+        width: root.fluent ? 20 : Theme.u * 10
         height: width
         sunken: true
         color: Theme.sunken

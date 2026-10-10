@@ -17,8 +17,11 @@ Loader {
 
     readonly property bool tall: wid === "start" || wid === "tasks" || wid === "media" || wid === "lyrics"
     Layout.fillWidth: fillTasks && wid === "tasks"
-    Layout.minimumWidth: wid === "tasks" ? Theme.u * 16 : -1
-    Layout.preferredWidth: wid === "tasks" ? (fillTasks ? Theme.u * 16 : Theme.u * 120) : -1
+    // outside the stretching left side (Windows 11 / ChromeOS layouts) an icon row
+    // takes just its buttons, so the run stays centred
+    readonly property bool tightTasks: wid === "tasks" && !fillTasks && !!item && item.iconsOnly
+    Layout.minimumWidth: wid === "tasks" ? (tightTasks ? 0 : Theme.u * 16) : -1
+    Layout.preferredWidth: wid === "tasks" ? (fillTasks ? Theme.u * 16 : tightTasks ? Math.min(item.rowWidth, Theme.u * 300) : Theme.u * 120) : -1
     Layout.preferredHeight: tall ? bar.itemHeight : -1
     Layout.alignment: Qt.AlignVCenter
     // Never bind a parent's visibility to its child's effective visibility:
@@ -29,7 +32,7 @@ Loader {
         if (wid === "media")
             return Config.bar.showMedia && !!Lyrics.player && Lyrics.title !== "";
         if (wid === "lyrics")
-            return Config.lyrics.enabled && Lyrics.visibleToggle && Lyrics.hasLyrics && (!Config.lyrics.screens.length || Config.lyrics.screens.includes(bar.screenName)) && lyricsMax >= Theme.u * 50;
+            return Config.lyrics.enabled && (!!Shell.lyricsHook || Lyrics.visibleToggle && Lyrics.hasLyrics) && (!Config.lyrics.screens.length || Config.lyrics.screens.includes(bar.screenName)) && lyricsMax >= Theme.u * 50;
         return true;
     }
 

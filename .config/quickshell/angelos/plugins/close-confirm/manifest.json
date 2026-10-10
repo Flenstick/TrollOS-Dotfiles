@@ -1,0 +1,10 @@
+{
+  "id": "close-confirm",
+  "name": "Подтверждение закрытия",
+  "version": "1.0.0",
+  "author": "flen",
+  "description": "Mod+Q в окне, где запущен claude или codex, спрашивает «Точно хотите закрыть эту вкладку?» (Enter или ещё раз Mod+Q — закрыть, Esc — отмена). Остальные окна закрываются сразу.",
+  "icon": "warn",
+  "enabledByDefault": true,
+  "main": "Main.qml"
+}

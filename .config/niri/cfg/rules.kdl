@@ -148,3 +148,18 @@ window-rule {
         block-out-from "screencast"
     }
     // ─── /angelOS ───
+
+// TrollOS: CS2 и другие игры Steam — сразу на весь экран (обычным окном в ленте niri может не отдать им захват мыши для камеры)
+window-rule {
+    match app-id="^cs2$"
+    match app-id="^steam_app_"
+    open-fullscreen true
+}
+
+// TrollOS: экран телефона (scrcpy из плагина Dynamic Island) — плавающее окно справа внизу
+window-rule {
+    match app-id="^angelos-phone$"
+    match app-id="^scrcpy$"
+    open-floating true
+    default-floating-position x=24 y=64 relative-to="bottom-right"
+}

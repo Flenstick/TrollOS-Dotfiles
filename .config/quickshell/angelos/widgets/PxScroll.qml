@@ -1,5 +1,6 @@
 import QtQuick
 import qs.config
+import qs.services
 
 // Flickable with a chunky pixel scrollbar.
 Item {
@@ -10,6 +11,7 @@ Item {
     property alias contentY: flick.contentY
     property bool barVisible: flick.contentHeight > flick.height + 1
     default property alias content: flick.flickableData
+    readonly property bool fluent: WinExtras.fluentSettings && !!Window.window && Window.window === Shell.fluentWindow
 
     // Mouse wheel: fixed steps with a short glide. Flickable's own wheel
     // handling is velocity based and crawls on long settings pages.
@@ -35,7 +37,7 @@ Item {
     Flickable {
         id: flick
         anchors.fill: parent
-        anchors.rightMargin: root.barVisible ? bar.width + Theme.u * 3 : 0
+        anchors.rightMargin: root.barVisible ? bar.width + (root.fluent ? 4 : Theme.u * 3) : 0
         clip: true
         contentWidth: width
         boundsBehavior: Flickable.StopAtBounds
@@ -61,9 +63,11 @@ Item {
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        width: Theme.u * 8
+        width: root.fluent ? 6 : Theme.u * 8
         sunken: true
         color: Theme.sunken
+        opacity: root.fluent ? 0.0 : 1
+        fluentRadius: 3
 
         PxBox {
             id: handle
@@ -90,6 +94,40 @@ Item {
                     const maxY = flick.contentHeight - flick.height;
                     flick.contentY = Math.max(0, Math.min(maxY, startContent + dy / Math.max(1, range) * maxY));
                 }
+            }
+        }
+    }
+    Rectangle {
+        visible: root.fluent && root.barVisible
+        anchors.right: parent.right
+        width: handleArea.containsMouse || handleArea.pressed ? 6 : 3
+        radius: width / 2
+        height: Math.max(24, root.height * flick.visibleArea.heightRatio)
+        y: (root.height - height) * (flick.contentY / Math.max(1, flick.contentHeight - flick.height))
+        color: WinStyle.text3
+        Behavior on width {
+            NumberAnimation {
+                duration: WinStyle.fast
+            }
+        }
+        MouseArea {
+            id: handleArea
+            anchors.fill: parent
+            anchors.margins: -4
+            hoverEnabled: true
+            property real startY
+            property real startContent
+            onPressed: m => {
+                startY = mapToItem(root, 0, m.y).y;
+                startContent = flick.contentY;
+            }
+            onPositionChanged: m => {
+                if (!pressed)
+                    return;
+                const dy = mapToItem(root, 0, m.y).y - startY;
+                const range = root.height - parent.height;
+                const maxY = flick.contentHeight - flick.height;
+                flick.contentY = Math.max(0, Math.min(maxY, startContent + dy / Math.max(1, range) * maxY));
             }
         }
     }

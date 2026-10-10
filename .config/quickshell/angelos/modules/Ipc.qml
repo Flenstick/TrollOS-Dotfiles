@@ -76,6 +76,17 @@ IpcHandler {
     function clipboard(): void {
         Shell.clipboardOpen = !Shell.clipboardOpen;
     }
+    // Mod+G overlay: notes, pictures, GIFs, videos; pinned ones stay on screen
+    function overlay(): void {
+        Overlay.toggle();
+    }
+    // put a note or a file (picture/GIF/video) on the overlay: angelos overlayAdd ~/cat.gif
+    function overlayAdd(what: string): string {
+        if (what.startsWith("/") || what.startsWith("~/") || what.startsWith("file://"))
+            return Overlay.addMedia(Config.expand(what)) ? "ok" : "unsupported file";
+        Overlay.addNote(what);
+        return "ok";
+    }
     // toggle a desktop widget: angelos widget clock DP-1 (types: clock sysmon cava nowplaying plugin:<id>)
     function widget(type: string, screen: string): string {
         if (!DesktopWidgets.typeInfo(type))
@@ -232,6 +243,23 @@ IpcHandler {
     }
     function bar(style: string): void {
         Config.bar.style = style;
+    }
+    // Windows 11 copy options: winSet settingsSkin true | gradient false | icons angelos | align left …
+    function winSet(key: string, value: string): string {
+        if (!(key in Config.win))
+            return "keys: accent align search taskView lyrics recommended gradient icons settingsSkin snip offered";
+        let v = value;
+        try {
+            v = JSON.parse(value);
+        } catch (e) {}
+        Config.win[key] = v;
+        return "ok";
+    }
+    // whole-desktop layout (Settings → Раскладки): default | macos | win11 | compact | ubuntu | classic | chromeos | elementary | cinnamon
+    function layout(id: string): string {
+        if (!id)
+            return DesktopLayouts.current;
+        return DesktopLayouts.apply(id) ? "ok" : "layouts: " + DesktopLayouts.ids.join(", ");
     }
     function volumeUp(): void {
         Audio.step(0.05);

@@ -16,7 +16,7 @@ Item {
     property int itemHeight: Theme.u * 15
     readonly property bool above: style === "taskbar"
     readonly property var layout: BarLayout.effective
-    readonly property bool lyricsShown: BarLayout.has("lyrics") && Config.lyrics.enabled && Lyrics.visibleToggle && Lyrics.hasLyrics && (!Config.lyrics.screens.length || Config.lyrics.screens.includes(screenName))
+    readonly property bool lyricsShown: BarLayout.has("lyrics") && Config.lyrics.enabled && (!!Shell.lyricsHook || Lyrics.visibleToggle && Lyrics.hasLyrics) && (!Config.lyrics.screens.length || Config.lyrics.screens.includes(screenName))
     readonly property int gap: Theme.u * 4
 
     Component.onCompleted: Shell.barViews[screenName] = root
@@ -147,6 +147,33 @@ Item {
             bar: root
             fillTasks: true
             lyricsMax: Theme.u * 150
+        }
+    }
+
+    // a file dragged anywhere onto the bar opens the island (dynamic-island plugin) and can be dropped right here
+    Item {
+        id: dropAnchor
+        anchors.centerIn: parent
+        width: Theme.u * 60
+        height: root.itemHeight
+    }
+    DropArea {
+        anchors.fill: parent
+        enabled: !!Shell.lyricsHook
+        function anchorItem() {
+            const l = Shell.lyricsItems[root.screenName];
+            return l && l.visible ? l : dropAnchor;
+        }
+        onEntered: d => {
+            d.accept(Qt.CopyAction);
+            Shell.lyricsHook.dragEnter(anchorItem(), root.screenName);
+        }
+        onExited: Shell.lyricsHook.dragLeft()
+        onDropped: d => {
+            if (Shell.lyricsHook.handleDrop(d, "bar"))
+                d.accept(Qt.CopyAction);
+            else
+                d.accepted = false;
         }
     }
 }

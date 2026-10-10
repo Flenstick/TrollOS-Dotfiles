@@ -1,0 +1,2183 @@
+#!/usr/bin/env python3
+"""angelos-shot — снимок экрана в духе ShareX для niri + angelOS.
+
+Экран замирает сразу: grim снимает весь экран (≈20 мс), и выделение и пометки
+дальше идут по этому кадру, а не по живому экрану — видео, анимации и курсор
+в кадр не попадают.
+
+  Выделение   тянуть мышью — область; клик — окно под курсором (или весь монитор);
+              Enter/Пробел — весь монитор; C — скопировать цвет пикселя;
+              колёсико — увеличение лупы; Esc/ПКМ — отмена.
+  Пометки     панель под областью: рамка, эллипс, стрелка, линия, карандаш, маркер,
+              текст, номер шага, размытие, пикселизация; цвета, толщина, заливка.
+              Клавиши по физическим кнопкам (работают и в русской раскладке):
+              V R E A L P M T N B X, F — заливка, C — следующий цвет, 1–4 — толщина,
+              колёсико — толщина, Ctrl+Z / Ctrl+Y, Del — убрать пометку, стрелки —
+              сдвинуть область (Shift ×10, Ctrl — размер), ПКМ — выделить заново.
+  Действия    Enter/Ctrl+C — готово (буфер + ~/Pictures/Screenshots), Ctrl+S — сохранить как,
+              Ctrl+P — закрепить поверх окон, Ctrl+T — распознать текст, Ctrl+U — загрузить
+              на catbox.moe и скопировать ссылку, Esc — отмена.
+
+Вид выделения берётся из angelOS (Настройки → Скриншоты, capture.skin): window /
+stream рисует capture_skins.py, остальное — свой чистый вид. Цвета панели — из
+текущей темы (~/.cache/angelos/palette.json).
+
+`angelos-shot --pin FILE [X Y]` — закреплённая картинка: тянуть мышью, колёсико —
+масштаб, Ctrl+колёсико — прозрачность, Ctrl+C — копировать, Esc/двойной клик/СКМ — закрыть.
+"""
+from __future__ import annotations
+
+import fcntl
+import io
+import json
+import math
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+
+ARGS = sys.argv[1:]
+PIN = bool(ARGS) and ARGS[0] == "--pin"
+RUNTIME = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+
+
+def single_instance():
+    """One selection at a time — shared with niri-screenshot-region / record-region."""
+    fd = os.open(os.path.join(RUNTIME, "niri-screenshot-region.lock"), os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def _windows_snip():
+    """Windows 11 layout (bar.style "windows", win.snip on): the Snipping Tool look."""
+    try:
+        with open(os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "angelos/settings.json")) as f:
+            d = json.load(f)
+        return (d.get("bar") or {}).get("style") == "windows" and (d.get("win") or {}).get("snip", False) is True
+    except (OSError, ValueError):
+        return False
+
+
+if __name__ == "__main__" and not PIN and not os.environ.get("ANGELOS_SHOT_CLASSIC") and _windows_snip():
+    _snip = os.path.join(os.path.dirname(os.path.realpath(__file__)), "angelos-snip")
+    if os.path.isfile(_snip):
+        os.execv(sys.executable, [sys.executable, _snip] + ARGS)
+
+if not PIN:
+    _LOCK = single_instance()
+    if _LOCK is None:
+        sys.exit(0)
+    # freeze first: grim and niri answer while GTK is still loading
+    _GRIM = subprocess.Popen(["grim", "-l", "0", "-"], stdout=subprocess.PIPE)
+    _NIRI = {k: subprocess.Popen(["niri", "msg", "-j", k], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+             for k in ("windows", "workspaces", "outputs")}
+
+import cairo  # noqa: E402
+import gi  # noqa: E402
+
+gi.require_version("Gdk", "3.0")
+gi.require_version("Gtk", "3.0")
+gi.require_version("GtkLayerShell", "0.1")
+gi.require_version("Pango", "1.0")
+gi.require_version("PangoCairo", "1.0")
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, GtkLayerShell, Pango, PangoCairo  # noqa: E402
+
+HOME = os.path.expanduser("~")
+CONFIG = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+CACHE = os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache")
+OUTDIR = os.path.join(HOME, "Pictures/Screenshots")
+PIN_DIR = os.path.join(CACHE, "angelos-shot")
+PALETTE = os.path.join(CACHE, "angelos/palette.json")
+SETTINGS = os.path.join(CONFIG, "angelos/settings.json")
+PLING = os.path.join(HOME, ".local/share/sounds/screenshot-pling.ogg")
+SOUNDS = {  # your own file for a kind: ~/.local/share/sounds/angelos-shot-<kind>.ogg
+    "shot": "/usr/share/sounds/freedesktop/stereo/camera-shutter.oga",
+    "done": "/usr/share/sounds/freedesktop/stereo/message.oga",
+    "error": "/usr/share/sounds/freedesktop/stereo/dialog-error.oga",
+}
+UPLOAD_URL = os.environ.get("ANGELOS_SHOT_UPLOAD", "https://catbox.moe/user/api.php")
+UI_FONT = "Sans"
+TEXT_FONT = "Sans Bold"
+
+INK = ["#ff4f5e", "#ff9f43", "#ffd93d", "#4cd97b", "#3ec5ff", "#7c6cff", "#ff5cad", "#ffffff", "#111111"]
+WIDTHS = [2, 4, 7, 12]
+TOOLS = [  # id, tooltip, evdev keycode + 8 (layout independent)
+    ("move", "Двигать область и пометки", "V", 55),
+    ("rect", "Рамка", "R", 27),
+    ("ellipse", "Эллипс", "E", 26),
+    ("arrow", "Стрелка", "A", 38),
+    ("line", "Линия", "L", 46),
+    ("pen", "Карандаш", "P", 33),
+    ("marker", "Маркер", "M", 58),
+    ("text", "Текст", "T", 28),
+    ("step", "Номер шага", "N", 57),
+    ("blur", "Размытие", "B", 56),
+    ("pixel", "Пикселизация", "X", 53),
+]
+ACTIONS = [
+    ("done", "Готово: в буфер и в папку", "Enter"),
+    ("saveas", "Сохранить как…", "Ctrl+S"),
+    ("pin", "Закрепить поверх окон", "Ctrl+P"),
+    ("ocr", "Распознать текст в буфер", "Ctrl+T"),
+    ("upload", "Загрузить на catbox.moe, ссылку в буфер", "Ctrl+U"),
+    ("cancel", "Отмена", "Esc"),
+]
+K_C, K_S, K_P, K_T, K_U, K_Z, K_Y, K_F = 54, 39, 33, 28, 30, 52, 29, 41
+K_DIGITS = {10: 0, 11: 1, 12: 2, 13: 3}
+HANDLES = ("tl", "t", "tr", "r", "br", "b", "bl", "l")
+HANDLE_CURSOR = {"tl": "nwse-resize", "br": "nwse-resize", "tr": "nesw-resize", "bl": "nesw-resize",
+                 "t": "ns-resize", "b": "ns-resize", "l": "ew-resize", "r": "ew-resize"}
+
+
+# ───────────────────────────── helpers ─────────────────────────────
+
+def rgb(value, alpha=1.0):
+    value = value.lstrip("#")
+    return tuple(int(value[i:i + 2], 16) / 255 for i in (0, 2, 4)) + (alpha,)
+
+
+def with_alpha(c, a):
+    return c[:3] + (a,)
+
+
+def luminance(c):
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
+def theme():
+    pal = {"face": "#1f1d2e", "faceAlt": "#26233a", "text": "#e0def4", "textDim": "#908caa",
+           "accent": "#ebbcba", "accent2": "#c4a7e7", "danger": "#ff4f6d", "ok": "#57e3a2",
+           "selectText": "#191724", "edge": "#191724", "desk": "#191724"}
+    try:
+        with open(PALETTE) as f:
+            for k, v in json.load(f).items():
+                if k in pal and isinstance(v, str) and v.startswith("#") and len(v) >= 7:
+                    pal[k] = v[:7]
+    except (OSError, ValueError):
+        pass
+    return {k: rgb(v) for k, v in pal.items()}
+
+
+T = theme()
+
+
+def rrect(cr, x, y, w, h, r):
+    r = max(0.0, min(r, w / 2, h / 2))
+    cr.new_sub_path()
+    cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+    cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+    cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+    cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+    cr.close_path()
+
+
+_FONTS: dict = {}
+
+
+def font(spec):
+    if spec not in _FONTS:
+        _FONTS[spec] = Pango.FontDescription.from_string(spec)
+    return _FONTS[spec]
+
+
+def layout(cr, s, size, bold=False, family=UI_FONT):
+    lay = PangoCairo.create_layout(cr)
+    lay.set_font_description(font(f"{family}{' Bold' if bold else ''} {size}px"))
+    lay.set_text(s, -1)
+    return lay
+
+
+def text(cr, s, x, y, size=13, color=None, bold=False):
+    """Draw text with its top-left at x,y; returns (w, h)."""
+    lay = layout(cr, s, size, bold)
+    w, h = lay.get_pixel_size()
+    cr.move_to(x, y)
+    cr.set_source_rgba(*(color or T["text"]))
+    PangoCairo.show_layout(cr, lay)
+    return w, h
+
+
+def text_size(cr, s, size=13, bold=False):
+    return layout(cr, s, size, bold).get_pixel_size()
+
+
+def norm(a, b):
+    x0, x1 = sorted((a[0], b[0]))
+    y0, y1 = sorted((a[1], b[1]))
+    return x0, y0, x1 - x0, y1 - y0
+
+
+def overlaps(a, b):
+    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+
+def inside(px, py, r, pad=0):
+    x, y, w, h = r
+    return x - pad <= px <= x + w + pad and y - pad <= py <= y + h + pad
+
+
+def notify(title, body="", icon=None, app="Скриншот"):
+    cmd = ["notify-send", "-a", app]
+    if icon:
+        cmd += ["-i", icon]
+    subprocess.Popen(cmd + [title, body], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def notify_saved(title, path):
+    """Notification with Open / In folder / Edit; waits for a click in its own session."""
+    script = r'''a=$(notify-send -a "Скриншот" -i "$3" -A open="Открыть" -A folder="В папке" -A edit="Изменить" "$1" "$2")
+case "$a" in
+  open) exec xdg-open "$3" ;;
+  folder) nautilus --select "$3" 2>/dev/null || exec xdg-open "$(dirname "$3")" ;;
+  edit) exec satty --filename "$3" --output-filename "$3" ;;
+esac'''
+    subprocess.Popen(["sh", "-c", script, "sh", title, path.replace(HOME, "~", 1), path],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def sounds_on():
+    """settings.json → capture.sounds (default on)."""
+    try:
+        with open(SETTINGS) as f:
+            return (json.load(f).get("capture") or {}).get("sounds", True) is not False
+    except (OSError, ValueError):
+        return True
+
+
+def sound(kind="shot"):
+    if not sounds_on():
+        return
+    own = os.path.join(HOME, f".local/share/sounds/angelos-shot-{kind}.ogg")
+    path = own if os.path.isfile(own) else PLING if kind == "shot" and os.path.isfile(PLING) else SOUNDS.get(kind)
+    if path and os.path.isfile(path):
+        subprocess.Popen(["pw-play", "--volume", "0.7", path], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def copy_bytes(data, mime):
+    try:
+        subprocess.run(["wl-copy", "--type", mime], input=data, check=False, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def load_skin():
+    try:
+        sys.path.insert(0, os.path.join(CONFIG, "quickshell/angelos/scripts"))
+        import capture_skins
+        return capture_skins.load()
+    except Exception:
+        return None
+
+
+# ───────────────────────────── icons ─────────────────────────────
+
+def icon(cr, name, cx, cy, color):
+    """20 px line icons drawn with cairo, centred on cx, cy."""
+    cr.save()
+    cr.translate(cx, cy)
+    cr.set_source_rgba(*color)
+    cr.set_line_width(1.8)
+    cr.set_line_cap(cairo.LINE_CAP_ROUND)
+    cr.set_line_join(cairo.LINE_JOIN_ROUND)
+    if name == "move":
+        for a in range(4):
+            cr.save()
+            cr.rotate(a * math.pi / 2)
+            cr.move_to(0, 0); cr.line_to(0, -8); cr.stroke()
+            cr.move_to(-3, -5); cr.line_to(0, -8.5); cr.line_to(3, -5); cr.stroke()
+            cr.restore()
+    elif name == "rect":
+        rrect(cr, -7, -6, 14, 12, 1.5); cr.stroke()
+    elif name == "ellipse":
+        cr.save(); cr.scale(1, 0.8); cr.arc(0, 0, 8, 0, 2 * math.pi); cr.restore(); cr.stroke()
+    elif name == "arrow":
+        cr.move_to(-7, 7); cr.line_to(6, -6); cr.stroke()
+        cr.move_to(7.5, -7.5); cr.line_to(0, -6); cr.line_to(6, 0); cr.close_path(); cr.fill()
+    elif name == "line":
+        cr.move_to(-7, 7); cr.line_to(7, -7); cr.stroke()
+    elif name == "pen":
+        cr.move_to(-8, 4); cr.curve_to(-4, -6, -1, 8, 3, -1); cr.curve_to(5, -5, 7, -4, 8, -6); cr.stroke()
+    elif name == "marker":
+        cr.save(); cr.set_source_rgba(*with_alpha(color, 0.45)); cr.set_line_width(7)
+        cr.move_to(-7, 4); cr.line_to(7, 4); cr.stroke(); cr.restore()
+        cr.move_to(-2, 2); cr.line_to(5, -6); cr.line_to(8, -3); cr.line_to(1, 5); cr.close_path(); cr.stroke()
+    elif name == "text":
+        cr.set_line_width(2.2)
+        cr.move_to(-7, -6); cr.line_to(7, -6); cr.stroke()
+        cr.move_to(0, -6); cr.line_to(0, 7); cr.stroke()
+    elif name == "step":
+        cr.arc(0, 0, 8, 0, 2 * math.pi); cr.fill()
+        lay = layout(cr, "1", 12, True)
+        w, h = lay.get_pixel_size()
+        cr.move_to(-w / 2, -h / 2); cr.set_source_rgba(*T["face"]); PangoCairo.show_layout(cr, lay)
+    elif name == "blur":
+        for i, (x, y) in enumerate(((-5, -5), (0, -5), (5, -5), (-5, 0), (0, 0), (5, 0), (-5, 5), (0, 5), (5, 5))):
+            cr.set_source_rgba(*with_alpha(color, (0.35, 0.6, 0.35, 0.6, 1, 0.6, 0.35, 0.6, 0.35)[i]))
+            cr.arc(x, y, 2.3, 0, 2 * math.pi); cr.fill()
+    elif name == "pixel":
+        for i in range(3):
+            for j in range(3):
+                cr.set_source_rgba(*with_alpha(color, 1 if (i + j) % 2 == 0 else 0.35))
+                cr.rectangle(-7 + i * 5, -7 + j * 5, 4, 4); cr.fill()
+    elif name in ("undo", "redo"):
+        if name == "redo":
+            cr.scale(-1, 1)
+        cr.arc(1.5, 3, 6, math.pi, 2 * math.pi)
+        cr.line_to(7.5, 6)
+        cr.stroke()
+        cr.move_to(-8, 0); cr.line_to(-4.5, 4); cr.line_to(-1, 0); cr.stroke()
+    elif name == "fill":
+        rrect(cr, -7, -6, 14, 12, 1.5); cr.stroke()
+        cr.set_source_rgba(*with_alpha(color, 0.55)); rrect(cr, -4.5, -3.5, 9, 7, 1); cr.fill()
+    elif name == "done":
+        cr.set_line_width(2.6)
+        cr.move_to(-7, 0); cr.line_to(-2, 5); cr.line_to(7, -5); cr.stroke()
+    elif name == "saveas":
+        rrect(cr, -7, -7, 14, 14, 2); cr.stroke()
+        cr.rectangle(-3.5, -7, 7, 4.5); cr.stroke()
+        cr.rectangle(-4, 2, 8, 5); cr.stroke()
+    elif name == "pin":
+        cr.save(); cr.rotate(math.pi / 4)
+        cr.move_to(-4, -8); cr.line_to(4, -8); cr.stroke()
+        cr.move_to(-2.5, -8); cr.line_to(-2.5, -2); cr.line_to(-5, 1); cr.line_to(5, 1); cr.line_to(2.5, -2)
+        cr.line_to(2.5, -8); cr.stroke()
+        cr.move_to(0, 1); cr.line_to(0, 8); cr.stroke(); cr.restore()
+    elif name == "ocr":
+        for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            cr.move_to(8 * sx, 8 * sy - 4 * sy); cr.line_to(8 * sx, 8 * sy); cr.line_to(8 * sx - 4 * sx, 8 * sy); cr.stroke()
+        cr.move_to(-4, -4); cr.line_to(4, -4); cr.stroke(); cr.move_to(0, -4); cr.line_to(0, 4.5); cr.stroke()
+    elif name == "upload":
+        cr.move_to(0, 4); cr.line_to(0, -7); cr.stroke()
+        cr.move_to(-5, -2); cr.line_to(0, -7); cr.line_to(5, -2); cr.stroke()
+        cr.move_to(-8, 3); cr.line_to(-8, 7); cr.line_to(8, 7); cr.line_to(8, 3); cr.stroke()
+    elif name == "cancel":
+        cr.set_line_width(2.2)
+        cr.move_to(-6, -6); cr.line_to(6, 6); cr.stroke(); cr.move_to(6, -6); cr.line_to(-6, 6); cr.stroke()
+    cr.restore()
+
+
+# ───────────────────────────── frozen frame ─────────────────────────────
+
+class Frame:
+    """The frozen screen: grim's image of the whole layout."""
+
+    def __init__(self, surface, origin, logical_w):
+        self.surface = surface
+        self.ox, self.oy = origin
+        self.scale = surface.get_width() / max(1, logical_w)
+        self.data = surface.get_data()
+        self.stride = surface.get_stride()
+
+    def paint(self, cr, rect=None):
+        cr.save()
+        if rect:
+            cr.rectangle(*rect)
+            cr.clip()
+        cr.translate(self.ox, self.oy)
+        cr.scale(1 / self.scale, 1 / self.scale)
+        cr.set_source_surface(self.surface, 0, 0)
+        cr.paint()
+        cr.restore()
+
+    def pixel_at(self, gx, gy):
+        """(image x, image y) of a global logical point."""
+        ix = int((gx - self.ox) * self.scale)
+        iy = int((gy - self.oy) * self.scale)
+        ix = min(max(ix, 0), self.surface.get_width() - 1)
+        iy = min(max(iy, 0), self.surface.get_height() - 1)
+        return ix, iy
+
+    def color_at(self, gx, gy):
+        ix, iy = self.pixel_at(gx, gy)
+        o = iy * self.stride + ix * 4
+        b, g, r = self.data[o], self.data[o + 1], self.data[o + 2]
+        return r, g, b
+
+    def crop(self, rect, factor=1.0):
+        """A new surface holding rect (global logical) of the frame, scaled by factor."""
+        x, y, w, h = rect
+        s = self.scale * factor
+        iw, ih = max(1, int(math.ceil(w * s))), max(1, int(math.ceil(h * s)))
+        out = cairo.ImageSurface(cairo.FORMAT_RGB24, iw, ih)
+        c = cairo.Context(out)
+        c.scale(factor, factor)
+        c.translate(-(x - self.ox) * self.scale, -(y - self.oy) * self.scale)
+        c.set_source_surface(self.surface, 0, 0)
+        c.get_source().set_filter(cairo.FILTER_GOOD)
+        c.paint()
+        return out
+
+
+def load_frame():
+    png, _ = _GRIM.communicate(timeout=10)
+    surface = cairo.ImageSurface.create_from_png(io.BytesIO(png))
+    outputs = niri_json("outputs") or {}
+    logical = [o.get("logical") for o in outputs.values() if o.get("logical")]
+    if logical:
+        x0 = min(l["x"] for l in logical)
+        y0 = min(l["y"] for l in logical)
+        x1 = max(l["x"] + l["width"] for l in logical)
+    else:
+        x0 = y0 = 0
+        x1 = surface.get_width()
+    return Frame(surface, (x0, y0), x1 - x0), outputs
+
+
+def niri_json(kind):
+    try:
+        out, _ = _NIRI[kind].communicate(timeout=3)
+        return json.loads(out)
+    except Exception:
+        return None
+
+
+# ───────────────────────────── windows under the pointer ─────────────────────────────
+
+def layout_config():
+    gaps, centred = 16.0, False
+    for name in ("cfg/layout.kdl", "config.kdl"):
+        try:
+            with open(os.path.join(CONFIG, "niri", name)) as f:
+                src = re.sub(r"//[^\n]*", "", f.read())
+        except OSError:
+            continue
+        m = re.search(r"\bgaps\s+([\d.]+)", src)
+        if m:
+            gaps = float(m.group(1))
+        if re.search(r'center-focused-column\s+"always"', src):
+            centred = True
+    return gaps, centred
+
+
+def bar_on_top():
+    try:
+        with open(SETTINGS) as f:
+            return (json.load(f).get("bar") or {}).get("style", "taskbar") not in ("taskbar", "windows")
+    except (OSError, ValueError):
+        return False
+
+
+def window_rects(outputs, workspaces, windows, work_areas):
+    """Visible windows, topmost first: [(rect, title)] in global logical coords.
+
+    Floating windows report their position. Tiled ones don't, but with
+    center-focused-column "always" niri keeps the focused column centred in the
+    working area, and the other columns follow by their widths and the gaps."""
+    gaps, centred = layout_config()
+    top_bar = bar_on_top()
+    floating, tiled = [], []
+    for ws in workspaces or []:
+        if not ws.get("is_active"):
+            continue
+        out = (outputs.get(ws.get("output")) or {}).get("logical")
+        if not out:
+            continue
+        ox, oy, ow, oh = out["x"], out["y"], out["width"], out["height"]
+        wa_w, wa_h = work_areas.get(ws.get("output")) or (ow, oh)
+        wa = (ox, oy + (oh - wa_h if top_bar else 0), wa_w, wa_h)
+        mine = [w for w in windows or [] if w.get("workspace_id") == ws["id"]]
+        for w in mine:
+            lay = w.get("layout") or {}
+            if w.get("is_floating") and lay.get("tile_pos_in_workspace_view"):
+                tx, ty = lay["tile_pos_in_workspace_view"]
+                dx, dy = lay.get("window_offset_in_tile") or (0, 0)
+                ww, wh = lay["window_size"]
+                floating.append(((w.get("focus_timestamp") or {}).get("secs", 0),
+                                 (wa[0] + tx + dx, wa[1] + ty + dy, ww, wh), w.get("title") or w.get("app_id") or ""))
+        if not centred:
+            continue
+        cols: dict = {}
+        for w in mine:
+            lay = w.get("layout") or {}
+            pos = lay.get("pos_in_scrolling_layout")
+            if w.get("is_floating") or not pos:
+                continue
+            cols.setdefault(pos[0], []).append((pos[1], w))
+        if not cols:
+            continue
+        active = next((w for w in mine if w["id"] == ws.get("active_window_id") and not w.get("is_floating")), None)
+        if active is None:
+            active = max((w for c in cols.values() for _, w in c),
+                         key=lambda w: ((w.get("focus_timestamp") or {}).get("secs", 0),
+                                        (w.get("focus_timestamp") or {}).get("nanos", 0)))
+        acol = active["layout"]["pos_in_scrolling_layout"][0]
+        width = {c: max(w["layout"]["tile_size"][0] for _, w in ws_) for c, ws_ in cols.items()}
+        xs = {}
+        full = width[acol] >= ow - 0.5
+        xs[acol] = ox if full else wa[0] + (wa[2] - width[acol]) / 2
+        order = sorted(cols)
+        i = order.index(acol)
+        for j in range(i + 1, len(order)):
+            xs[order[j]] = xs[order[j - 1]] + width[order[j - 1]] + gaps
+        for j in range(i - 1, -1, -1):
+            xs[order[j]] = xs[order[j + 1]] - gaps - width[order[j]]
+        for c, items in cols.items():
+            items.sort(key=lambda t: t[0])
+            heights = [w["layout"]["tile_size"][1] for _, w in items]
+            stacked = len(items) > 1 and sum(heights) + gaps * (len(items) + 1) <= wa[3] + 1
+            y = wa[1] + gaps
+            for (_, w), th in zip(items, heights):
+                lay = w["layout"]
+                tw = lay["tile_size"][0]
+                if th >= oh - 0.5:
+                    ty = oy
+                elif stacked:
+                    ty = y
+                    y += th + gaps
+                else:
+                    ty = wa[1] + max(0.0, (wa[3] - th) / 2)
+                dx, dy = lay.get("window_offset_in_tile") or (0, 0)
+                ww, wh = lay["window_size"]
+                rect = (xs[c] + (width[c] - tw) / 2 + dx, ty + dy, ww, wh)
+                # keep only what is on the output
+                x0, y0 = max(rect[0], ox), max(rect[1], oy)
+                x1, y1 = min(rect[0] + rect[2], ox + ow), min(rect[1] + rect[3], oy + oh)
+                if x1 - x0 > 8 and y1 - y0 > 8:
+                    focus = (w.get("focus_timestamp") or {}).get("secs", 0)
+                    tiled.append((focus, (x0, y0, x1 - x0, y1 - y0), w.get("title") or w.get("app_id") or ""))
+    floating.sort(key=lambda t: -t[0])
+    tiled.sort(key=lambda t: -t[0])
+    return [(tuple(round(v) for v in r), t) for _, r, t in floating + tiled]
+
+
+# ───────────────────────────── annotations ─────────────────────────────
+
+def snap_angle(a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    ang = round(math.atan2(dy, dx) / (math.pi / 12)) * (math.pi / 12)
+    d = math.hypot(dx, dy)
+    return a[0] + d * math.cos(ang), a[1] + d * math.sin(ang)
+
+
+def snap_square(a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    d = max(abs(dx), abs(dy))
+    return a[0] + math.copysign(d, dx or 1), a[1] + math.copysign(d, dy or 1)
+
+
+def effect_surface(frame, o):
+    """Blurred or pixelated copy of the frame under o, cached on o."""
+    rect = norm(o["a"], o["b"])
+    key = (rect, o["w"])
+    if o.get("_key") == key:
+        return o["_fx"]
+    x, y, w, h = rect
+    if w < 2 or h < 2:
+        return None
+    if o["k"] == "pixel":
+        block = 6 + o["w"] * 1.5
+        small = frame.crop(rect, 1 / (block * frame.scale))
+        res = (small, cairo.FILTER_NEAREST)
+    else:
+        # repeated halving + bilinear doubling ≈ gaussian, and cheap
+        steps = 3 + WIDTHS.index(o["w"]) if o["w"] in WIDTHS else 4
+        cur = frame.crop(rect)
+        sizes = []
+        for _ in range(steps):
+            cw, ch = cur.get_width(), cur.get_height()
+            if cw < 4 or ch < 4:
+                break
+            sizes.append((cw, ch))
+            nxt = cairo.ImageSurface(cairo.FORMAT_RGB24, max(1, cw // 2), max(1, ch // 2))
+            c = cairo.Context(nxt)
+            c.scale(nxt.get_width() / cw, nxt.get_height() / ch)
+            c.set_source_surface(cur, 0, 0)
+            c.get_source().set_filter(cairo.FILTER_GOOD)
+            c.get_source().set_extend(cairo.EXTEND_PAD)
+            c.paint()
+            cur = nxt
+        for cw, ch in reversed(sizes):
+            nxt = cairo.ImageSurface(cairo.FORMAT_RGB24, cw, ch)
+            c = cairo.Context(nxt)
+            c.scale(cw / cur.get_width(), ch / cur.get_height())
+            c.set_source_surface(cur, 0, 0)
+            c.get_source().set_filter(cairo.FILTER_BILINEAR)
+            c.get_source().set_extend(cairo.EXTEND_PAD)
+            c.paint()
+            cur = nxt
+        res = (cur, cairo.FILTER_BILINEAR)
+    o["_key"], o["_fx"] = key, res
+    return res
+
+
+def text_layout(cr, o):
+    lay = PangoCairo.create_layout(cr)
+    lay.set_font_description(font(f"{TEXT_FONT} {o['size']}px"))
+    lay.set_text(o["s"] or " ", -1)
+    return lay
+
+
+def obj_bbox(o):
+    k = o["k"]
+    pad = o.get("w", 2) + 4
+    if k in ("pen", "marker"):
+        xs = [p[0] for p in o["pts"]]
+        ys = [p[1] for p in o["pts"]]
+        pad = (o["w"] * 3 if k == "marker" else o["w"]) + 4
+        return min(xs) - pad, min(ys) - pad, max(xs) - min(xs) + 2 * pad, max(ys) - min(ys) + 2 * pad
+    if k == "step":
+        r = step_radius(o) + 2
+        return o["a"][0] - r, o["a"][1] - r, 2 * r, 2 * r
+    if k == "text":
+        return o.get("_bbox") or (o["a"][0], o["a"][1], 20, o["size"])
+    x, y, w, h = norm(o["a"], o["b"])
+    return x - pad, y - pad, w + 2 * pad, h + 2 * pad
+
+
+def step_radius(o):
+    return 11 + o["w"] * 1.2
+
+
+def shift_obj(o, dx, dy):
+    for key in ("a", "b"):
+        if key in o:
+            o[key] = (o[key][0] + dx, o[key][1] + dy)
+    if "pts" in o:
+        o["pts"] = [(x + dx, y + dy) for x, y in o["pts"]]
+    o.pop("_key", None)
+    o.pop("_bbox", None)
+
+
+def draw_obj(cr, frame, o, caret=False):
+    k = o["k"]
+    col = rgb(o["c"])
+    w = o.get("w", 4)
+    cr.save()
+    cr.set_line_cap(cairo.LINE_CAP_ROUND)
+    cr.set_line_join(cairo.LINE_JOIN_ROUND)
+    shadow = (0, 0, 0, 0.35)
+    if k in ("blur", "pixel"):
+        fx = effect_surface(frame, o)
+        if fx:
+            surf, flt = fx
+            x, y, rw, rh = norm(o["a"], o["b"])
+            cr.rectangle(x, y, rw, rh)
+            cr.clip()
+            cr.translate(x, y)
+            cr.scale(rw / surf.get_width(), rh / surf.get_height())
+            cr.set_source_surface(surf, 0, 0)
+            cr.get_source().set_filter(flt)
+            cr.get_source().set_extend(cairo.EXTEND_PAD)
+            cr.paint()
+    elif k in ("rect", "ellipse"):
+        x, y, rw, rh = norm(o["a"], o["b"])
+
+        def path(dx=0.0, dy=0.0):
+            if k == "rect":
+                cr.rectangle(x + dx, y + dy, rw, rh)
+            else:
+                cr.save()
+                cr.translate(x + rw / 2 + dx, y + rh / 2 + dy)
+                cr.scale(max(rw, 0.5) / 2, max(rh, 0.5) / 2)
+                cr.arc(0, 0, 1, 0, 2 * math.pi)
+                cr.restore()
+        cr.set_line_join(cairo.LINE_JOIN_MITER if k == "rect" else cairo.LINE_JOIN_ROUND)
+        cr.set_line_width(w)
+        if o.get("fill"):
+            path(1.5, 2)
+            cr.set_source_rgba(*shadow)
+            cr.fill()
+            path()
+            cr.set_source_rgba(*col)
+            cr.fill()
+        else:
+            path(1.5, 2)
+            cr.set_source_rgba(*shadow)
+            cr.stroke()
+            path()
+            cr.set_source_rgba(*col)
+            cr.stroke()
+    elif k in ("line", "arrow"):
+        (x0, y0), (x1, y1) = o["a"], o["b"]
+        ang = math.atan2(y1 - y0, x1 - x0)
+        head = max(12.0, w * 3.6)
+        ex, ey = x1, y1
+        if k == "arrow":
+            ex, ey = x1 - math.cos(ang) * head * 0.8, y1 - math.sin(ang) * head * 0.8
+
+        def path(dx=0.0, dy=0.0):
+            cr.move_to(x0 + dx, y0 + dy)
+            cr.line_to(ex + dx, ey + dy)
+            cr.stroke()
+            if k == "arrow":
+                spread = 0.42
+                cr.move_to(x1 + dx, y1 + dy)
+                cr.line_to(x1 + dx - head * math.cos(ang - spread), y1 + dy - head * math.sin(ang - spread))
+                cr.line_to(x1 + dx - head * math.cos(ang + spread), y1 + dy - head * math.sin(ang + spread))
+                cr.close_path()
+                cr.fill()
+        cr.set_line_width(w)
+        cr.set_source_rgba(*shadow)
+        path(1.5, 2)
+        cr.set_source_rgba(*col)
+        path()
+    elif k in ("pen", "marker"):
+        pts = o["pts"]
+        if k == "marker":
+            cr.set_line_width(w * 3 + 6)
+            cr.set_line_cap(cairo.LINE_CAP_SQUARE if len(pts) < 2 else cairo.LINE_CAP_ROUND)
+            col = with_alpha(col, 0.42)
+        else:
+            cr.set_line_width(w)
+        passes = [(col, 0, 0)] if k == "marker" else [(shadow, 1.5, 2), (col, 0, 0)]
+        for c, dx, dy in passes:
+            cr.move_to(pts[0][0] + dx, pts[0][1] + dy)
+            if len(pts) == 1:
+                cr.line_to(pts[0][0] + dx + 0.1, pts[0][1] + dy)
+            for i in range(1, len(pts)):
+                if i < len(pts) - 1:  # smooth through midpoints
+                    mx = (pts[i][0] + pts[i + 1][0]) / 2
+                    my = (pts[i][1] + pts[i + 1][1]) / 2
+                    cr.curve_to(pts[i][0] + dx, pts[i][1] + dy, pts[i][0] + dx, pts[i][1] + dy, mx + dx, my + dy)
+                else:
+                    cr.line_to(pts[i][0] + dx, pts[i][1] + dy)
+            cr.set_source_rgba(*c)
+            cr.stroke()
+    elif k == "step":
+        x, y = o["a"]
+        r = step_radius(o)
+        cr.arc(x + 1.5, y + 2, r, 0, 2 * math.pi)
+        cr.set_source_rgba(*shadow)
+        cr.fill()
+        cr.arc(x, y, r, 0, 2 * math.pi)
+        cr.set_source_rgba(*col)
+        cr.fill_preserve()
+        cr.set_line_width(2)
+        cr.set_source_rgba(1, 1, 1, 0.9)
+        cr.stroke()
+        lay = PangoCairo.create_layout(cr)
+        lay.set_font_description(font(f"{TEXT_FONT} {int(r * 1.15)}px"))
+        lay.set_text(str(o["n"]), -1)
+        tw, th = lay.get_pixel_size()
+        cr.move_to(x - tw / 2, y - th / 2)
+        cr.set_source_rgba(*((0.07, 0.07, 0.07, 1) if luminance(col) > 0.6 else (1, 1, 1, 1)))
+        PangoCairo.show_layout(cr, lay)
+    elif k == "text":
+        x, y = o["a"]
+        lay = text_layout(cr, o)
+        tw, th = lay.get_pixel_size()
+        o["_bbox"] = (x - 4, y - 2, tw + 8, th + 4)
+        if o["s"]:
+            cr.move_to(x, y)
+            PangoCairo.layout_path(cr, lay)
+            cr.set_line_width(max(2.5, o["size"] / 7))
+            dark = luminance(col) > 0.2
+            cr.set_source_rgba(*((0, 0, 0, 0.85) if dark else (1, 1, 1, 0.9)))
+            cr.stroke_preserve()
+            cr.set_source_rgba(*col)
+            cr.fill()
+        if caret:
+            # caret after the last character
+            idx = len(o["s"].encode())
+            pos = lay.get_cursor_pos(idx)[0]
+            cx = x + pos.x / Pango.SCALE
+            cy = y + pos.y / Pango.SCALE
+            ch = max(pos.height / Pango.SCALE, o["size"])
+            cr.rectangle(cx + 1, cy, 2, ch)
+            cr.set_source_rgba(*T["accent"])
+            cr.fill()
+            cr.rectangle(*o["_bbox"])
+            cr.set_dash([4, 3])
+            cr.set_line_width(1)
+            cr.set_source_rgba(*with_alpha(T["accent"], 0.8))
+            cr.stroke()
+    cr.restore()
+
+
+# ───────────────────────────── overlay windows ─────────────────────────────
+
+class Overlay(Gtk.Window):
+    """One output-sized layer that shows the frozen frame and takes the input."""
+
+    def __init__(self, app, monitor, geo, keyboard):
+        super().__init__()
+        self.app, self.monitor, self.geo = app, monitor, geo
+        self.skin_layer = None
+        self.skin_key = None
+        self.skin_time = 0.0
+        self._cursor = None
+        self.set_app_paintable(True)
+        self.set_decorated(False)
+        self.set_size_request(geo.width, geo.height)
+        visual = self.get_screen().get_rgba_visual()
+        if visual is not None:
+            self.set_visual(visual)
+        GtkLayerShell.init_for_window(self)
+        GtkLayerShell.set_namespace(self, "angelos-shot")
+        GtkLayerShell.set_layer(self, GtkLayerShell.Layer.OVERLAY)
+        GtkLayerShell.set_exclusive_zone(self, -1)
+        GtkLayerShell.set_monitor(self, monitor)
+        GtkLayerShell.set_keyboard_mode(
+            self, GtkLayerShell.KeyboardMode.EXCLUSIVE if keyboard else GtkLayerShell.KeyboardMode.NONE)
+        for edge in (GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.RIGHT, GtkLayerShell.Edge.BOTTOM):
+            GtkLayerShell.set_anchor(self, edge, True)
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
+                        | Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.KEY_PRESS_MASK
+                        | Gdk.EventMask.SCROLL_MASK | Gdk.EventMask.SMOOTH_SCROLL_MASK
+                        | Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        self.connect("draw", self.on_draw)
+        self.connect("button-press-event", lambda _w, e: app.on_press(e, *self.to_global(e.x, e.y)))
+        self.connect("button-release-event", lambda _w, e: app.on_release(e, *self.to_global(e.x, e.y)))
+        self.connect("motion-notify-event", lambda _w, e: app.on_motion(e, *self.to_global(e.x, e.y)))
+        self.connect("scroll-event", lambda _w, e: app.on_scroll(e))
+        self.connect("key-press-event", lambda _w, e: app.on_key(e))
+        self.set_can_focus(True)
+        self.show_all()
+        self.grab_focus()
+
+    def to_global(self, x, y):
+        return self.geo.x + x, self.geo.y + y
+
+    def set_cursor(self, name):
+        if name == self._cursor or self.get_window() is None:
+            return
+        self._cursor = name
+        self.get_window().set_cursor(Gdk.Cursor.new_from_name(self.get_display(), name))
+
+    def area(self, rect, pad=0):
+        """Queue a redraw of a global rect."""
+        x, y, w, h = rect
+        self.queue_draw_area(int(x - self.geo.x - pad), int(y - self.geo.y - pad), int(w + 2 * pad + 2), int(h + 2 * pad + 2))
+
+    def skin_surface(self, sel, now):
+        skin = self.app.skin
+        key = (sel, self.app.mode)
+        if self.skin_layer is None or key != self.skin_key or now - self.skin_time >= 1 / skin.fps:
+            if self.skin_layer is None:
+                self.skin_layer = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.geo.width, self.geo.height)
+            c = cairo.Context(self.skin_layer)
+            c.set_operator(cairo.OPERATOR_CLEAR)
+            c.paint()
+            c.set_operator(cairo.OPERATOR_OVER)
+            c.set_antialias(cairo.ANTIALIAS_NONE)
+            local = None if sel is None else (sel[0] - self.geo.x, sel[1] - self.geo.y, sel[2], sel[3])
+            try:
+                self.app.draw_skin(c, self.geo.width, self.geo.height, local)
+            except Exception:
+                self.app.skin = None
+            self.skin_key, self.skin_time = key, now
+        return self.skin_layer
+
+    def on_draw(self, _w, cr):
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.translate(-self.geo.x, -self.geo.y)
+        self.app.frame.paint(cr)
+        cr.set_operator(cairo.OPERATOR_OVER)
+        self.app.draw(cr, self)
+        return False
+
+
+class Probe(Gtk.Window):
+    """Invisible layer that niri sizes to the working area (output minus the bar)."""
+
+    def __init__(self, app, name, monitor):
+        super().__init__()
+        self.set_app_paintable(True)
+        visual = self.get_screen().get_rgba_visual()
+        if visual is not None:
+            self.set_visual(visual)
+        GtkLayerShell.init_for_window(self)
+        GtkLayerShell.set_namespace(self, "angelos-shot-probe")
+        GtkLayerShell.set_layer(self, GtkLayerShell.Layer.BACKGROUND)
+        GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.NONE)
+        GtkLayerShell.set_monitor(self, monitor)
+        for edge in (GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.RIGHT, GtkLayerShell.Edge.BOTTOM):
+            GtkLayerShell.set_anchor(self, edge, True)
+        self.set_size_request(1, 1)
+        self.connect("draw", lambda _w, cr: (cr.set_operator(cairo.OPERATOR_CLEAR), cr.paint()) and False)
+
+        def allocated(_w, alloc):
+            if alloc.width > 1 and alloc.height > 1:
+                app.work_areas[name] = (alloc.width, alloc.height)
+                app.windows_dirty = True
+                GLib.idle_add(self.destroy)
+        self.connect("size-allocate", allocated)
+        self.connect("realize", lambda _w: self.get_window().input_shape_combine_region(cairo.Region(), 0, 0))
+        self.show_all()
+
+
+# ───────────────────────────── the app ─────────────────────────────
+
+class Shot:
+    MAG_CELLS = 15
+
+    def __init__(self):
+        self.frame, self.outputs = load_frame()
+        self._niri = {k: niri_json(k) for k in ("windows", "workspaces")}
+        self.skin = load_skin()
+        self.mode = "select"
+        self.sel = None              # (x, y, w, h) global logical, ints
+        self.ptr = None
+        self.press = None
+        self.op = None
+        self.hover = None            # (rect, title) under the pointer while selecting
+        self.objs = []
+        self.redo = []
+        self.cur = None              # annotation being drawn
+        self.editing = None          # text annotation taking keys
+        self.picked = None           # annotation picked with the move tool
+        self.tool = "rect"
+        self.color = 0
+        self.width = 1
+        self.fill = False
+        self.zoom = 8
+        self.buttons = []
+        self.hot = None
+        self.done = False
+        self.work_areas = {}
+        self.windows_dirty = True
+        self._wins = []
+        self.overlays = []
+        display = Gdk.Display.get_default()
+        for i in range(display.get_n_monitors()):
+            mon = display.get_monitor(i)
+            geo = mon.get_geometry()
+            name = next((n for n, o in self.outputs.items()
+                         if (o.get("logical") or {}).get("x") == geo.x and (o.get("logical") or {}).get("y") == geo.y), None)
+            if name:
+                Probe(self, name, mon)
+            self.overlays.append(Overlay(self, mon, geo, keyboard=(i == 0)))
+        if self.skin is not None:
+            GLib.timeout_add(int(1000 / max(1, self.skin.fps)), self._skin_tick)
+        GLib.timeout_add(530, self._caret_tick)
+
+    # ── geometry ──
+    def monitor_at(self, gx, gy):
+        for ov in self.overlays:
+            g = ov.geo
+            if g.x <= gx < g.x + g.width and g.y <= gy < g.y + g.height:
+                return ov
+        return self.overlays[0]
+
+    def mon_rect(self, gx, gy):
+        g = self.monitor_at(gx, gy).geo
+        return g.x, g.y, g.width, g.height
+
+    def windows(self):
+        if self.windows_dirty:
+            try:
+                self._wins = window_rects(self.outputs, self._niri["workspaces"], self._niri["windows"], self.work_areas)
+            except Exception:
+                self._wins = []
+            self.windows_dirty = False
+        return self._wins
+
+    def window_at(self, gx, gy):
+        for rect, title in self.windows():
+            if inside(gx, gy, rect):
+                return rect, title
+        return self.mon_rect(gx, gy), "Весь экран"
+
+    def clamp_sel(self, r):
+        x, y, w, h = r
+        g = [ov.geo for ov in self.overlays]
+        x0, y0 = min(a.x for a in g), min(a.y for a in g)
+        x1, y1 = max(a.x + a.width for a in g), max(a.y + a.height for a in g)
+        nx0, ny0 = max(x0, round(x)), max(y0, round(y))
+        nx1, ny1 = min(x1, round(x + w)), min(y1, round(y + h))
+        return nx0, ny0, max(1, nx1 - nx0), max(1, ny1 - ny0)
+
+    # ── redraw ──
+    def redraw(self):
+        for ov in self.overlays:
+            ov.queue_draw()
+
+    def _skin_tick(self):
+        if self.done:
+            return False
+        if self.skin is not None:
+            self.redraw()
+        return True
+
+    def _caret_tick(self):
+        if self.done:
+            return False
+        if self.editing is not None:
+            self.redraw()
+        return True
+
+    # ── drawing ──
+    def shown_sel(self):
+        if self.mode == "edit":
+            return self.sel
+        if self.op == "new" and self.sel:
+            return self.sel
+        return self.hover[0] if self.hover else None
+
+    def draw(self, cr, ov):
+        sel = self.shown_sel()
+        g = ov.geo
+        if self.skin is not None:
+            # the skin draws on its own layer: its hole is a clear, not a paint
+            cr.save()
+            cr.set_source_surface(ov.skin_surface(sel, time.monotonic()), g.x, g.y)
+            cr.paint()
+            cr.restore()
+        else:
+            cr.save()
+            cr.set_source_rgba(0, 0, 0, 0.45)
+            cr.rectangle(g.x, g.y, g.width, g.height)
+            if sel:
+                cr.rectangle(sel[0] + sel[2], sel[1], -sel[2], sel[3])  # reversed = hole
+            cr.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
+            cr.fill()
+            cr.restore()
+            if sel:
+                cr.set_line_width(2 if self.mode == "edit" or self.op == "new" else 3)
+                cr.set_source_rgba(*T["accent"])
+                cr.rectangle(sel[0] - 1, sel[1] - 1, sel[2] + 2, sel[3] + 2)
+                cr.stroke()
+        # annotations (in select mode they show unclipped, as they were left)
+        if self.objs or self.cur:
+            cr.save()
+            if self.mode == "edit" and self.sel:
+                cr.rectangle(*self.sel)
+                cr.clip()
+            for o in self.objs:
+                draw_obj(cr, self.frame, o, caret=(o is self.editing and int(time.monotonic() * 1.9) % 2 == 0))
+            if self.cur is not None:
+                draw_obj(cr, self.frame, self.cur)
+            cr.restore()
+        if self.picked is not None and self.picked in self.objs:
+            cr.save()
+            cr.rectangle(*obj_bbox(self.picked))
+            cr.set_dash([5, 4])
+            cr.set_line_width(1.2)
+            cr.set_source_rgba(*T["accent"])
+            cr.stroke()
+            cr.restore()
+        if self.mode == "select":
+            self.draw_select_info(cr, ov, sel)
+        else:
+            self.draw_edit_ui(cr, ov)
+
+    def draw_skin(self, cr, W, H, sel):
+        """The skin's selection; the window skin's title bar has no room above a
+        (near) full-screen region and would lie across the bottom — go compact there."""
+        skin = self.skin
+        if sel is None or getattr(skin, "name", "") != "window" or sel[1] - 36 >= 0:
+            skin.draw_select(cr, W, H, sel)
+            return
+        x, y, w, h = sel
+        t = time.monotonic() - skin.t0
+        skin.dim(cr, W, H, 0.42)
+        skin.dots(cr, W, H, rgb(skin.c["accent"], 0.10))
+        skin.hole(cr, x, y, w, h)
+        cr.set_line_width(2)
+        cr.rectangle(x + 1, y + 1, w - 2, h - 2)
+        cr.set_dash([6, 6], (t * 24) % 12)
+        cr.set_source_rgba(*rgb(skin.c["accent"]))
+        cr.stroke_preserve()
+        cr.set_dash([6, 6], (t * 24 + 6) % 12)
+        cr.set_source_rgba(1, 1, 1, 1)
+        cr.stroke()
+        cr.set_dash([])
+        for i, (hx, hy) in enumerate(((x + 6, y + 6), (x + w - 24, y + 6), (x + 6, y + h - 22), (x + w - 24, y + h - 22))):
+            skin.heart(cr, hx, hy, 2, rgb(skin.c["accent"] if i % 2 == 0 else skin.c["accent2"]))
+        skin.badge(cr, x + 30, y + 6, "screenshot.exe")
+        skin.badge(cr, x + 30 + skin.text_width(cr, "screenshot.exe", 14, True) + 26, y + 6, f"{w} × {h}")
+
+    def draw_select_info(self, cr, ov, sel):
+        if self.ptr is None:
+            return
+        gx, gy = self.ptr
+        if self.monitor_at(gx, gy) is not ov:
+            return
+        g = ov.geo
+        # crosshair through the pointer
+        cr.save()
+        cr.set_line_width(1)
+        cr.set_source_rgba(*with_alpha(T["accent"], 0.55))
+        cr.move_to(g.x, int(gy) + 0.5); cr.line_to(g.x + g.width, int(gy) + 0.5)
+        cr.move_to(int(gx) + 0.5, g.y); cr.line_to(int(gx) + 0.5, g.y + g.height)
+        cr.stroke()
+        cr.restore()
+        if self.skin is None and sel:
+            label = f"{sel[2]} × {sel[3]}"
+            if self.op != "new" and self.hover:
+                label = f"{self.hover[1][:60]}  ·  {label}"
+            self.chip(cr, label, sel[0], sel[1] - 30 if sel[1] - 30 >= g.y else sel[1] + 6)
+        self.draw_magnifier(cr, ov, gx, gy)
+
+    def mag_rect(self, ov, gx, gy):
+        size = self.MAG_CELLS * self.zoom
+        w, h = size, size + 50
+        g = ov.geo
+        x = gx + 26 if gx + 26 + w <= g.x + g.width else gx - 26 - w
+        y = gy + 26 if gy + 26 + h <= g.y + g.height else gy - 26 - h
+        return x, y, w, h
+
+    def draw_magnifier(self, cr, ov, gx, gy):
+        z, n = self.zoom, self.MAG_CELLS
+        x, y, w, h = self.mag_rect(ov, gx, gy)
+        size = n * z
+        cr.save()
+        rrect(cr, x - 3, y - 3, w + 6, h + 6, 12)
+        cr.set_source_rgba(*with_alpha(T["face"], 0.96))
+        cr.fill_preserve()
+        cr.set_source_rgba(*with_alpha(T["accent"], 0.7))
+        cr.set_line_width(1.5)
+        cr.stroke()
+        cr.save()
+        rrect(cr, x, y, size, size, 9)
+        cr.clip()
+        ix, iy = self.frame.pixel_at(gx, gy)
+        cr.translate(x + (n // 2) * z - ix * z, y + (n // 2) * z - iy * z)
+        cr.scale(z, z)
+        cr.set_source_surface(self.frame.surface, 0, 0)
+        cr.get_source().set_filter(cairo.FILTER_NEAREST)
+        cr.paint()
+        cr.restore()
+        # pixel grid + centre cell
+        cr.set_line_width(1)
+        cr.set_source_rgba(0, 0, 0, 0.18)
+        for i in range(1, n):
+            cr.move_to(x + i * z + 0.5, y); cr.line_to(x + i * z + 0.5, y + size)
+            cr.move_to(x, y + i * z + 0.5); cr.line_to(x + size, y + i * z + 0.5)
+        cr.stroke()
+        c0 = (n // 2) * z
+        cr.rectangle(x + c0 - 0.5, y + c0 - 0.5, z + 1, z + 1)
+        cr.set_source_rgba(0, 0, 0, 0.9)
+        cr.stroke()
+        cr.rectangle(x + c0 + 0.5, y + c0 + 0.5, z - 1, z - 1)
+        cr.set_source_rgba(1, 1, 1, 0.95)
+        cr.stroke()
+        r, gg, b = self.frame.color_at(gx, gy)
+        cr.rectangle(x + 2, y + size + 8, 14, 14)
+        cr.set_source_rgba(r / 255, gg / 255, b / 255, 1)
+        cr.fill_preserve()
+        cr.set_source_rgba(*T["textDim"])
+        cr.stroke()
+        text(cr, f"#{r:02x}{gg:02x}{b:02x}", x + 22, y + size + 7, 13, T["text"], True)
+        text(cr, f"{int(gx)}, {int(gy)}", x + 2, y + size + 28, 12, T["textDim"])
+        cw, _ = text_size(cr, "C — цвет", 12)
+        text(cr, "C — цвет", x + w - cw - 2, y + size + 28, 12, T["textDim"])
+        cr.restore()
+
+    def chip(self, cr, s, x, y, size=13, color=None, bg=None):
+        w, h = text_size(cr, s, size)
+        rrect(cr, x, y, w + 16, h + 8, 7)
+        cr.set_source_rgba(*(bg or with_alpha(T["face"], 0.94)))
+        cr.fill()
+        text(cr, s, x + 8, y + 4, size, color or T["text"])
+        return w + 16, h + 8
+
+    # ── edit-mode panels ──
+    def layout_bars(self):
+        """Tool bar under the region, action column beside it; both stay on the region's output."""
+        x, y, w, h = self.sel
+        mon = self.mon_rect(x + w / 2, y + h / 2)
+        mx, my, mw, mh = mon
+        skin = self.skin is not None
+        pad_b, pad_t, pad_s = (50, 46, 22) if skin else (12, 12, 12)
+        btn, gapw = 34, 4
+        items = [("tool", t[0]) for t in TOOLS] + [("sep", None)] \
+            + [("color", i) for i in range(len(INK))] + [("sep", None)] \
+            + [("width", i) for i in range(len(WIDTHS))] + [("fill", None), ("sep", None), ("undo", None), ("redo", None)]
+        sizes = {"tool": btn, "color": 24, "width": 24, "fill": btn, "undo": btn, "redo": btn, "sep": 9}
+        bw = 12 + sum(sizes[k] for k, _ in items) + gapw * (len(items) - 1)
+        bh = btn + 12
+        bx = min(max(mx + 8, x + w / 2 - bw / 2), mx + mw - bw - 8)
+        if y + h + pad_b + bh <= my + mh - 4:
+            by = y + h + pad_b
+        elif y - pad_t - bh >= my + 4:
+            by = y - pad_t - bh
+        else:
+            by = y + h - bh - 14
+        self.buttons = []
+        self.seps = []
+        cx = bx + 6
+        for kind, val in items:
+            s = sizes[kind]
+            if kind == "sep":
+                self.seps.append(cx + s / 2)
+            else:
+                self.buttons.append((kind, val, (cx, by + 6 + (btn - s) / 2, s, s)))
+            cx += s + gapw
+        self.toolbar = (bx, by, bw, bh)
+        # action column
+        ah = 12 + len(ACTIONS) * (btn + gapw) - gapw
+        aw = btn + 12
+        if x + w + pad_s + aw <= mx + mw - 4:
+            ax = x + w + pad_s
+        elif x - pad_s - aw >= mx + 4:
+            ax = x - pad_s - aw
+        else:
+            ax = x + w - aw - 14
+        ay = min(max(my + 4, y), my + mh - ah - 4)
+        if overlaps((ax, ay, aw, ah), self.toolbar):
+            ay = by - ah - 8 if by - ah - 8 >= my + 4 else by + bh + 8
+        self.actionbar = (ax, ay, aw, ah)
+        for i, (aid, _, _) in enumerate(ACTIONS):
+            self.buttons.append(("action", aid, (ax + 6, ay + 6 + i * (btn + gapw), btn, btn)))
+
+    def button_at(self, gx, gy):
+        for b in self.buttons:
+            if inside(gx, gy, b[2]):
+                return b
+        return None
+
+    def on_panel(self, gx, gy):
+        return inside(gx, gy, self.toolbar) or inside(gx, gy, self.actionbar)
+
+    def tooltip(self, b):
+        kind, val, _ = b
+        if kind == "tool":
+            t = next(t for t in TOOLS if t[0] == val)
+            return f"{t[1]}   {t[2]}"
+        if kind == "color":
+            return "Цвет   C — следующий"
+        if kind == "width":
+            return f"Толщина {WIDTHS[val]}   {val + 1} · колёсико"
+        if kind == "fill":
+            return f"Заливка рамки и эллипса: {'вкл' if self.fill else 'выкл'}   F"
+        if kind == "undo":
+            return "Отменить   Ctrl+Z"
+        if kind == "redo":
+            return "Вернуть   Ctrl+Y"
+        a = next(a for a in ACTIONS if a[0] == val)
+        return f"{a[1]}   {a[2]}"
+
+    def panel(self, cr, rect):
+        x, y, w, h = rect
+        rrect(cr, x + 2, y + 3, w, h, 12)
+        cr.set_source_rgba(0, 0, 0, 0.35)
+        cr.fill()
+        rrect(cr, x, y, w, h, 12)
+        cr.set_source_rgba(*with_alpha(T["face"], 0.97))
+        cr.fill_preserve()
+        cr.set_line_width(1)
+        cr.set_source_rgba(*with_alpha(T["accent"], 0.35))
+        cr.stroke()
+
+    def draw_edit_ui(self, cr, ov):
+        x, y, w, h = self.sel
+        # handles
+        if self.op not in ("draw",):
+            for hx, hy in self.handle_points().values():
+                cr.rectangle(hx - 4.5, hy - 4.5, 9, 9)
+                cr.set_source_rgba(1, 1, 1, 1)
+                cr.fill_preserve()
+                cr.set_line_width(1.5)
+                cr.set_source_rgba(*T["accent"])
+                cr.stroke()
+        if self.skin is None and self.op in ("new", "resize", "move_sel"):
+            self.chip(cr, f"{w} × {h}", x, y - 30 if y - 30 >= ov.geo.y else y + 6)
+        self.layout_bars()
+        tb, ab = self.toolbar, self.actionbar
+        self.panel(cr, tb)
+        self.panel(cr, ab)
+        for kind, val, (bx, by, bw, bh) in self.buttons:
+            hot = self.hot is not None and self.hot[:2] == (kind, val)
+            cx, cy = bx + bw / 2, by + bh / 2
+            if kind == "tool":
+                active = self.tool == val
+                if active or hot:
+                    rrect(cr, bx, by, bw, bh, 8)
+                    cr.set_source_rgba(*(T["accent"] if active else with_alpha(T["faceAlt"], 1)))
+                    cr.fill()
+                icon(cr, val, cx, cy, T["selectText"] if active else T["text"])
+            elif kind == "color":
+                cr.arc(cx, cy, 8 if self.color != val else 9, 0, 2 * math.pi)
+                cr.set_source_rgba(*rgb(INK[val]))
+                cr.fill_preserve()
+                cr.set_line_width(1)
+                cr.set_source_rgba(1, 1, 1, 0.25)
+                cr.stroke()
+                if self.color == val or hot:
+                    cr.arc(cx, cy, 11.5, 0, 2 * math.pi)
+                    cr.set_line_width(2 if self.color == val else 1)
+                    cr.set_source_rgba(*(T["accent"] if self.color == val else T["textDim"]))
+                    cr.stroke()
+            elif kind == "width":
+                if self.width == val or hot:
+                    rrect(cr, bx, by, bw, bh, 7)
+                    cr.set_source_rgba(*(with_alpha(T["accent"], 0.25) if self.width == val else T["faceAlt"]))
+                    cr.fill()
+                cr.arc(cx, cy, 1.2 + WIDTHS[val] / 2.2, 0, 2 * math.pi)
+                cr.set_source_rgba(*(T["accent"] if self.width == val else T["text"]))
+                cr.fill()
+            elif kind in ("fill", "undo", "redo"):
+                on = kind == "fill" and self.fill
+                dim = (kind == "undo" and not self.objs) or (kind == "redo" and not self.redo)
+                if on or hot:
+                    rrect(cr, bx, by, bw, bh, 8)
+                    cr.set_source_rgba(*(with_alpha(T["accent"], 0.25) if on else T["faceAlt"]))
+                    cr.fill()
+                icon(cr, kind, cx, cy, T["accent"] if on else with_alpha(T["text"], 0.35 if dim else 1))
+            elif kind == "action":
+                main = val == "done"
+                if main or hot:
+                    rrect(cr, bx, by, bw, bh, 8)
+                    if main:
+                        cr.set_source_rgba(*(T["accent"] if not hot else T["accent2"]))
+                    else:
+                        cr.set_source_rgba(*(with_alpha(T["danger"], 0.25) if val == "cancel" else T["faceAlt"]))
+                    cr.fill()
+                col = T["selectText"] if main else (T["danger"] if val == "cancel" else T["text"])
+                icon(cr, val, cx, cy, col)
+        cr.set_source_rgba(*with_alpha(T["textDim"], 0.35))
+        cr.set_line_width(1)
+        for sx in self.seps:
+            cr.move_to(int(sx) + 0.5, tb[1] + 10)
+            cr.line_to(int(sx) + 0.5, tb[1] + tb[3] - 10)
+        cr.stroke()
+        # tooltip
+        if self.hot is not None and self.op is None:
+            tip = self.tooltip(self.hot)
+            bx, by, bw, bh = self.hot[2]
+            tw, th = text_size(cr, tip, 13)
+            g = ov.geo
+            if self.hot[0] == "action":
+                tx = bx - tw - 28 if bx - tw - 28 >= g.x else bx + bw + 10
+                ty = by + bh / 2 - (th + 8) / 2
+            else:
+                tx = min(max(g.x + 4, bx + bw / 2 - (tw + 16) / 2), g.x + g.width - tw - 20)
+                ty = by - th - 22 if by - th - 22 >= g.y else by + bh + 12
+            self.chip(cr, tip, tx, ty)
+
+    def handle_points(self):
+        x, y, w, h = self.sel
+        return {"tl": (x, y), "t": (x + w / 2, y), "tr": (x + w, y), "r": (x + w, y + h / 2),
+                "br": (x + w, y + h), "b": (x + w / 2, y + h), "bl": (x, y + h), "l": (x, y + h / 2)}
+
+    def handle_at(self, gx, gy):
+        for name, (hx, hy) in self.handle_points().items():
+            if abs(gx - hx) <= 9 and abs(gy - hy) <= 9:
+                return name
+        return None
+
+    def obj_at(self, gx, gy):
+        for o in reversed(self.objs):
+            if inside(gx, gy, obj_bbox(o)):
+                return o
+        return None
+
+    # ── input ──
+    def on_motion(self, e, gx, gy):
+        if self.done:
+            return True
+        old = self.ptr
+        self.ptr = (gx, gy)
+        ov = self.monitor_at(gx, gy)
+        if self.mode == "select":
+            if self.op == "pending" and math.hypot(gx - self.press[0], gy - self.press[1]) > 3:
+                self.op = "new"
+            if self.op == "new":
+                self.sel = self.clamp_sel(norm(self.press, (gx, gy)))
+                self.redraw()
+            else:
+                hov = self.window_at(gx, gy)
+                if hov != self.hover:
+                    self.hover = hov
+                    self.redraw()
+                else:
+                    self.dirty_pointer(ov, old, (gx, gy))
+            ov.set_cursor("crosshair")
+            return True
+        # edit mode
+        if self.op == "move_sel":
+            dx, dy = gx - self.press[0], gy - self.press[1]
+            x, y, w, h = self.press_sel
+            g = [o.geo for o in self.overlays]
+            x0, y0 = min(a.x for a in g), min(a.y for a in g)
+            x1, y1 = max(a.x + a.width for a in g), max(a.y + a.height for a in g)
+            nx = min(max(x0, round(x + dx)), x1 - w)
+            ny = min(max(y0, round(y + dy)), y1 - h)
+            self.sel = (nx, ny, w, h)
+            self.redraw()
+        elif self.op == "resize":
+            x, y, w, h = self.press_sel
+            l, t, r, b = x, y, x + w, y + h
+            hd = self.handle
+            if "l" in hd:
+                l = gx
+            if "r" in hd:
+                r = gx
+            if "t" in hd:
+                t = gy
+            if "b" in hd:
+                b = gy
+            self.sel = self.clamp_sel(norm((l, t), (r, b)))
+            self.redraw()
+        elif self.op == "move_obj":
+            shift_obj(self.picked, gx - self.last[0], gy - self.last[1])
+            self.last = (gx, gy)
+            self.redraw()
+        elif self.op == "draw" and self.cur is not None:
+            shift = bool(e.state & Gdk.ModifierType.SHIFT_MASK)
+            k = self.cur["k"]
+            if k in ("pen", "marker"):
+                lx, ly = self.cur["pts"][-1]
+                if math.hypot(gx - lx, gy - ly) >= 1.5:
+                    if shift and k == "marker":  # straight highlighter
+                        self.cur["pts"] = [self.cur["pts"][0], (gx, self.cur["pts"][0][1])]
+                    else:
+                        self.cur["pts"].append((gx, gy))
+            else:
+                b = (gx, gy)
+                if shift and k in ("line", "arrow"):
+                    b = snap_angle(self.cur["a"], b)
+                elif shift and k in ("rect", "ellipse", "blur", "pixel"):
+                    b = snap_square(self.cur["a"], b)
+                self.cur["b"] = b
+            self.redraw()
+        else:
+            hot = self.button_at(gx, gy)
+            if (hot and hot[:2]) != (self.hot and self.hot[:2]):
+                self.hot = hot
+                self.redraw()
+            ov.set_cursor(self.cursor_for(gx, gy))
+        return True
+
+    def cursor_for(self, gx, gy):
+        if self.on_panel(gx, gy):
+            return "pointer" if self.button_at(gx, gy) else "default"
+        hd = self.handle_at(gx, gy)
+        if hd:
+            return HANDLE_CURSOR[hd]
+        if self.tool == "move":
+            if self.obj_at(gx, gy) or inside(gx, gy, self.sel):
+                return "move"
+            return "crosshair"
+        return "text" if self.tool == "text" else "crosshair"
+
+    def dirty_pointer(self, ov, old, new):
+        """Redraw just the crosshair lines and the magnifier, not the whole frame."""
+        g = ov.geo
+        for p in (old, new):
+            if p is None:
+                continue
+            ov.area((g.x, p[1] - 1, g.width, 2))
+            ov.area((p[0] - 1, g.y, 2, g.height))
+            ov.area(self.mag_rect(ov, *p), 6)
+
+    def on_scroll(self, e):
+        ok, dx, dy = e.get_scroll_deltas()
+        if ok:
+            step = -1 if dy < 0 else 1 if dy > 0 else 0
+        else:
+            step = {Gdk.ScrollDirection.UP: -1, Gdk.ScrollDirection.DOWN: 1}.get(e.direction, 0)
+        if not step:
+            return True
+        if self.mode == "select":
+            self.zoom = min(16, max(4, self.zoom - 2 * step))
+        else:
+            self.set_width(self.width - step)
+        self.redraw()
+        return True
+
+    def on_press(self, e, gx, gy):
+        if self.done or e.type != Gdk.EventType.BUTTON_PRESS:
+            return True
+        self.ptr = (gx, gy)
+        if e.button == 3:
+            if self.mode == "select":
+                self.cancel()
+            elif self.op == "draw":
+                self.cur, self.op = None, None
+                self.redraw()
+            else:
+                self.commit_text()
+                self.mode, self.sel, self.op, self.picked = "select", None, None, None
+                self.hover = self.window_at(gx, gy)
+                self.redraw()
+            return True
+        if e.button != 1:
+            return True
+        if self.mode == "select":
+            self.press, self.op = (gx, gy), "pending"
+            return True
+        b = self.button_at(gx, gy)
+        if b:
+            self.commit_text()
+            self.click_button(b)
+            return True
+        if self.on_panel(gx, gy):
+            return True
+        if self.editing is not None:
+            if inside(gx, gy, obj_bbox(self.editing)):
+                return True
+            self.commit_text()
+            if self.tool == "text":
+                return True  # a click away from a text just finishes it
+        hd = self.handle_at(gx, gy)
+        if hd:
+            self.op, self.handle, self.press, self.press_sel = "resize", hd, (gx, gy), self.sel
+            self.picked = None
+            return True
+        if self.tool == "move":
+            o = self.obj_at(gx, gy)
+            if o is not None:
+                self.picked, self.op, self.last = o, "move_obj", (gx, gy)
+                self.push_undo()
+                self.redraw()
+            elif inside(gx, gy, self.sel):
+                self.picked = None
+                self.op, self.press, self.press_sel = "move_sel", (gx, gy), self.sel
+            else:
+                self.picked = None
+                self.mode, self.press, self.op = "select", (gx, gy), "pending"
+                self.sel = None
+                self.redraw()
+            return True
+        self.picked = None
+        col, w = INK[self.color], WIDTHS[self.width]
+        if self.tool == "text":
+            o = {"k": "text", "a": (gx, gy - (12 + w * 3) / 2), "s": "", "c": col, "size": 14 + w * 3}
+            self.push_undo()
+            self.objs.append(o)
+            self.editing = o
+            self.redraw()
+            return True
+        if self.tool == "step":
+            n = 1 + sum(1 for o in self.objs if o["k"] == "step")
+            self.push_undo()
+            self.objs.append({"k": "step", "a": (gx, gy), "n": n, "c": col, "w": w})
+            self.redraw()
+            return True
+        if self.tool in ("pen", "marker"):
+            self.cur = {"k": self.tool, "pts": [(gx, gy)], "c": col, "w": w}
+        else:
+            self.cur = {"k": self.tool, "a": (gx, gy), "b": (gx, gy), "c": col, "w": w, "fill": self.fill}
+        self.op = "draw"
+        return True
+
+    def on_release(self, e, gx, gy):
+        if self.done or e.button != 1:
+            return True
+        if self.mode == "select":
+            if self.op == "new" and self.sel and self.sel[2] >= 4 and self.sel[3] >= 4:
+                self.enter_edit(self.sel)
+            elif self.op == "pending":
+                self.enter_edit(self.window_at(gx, gy)[0])
+            else:
+                self.op = None
+                self.sel = None
+                self.redraw()
+            return True
+        if self.op == "draw" and self.cur is not None:
+            o = self.cur
+            keep = True
+            if o["k"] in ("pen", "marker"):
+                keep = len(o["pts"]) >= 1
+            else:
+                x, y, w, h = norm(o["a"], o["b"])
+                keep = math.hypot(w, h) >= 4
+            if keep:
+                self.push_undo()
+                self.objs.append(o)
+            self.cur = None
+        self.op = None
+        self.redraw()
+        return True
+
+    def enter_edit(self, rect):
+        self.sel = self.clamp_sel(rect)
+        self.mode, self.op, self.hover = "edit", None, None
+        for ov in self.overlays:
+            ov.set_cursor("crosshair")
+        self.redraw()
+
+    def push_undo(self):
+        self.redo.clear()
+        self.history = getattr(self, "history", [])
+        self.history.append([dict(o, pts=list(o["pts"])) if "pts" in o else dict(o) for o in self.objs])
+        if len(self.history) > 100:
+            self.history.pop(0)
+
+    def undo(self):
+        self.commit_text()
+        hist = getattr(self, "history", [])
+        if not hist:
+            return
+        self.redo.append(self.objs)
+        self.objs = hist.pop()
+        self.picked = None
+        self.redraw()
+
+    def redo_(self):
+        if not self.redo:
+            return
+        self.history = getattr(self, "history", [])
+        self.history.append(self.objs)
+        self.objs = self.redo.pop()
+        self.picked = None
+        self.redraw()
+
+    def commit_text(self):
+        if self.editing is None:
+            return
+        o = self.editing
+        self.editing = None
+        if not o["s"].strip() and o in self.objs:
+            self.objs.remove(o)
+            hist = getattr(self, "history", [])
+            if hist:
+                hist.pop()
+        self.redraw()
+
+    def set_width(self, i):
+        self.width = min(len(WIDTHS) - 1, max(0, i))
+        w = WIDTHS[self.width]
+        target = self.editing or self.picked
+        if target is not None:
+            if target["k"] == "text":
+                target["size"] = 14 + w * 3
+            else:
+                target["w"] = w
+            target.pop("_key", None)
+        self.redraw()
+
+    def set_color(self, i):
+        self.color = i % len(INK)
+        target = self.editing or self.picked
+        if target is not None and target["k"] not in ("blur", "pixel"):
+            target["c"] = INK[self.color]
+        self.redraw()
+
+    def set_tool(self, t):
+        self.commit_text()
+        self.tool = t
+        if t != "move":
+            self.picked = None
+        if self.ptr:
+            self.monitor_at(*self.ptr).set_cursor(self.cursor_for(*self.ptr))
+        self.redraw()
+
+    def click_button(self, b):
+        kind, val, _ = b
+        if kind == "tool":
+            self.set_tool(val)
+        elif kind == "color":
+            self.set_color(val)
+        elif kind == "width":
+            self.set_width(val)
+        elif kind == "fill":
+            self.toggle_fill()
+        elif kind == "undo":
+            self.undo()
+        elif kind == "redo":
+            self.redo_()
+        elif kind == "action":
+            self.finish(val)
+
+    def toggle_fill(self):
+        self.fill = not self.fill
+        if self.picked is not None and self.picked["k"] in ("rect", "ellipse"):
+            self.picked["fill"] = self.fill
+        self.redraw()
+
+    def on_key(self, e):
+        if self.done:
+            return True
+        name = Gdk.keyval_name(e.keyval) or ""
+        ctrl = bool(e.state & Gdk.ModifierType.CONTROL_MASK)
+        shift = bool(e.state & Gdk.ModifierType.SHIFT_MASK)
+        code = e.hardware_keycode
+        if self.editing is not None:
+            return self.text_key(e, name, ctrl, shift, code)
+        if self.mode == "select":
+            if name == "Escape":
+                self.cancel()
+            elif name in ("Return", "KP_Enter", "space"):
+                p = self.ptr or (self.overlays[0].geo.x + 1, self.overlays[0].geo.y + 1)
+                self.enter_edit(self.mon_rect(*p))
+            elif code == K_C and self.ptr:
+                r, g, b = self.frame.color_at(*self.ptr)
+                hexv = f"#{r:02x}{g:02x}{b:02x}"
+                self.hide()
+                copy_bytes(hexv.encode(), "text/plain")
+                sound("done")
+                notify(f"Цвет {hexv} скопирован", f"rgb({r}, {g}, {b})", app="Пипетка")
+                self.quit()
+            return True
+        if name == "Escape":
+            if self.op == "draw":
+                self.cur, self.op = None, None
+                self.redraw()
+            else:
+                self.cancel()
+            return True
+        if name in ("Return", "KP_Enter"):
+            self.finish("done")
+            return True
+        if ctrl:
+            if code == K_C:
+                self.finish("done")
+            elif code == K_S:
+                self.finish("saveas")
+            elif code == K_P:
+                self.finish("pin")
+            elif code == K_T:
+                self.finish("ocr")
+            elif code == K_U:
+                self.finish("upload")
+            elif code == K_Z and shift or code == K_Y:
+                self.redo_()
+            elif code == K_Z:
+                self.undo()
+            elif name in ("Left", "Right", "Up", "Down"):
+                self.nudge(name, 10 if shift else 1, resize=True)
+            return True
+        if name in ("Delete", "BackSpace"):
+            target = self.picked if self.picked in self.objs else (self.objs[-1] if self.objs else None)
+            if target is not None:
+                self.push_undo()
+                self.objs.remove(target)
+                self.picked = None
+                self.redraw()
+            return True
+        if name in ("Left", "Right", "Up", "Down"):
+            self.nudge(name, 10 if shift else 1)
+            return True
+        for tid, _, _, kc in TOOLS:
+            if code == kc:
+                self.set_tool(tid)
+                return True
+        if code in K_DIGITS:
+            self.set_width(K_DIGITS[code])
+        elif code == K_C:
+            self.set_color(self.color + (-1 if shift else 1))
+        elif code == K_F:
+            self.toggle_fill()
+        return True
+
+    def text_key(self, e, name, ctrl, shift, code):
+        o = self.editing
+        if name == "Escape" or (name in ("Return", "KP_Enter") and not shift):
+            self.commit_text()
+        elif name in ("Return", "KP_Enter"):
+            o["s"] += "\n"
+        elif name == "BackSpace":
+            o["s"] = o["s"][:-1]
+        elif ctrl and code == 55:  # Ctrl+V: paste text
+            try:
+                pasted = subprocess.run(["wl-paste", "-n", "-t", "text/plain"], capture_output=True, timeout=2).stdout
+                o["s"] += pasted.decode("utf-8", "replace")
+            except (OSError, subprocess.SubprocessError):
+                pass
+        elif not ctrl:
+            ch = Gdk.keyval_to_unicode(e.keyval)
+            if ch and (ch >= 32 or ch == 9):
+                o["s"] += chr(ch)
+        o.pop("_bbox", None)
+        self.redraw()
+        return True
+
+    def nudge(self, name, step, resize=False):
+        dx = {"Left": -step, "Right": step}.get(name, 0)
+        dy = {"Up": -step, "Down": step}.get(name, 0)
+        x, y, w, h = self.sel
+        if resize:
+            self.sel = self.clamp_sel((x, y, max(1, w + dx), max(1, h + dy)))
+        else:
+            g = [o.geo for o in self.overlays]
+            x0, y0 = min(a.x for a in g), min(a.y for a in g)
+            x1, y1 = max(a.x + a.width for a in g), max(a.y + a.height for a in g)
+            self.sel = (min(max(x0, x + dx), x1 - w), min(max(y0, y + dy), y1 - h), w, h)
+        self.redraw()
+
+    # ── results ──
+    def render(self):
+        x, y, w, h = self.sel
+        s = self.frame.scale
+        out = cairo.ImageSurface(cairo.FORMAT_RGB24, max(1, round(w * s)), max(1, round(h * s)))
+        cr = cairo.Context(out)
+        cr.scale(s, s)
+        cr.translate(-x, -y)
+        self.frame.paint(cr)
+        for o in self.objs:
+            draw_obj(cr, self.frame, o)
+        return out
+
+    def png_bytes(self, surface):
+        buf = io.BytesIO()
+        surface.write_to_png(buf)
+        return buf.getvalue()
+
+    def hide(self):
+        for ov in self.overlays:
+            ov.hide()
+        while Gtk.events_pending():
+            Gtk.main_iteration_do(False)
+
+    def show(self):
+        for ov in self.overlays:
+            ov.show_all()
+        self.overlays[0].grab_focus()
+        self.redraw()
+
+    def finish(self, action):
+        if self.sel is None:
+            return
+        self.commit_text()
+        if action == "cancel":
+            self.cancel()
+            return
+        img = self.render()
+        stamp = time.strftime("%Y-%m-%d %H-%M-%S")
+        if action == "saveas":
+            self.hide()
+            path = self.ask_path(f"Screenshot from {stamp}.png")
+            if not path:
+                self.show()
+                return
+            self.done = True
+            if not self.save(img, path):
+                self.quit()
+                return
+            copy_bytes(self.png_bytes(img), "image/png")
+            sound("shot")
+            notify_saved("Скриншот сохранён", path)
+            self.quit()
+            return
+        self.done = True
+        self.hide()
+        signal.alarm(120 if action in ("upload", "ocr") else 20)
+        if action == "done":
+            path = os.path.join(OUTDIR, f"Screenshot from {stamp}.png")
+            data = self.png_bytes(img)
+            os.makedirs(OUTDIR, exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(data)
+            sound("shot")
+            copy_bytes(data, "image/png")
+            notify_saved("Скриншот скопирован", path)
+        elif action == "pin":
+            os.makedirs(PIN_DIR, exist_ok=True)
+            self.clean_pins()
+            path = os.path.join(PIN_DIR, f"pin {stamp}.png")
+            img.write_to_png(path)
+            sound("shot")
+            x, y = self.sel[0], self.sel[1]
+            subprocess.Popen([sys.executable, os.path.abspath(__file__), "--pin", path, str(x), str(y)],
+                             start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif action == "ocr":
+            self.ocr(img)
+        elif action == "upload":
+            self.upload(img, stamp)
+        self.quit()
+
+    def clean_pins(self):
+        """Pins live in the cache; drop the ones older than a day."""
+        now = time.time()
+        try:
+            for name in os.listdir(PIN_DIR):
+                p = os.path.join(PIN_DIR, name)
+                if now - os.path.getmtime(p) > 86400:
+                    os.remove(p)
+        except OSError:
+            pass
+
+    def ask_path(self, name):
+        os.makedirs(OUTDIR, exist_ok=True)
+        try:
+            r = subprocess.run(["zenity", "--file-selection", "--save", "--confirm-overwrite",
+                                "--title=Сохранить скриншот", f"--filename={os.path.join(OUTDIR, name)}",
+                                "--file-filter=Картинки | *.png *.jpg *.jpeg *.webp", "--file-filter=Все файлы | *"],
+                               capture_output=True, text=True)
+        except OSError:
+            return None
+        path = r.stdout.strip()
+        if r.returncode != 0 or not path:
+            return None
+        if not os.path.splitext(path)[1]:
+            path += ".png"
+        return path
+
+    def save(self, img, path):
+        ext = os.path.splitext(path)[1].lower()
+        try:
+            if ext in (".jpg", ".jpeg", ".webp"):
+                pb = Gdk.pixbuf_get_from_surface(img, 0, 0, img.get_width(), img.get_height())
+                kind = "jpeg" if ext != ".webp" else "webp"
+                pb.savev(path, kind, ["quality"], ["92"])
+            else:
+                img.write_to_png(path)
+            return True
+        except Exception as err:
+            sound("error")
+            notify("Не удалось сохранить", str(err))
+            return False
+
+    def ocr(self, img):
+        tmp = os.path.join(RUNTIME, f"angelos-shot-ocr-{os.getpid()}.png")
+        # tesseract reads small UI text much better at 2×
+        big = cairo.ImageSurface(cairo.FORMAT_RGB24, img.get_width() * 2, img.get_height() * 2)
+        c = cairo.Context(big)
+        c.scale(2, 2)
+        c.set_source_surface(img, 0, 0)
+        c.get_source().set_filter(cairo.FILTER_GOOD)
+        c.paint()
+        big.write_to_png(tmp)
+        langs = ocr_langs()
+        try:
+            r = subprocess.run(["tesseract", tmp, "stdout", "-l", "+".join(langs), "--psm", "6"],
+                               capture_output=True, text=True, timeout=60)
+            lines = [ln.rstrip() for ln in r.stdout.splitlines()]
+            out = "\n".join(ln for ln in lines if ln.strip())
+        except (OSError, subprocess.SubprocessError) as err:
+            sound("error")
+            notify("OCR не сработал", str(err), app="OCR")
+            return
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        if not out:
+            sound("error")
+            note = "" if "rus" in langs else "\nДля русского: sudo pacman -S tesseract-data-rus"
+            notify("Текст не найден", note.strip(), app="OCR")
+            return
+        copy_bytes(out.encode(), "text/plain;charset=utf-8")
+        sound("done")
+        tail = "" if "rus" in langs else "\n(русский не установлен: sudo pacman -S tesseract-data-rus)"
+        notify("Текст скопирован", out[:280] + tail, app="OCR")
+
+    def upload(self, img, stamp):
+        path = os.path.join(OUTDIR, f"Screenshot from {stamp}.png")
+        os.makedirs(OUTDIR, exist_ok=True)
+        img.write_to_png(path)
+        sound("shot")
+        notify("Загружаю скриншот…", "catbox.moe", icon=path)
+        try:
+            r = subprocess.run(["curl", "-sS", "--max-time", "90", "-F", "reqtype=fileupload",
+                                "-F", f"fileToUpload=@{path}", UPLOAD_URL],
+                               capture_output=True, text=True, timeout=100)
+            link = r.stdout.strip()
+        except (OSError, subprocess.SubprocessError) as err:
+            link, r = "", None
+            sound("error")
+            notify("Загрузка не удалась", str(err), icon=path)
+            return
+        if not link.startswith("http"):
+            sound("error")
+            notify("Загрузка не удалась", (r.stderr or link or "нет ответа")[:200], icon=path)
+            return
+        copy_bytes(link.encode(), "text/plain;charset=utf-8")
+        sound("done")
+        notify("Ссылка скопирована", link, icon=path)
+
+    def cancel(self):
+        if self.done:
+            return
+        self.done = True
+        self.quit()
+
+    def quit(self):
+        self.done = True
+        Gtk.main_quit()
+
+
+def ocr_langs():
+    found = set()
+    for d in (os.environ.get("TESSDATA_PREFIX"), "/usr/share/tessdata", os.path.join(HOME, ".local/share/tessdata")):
+        if d and os.path.isdir(d):
+            found |= {f[:-12] for f in os.listdir(d) if f.endswith(".traineddata")}
+    langs = [l for l in ("rus", "eng") if l in found]
+    return langs or ["eng"]
+
+
+# ───────────────────────────── pinned picture ─────────────────────────────
+
+class Pin(Gtk.Window):
+    def __init__(self, path, x, y):
+        super().__init__()
+        self.path = path
+        self.img = cairo.ImageSurface.create_from_png(path)
+        self.iw, self.ih = self.img.get_width(), self.img.get_height()
+        disp = Gdk.Display.get_default()
+        mon = disp.get_monitor_at_point(int(x), int(y)) or disp.get_monitor(0)
+        self.geo = mon.get_geometry()
+        fit = min(1.0, self.geo.width * 0.8 / self.iw, self.geo.height * 0.8 / self.ih)
+        self.zoom = fit
+        self.alpha = 1.0
+        self.mx, self.my = int(x) - self.geo.x - 4, int(y) - self.geo.y - 4
+        self.drag = None
+        self.set_app_paintable(True)
+        self.set_decorated(False)
+        visual = self.get_screen().get_rgba_visual()
+        if visual is not None:
+            self.set_visual(visual)
+        GtkLayerShell.init_for_window(self)
+        GtkLayerShell.set_namespace(self, "angelos-shot-pin")
+        GtkLayerShell.set_layer(self, GtkLayerShell.Layer.TOP)
+        GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.ON_DEMAND)
+        GtkLayerShell.set_monitor(self, mon)
+        GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.LEFT, True)
+        GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.TOP, True)
+        self.place()
+        self.resize_to()
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
+                        | Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.SCROLL_MASK
+                        | Gdk.EventMask.SMOOTH_SCROLL_MASK | Gdk.EventMask.KEY_PRESS_MASK
+                        | Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        self.hover = False
+        self.connect("draw", self.on_draw)
+        self.connect("button-press-event", self.on_press)
+        self.connect("button-release-event", lambda *_: setattr(self, "drag", None))
+        self.connect("motion-notify-event", self.on_motion)
+        self.connect("scroll-event", self.on_scroll)
+        self.connect("key-press-event", self.on_key)
+        self.connect("enter-notify-event", lambda *_: self.set_hover(True))
+        self.connect("leave-notify-event", lambda *_: self.set_hover(False))
+        self.connect("destroy", Gtk.main_quit)
+        self.show_all()
+
+    def set_hover(self, v):
+        self.hover = v
+        self.queue_draw()
+
+    def size(self):
+        return max(24, int(self.iw * self.zoom)) + 8, max(24, int(self.ih * self.zoom)) + 8
+
+    def place(self):
+        w, h = self.size()
+        self.mx = min(max(-w + 40, self.mx), self.geo.width - 40)
+        self.my = min(max(0, self.my), self.geo.height - 40)
+        GtkLayerShell.set_margin(self, GtkLayerShell.Edge.LEFT, int(self.mx))
+        GtkLayerShell.set_margin(self, GtkLayerShell.Edge.TOP, int(self.my))
+
+    def resize_to(self):
+        w, h = self.size()
+        self.set_size_request(w, h)
+        self.resize(w, h)
+        self.queue_draw()
+
+    def on_draw(self, _w, cr):
+        w, h = self.size()
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(0, 0, 0, 0)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        rrect(cr, 1, 2, w - 2, h - 2, 8)
+        cr.set_source_rgba(0, 0, 0, 0.35 * self.alpha)
+        cr.fill()
+        cr.save()
+        cr.rectangle(4, 4, w - 8, h - 8)
+        cr.clip()
+        cr.translate(4, 4)
+        cr.scale((w - 8) / self.iw, (h - 8) / self.ih)
+        cr.set_source_surface(self.img, 0, 0)
+        cr.get_source().set_filter(cairo.FILTER_GOOD)
+        cr.paint_with_alpha(self.alpha)
+        cr.restore()
+        cr.rectangle(3.5, 3.5, w - 7, h - 7)
+        cr.set_line_width(1)
+        cr.set_source_rgba(*with_alpha(T["accent"], (0.95 if self.hover else 0.5) * self.alpha))
+        cr.stroke()
+        if self.hover:
+            label = f"{round(self.zoom * 100)}%"
+            tw, th = text_size(cr, label, 12)
+            if w > tw + 30 and h > th + 24:
+                rrect(cr, w - tw - 20, h - th - 18, tw + 12, th + 8, 6)
+                cr.set_source_rgba(*with_alpha(T["face"], 0.9))
+                cr.fill()
+                text(cr, label, w - tw - 14, h - th - 14, 12, T["text"])
+        return False
+
+    def on_press(self, _w, e):
+        if e.type == getattr(Gdk.EventType, "_2BUTTON_PRESS", None) or e.button == 2:
+            self.destroy()
+        elif e.button == 1:
+            self.drag = (e.x, e.y)
+        elif e.button == 3:
+            menu = Gtk.Menu()
+            for label, cb in (("Копировать", self.copy), ("Сохранить как…", self.save_as),
+                              ("Масштаб 100%", lambda: self.set_zoom(1.0)), ("Закрыть", self.destroy)):
+                item = Gtk.MenuItem(label=label)
+                item.connect("activate", lambda _i, f=cb: f())
+                menu.append(item)
+            menu.show_all()
+            menu.popup_at_pointer(e)
+            self._menu = menu
+        return True
+
+    def on_motion(self, _w, e):
+        if self.drag:
+            self.mx += e.x - self.drag[0]
+            self.my += e.y - self.drag[1]
+            self.place()
+        return True
+
+    def set_zoom(self, z):
+        self.zoom = min(4.0, max(0.1, z))
+        self.place()
+        self.resize_to()
+
+    def on_scroll(self, _w, e):
+        ok, _dx, dy = e.get_scroll_deltas()
+        if not ok:
+            dy = {Gdk.ScrollDirection.UP: -1, Gdk.ScrollDirection.DOWN: 1}.get(e.direction, 0)
+        if not dy:
+            return True
+        if e.state & Gdk.ModifierType.CONTROL_MASK:
+            self.alpha = min(1.0, max(0.15, self.alpha - 0.08 * (1 if dy > 0 else -1)))
+            self.queue_draw()
+        else:
+            self.set_zoom(self.zoom * (0.9 if dy > 0 else 1 / 0.9))
+        return True
+
+    def on_key(self, _w, e):
+        name = Gdk.keyval_name(e.keyval)
+        ctrl = e.state & Gdk.ModifierType.CONTROL_MASK
+        if name == "Escape":
+            self.destroy()
+        elif ctrl and e.hardware_keycode == K_C:
+            self.copy()
+        elif ctrl and e.hardware_keycode == K_S:
+            self.save_as()
+        elif name in ("plus", "equal", "KP_Add"):
+            self.set_zoom(self.zoom / 0.9)
+        elif name in ("minus", "KP_Subtract"):
+            self.set_zoom(self.zoom * 0.9)
+        elif name == "0":
+            self.set_zoom(1.0)
+        return True
+
+    def copy(self):
+        with open(self.path, "rb") as f:
+            copy_bytes(f.read(), "image/png")
+        notify("Картинка скопирована", icon=self.path)
+
+    def save_as(self):
+        os.makedirs(OUTDIR, exist_ok=True)
+        r = subprocess.run(["zenity", "--file-selection", "--save", "--confirm-overwrite",
+                            f"--filename={os.path.join(OUTDIR, os.path.basename(self.path))}"],
+                           capture_output=True, text=True)
+        dest = r.stdout.strip()
+        if r.returncode == 0 and dest:
+            if not os.path.splitext(dest)[1]:
+                dest += ".png"
+            self.img.write_to_png(dest)
+            notify("Сохранено", dest.replace(HOME, "~", 1), icon=dest)
+
+
+def main():
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    if PIN:
+        path = ARGS[1] if len(ARGS) > 1 else None
+        if not path or not os.path.isfile(path):
+            print("usage: angelos-shot --pin FILE [X Y]", file=sys.stderr)
+            return 2
+        x = float(ARGS[2]) if len(ARGS) > 2 else 100
+        y = float(ARGS[3]) if len(ARGS) > 3 else 100
+        Pin(path, x, y)
+        Gtk.main()
+        return 0
+    Shot()
+    Gtk.main()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

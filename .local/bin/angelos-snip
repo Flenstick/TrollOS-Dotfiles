@@ -1,0 +1,381 @@
+#!/usr/bin/env python3
+"""angelos-snip — screenshots the way Windows 11's Snipping Tool takes them.
+
+Used instead of angelos-shot while angelOS runs the Windows 11 layout
+(settings.json: bar.style "windows", win.snip). The screen freezes and dims, a
+small toolbar slides down at the top: Rectangle / Freeform / Window / Full screen
+and ×. Drag (or click a window / the screen) — the snip goes to the clipboard and
+~/Pictures/Screenshots, and a toast says so (Изменить / В папке).
+
+Keys: Esc — cancel, 1–4 — mode, Enter — full screen.
+Frame grab, window rectangles and the layer windows come from angelos-shot.
+"""
+import math
+import os
+import sys
+import time
+from importlib.machinery import SourceFileLoader
+from importlib.util import module_from_spec, spec_from_loader
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+_loader = SourceFileLoader("angelos_shot", os.path.join(HERE, "angelos-shot"))
+_spec = spec_from_loader("angelos_shot", _loader)
+S = module_from_spec(_spec)
+_loader.exec_module(S)   # takes the shared lock, starts grim + niri queries (exits if a snip is running)
+
+cairo, Gdk, GLib, Gtk = S.cairo, S.Gdk, S.GLib, S.Gtk
+subprocess = S.subprocess
+
+ACCENT = (0x4c / 255, 0xc2 / 255, 0xff / 255)
+MODES = [("rect", "Прямоугольник"), ("free", "Произвольная форма"), ("window", "Окно"), ("screen", "Весь экран")]
+TOOL_W, TOOL_H, BTN = 4 * 40 + 1 + 40 + 16, 48, 40
+
+
+def ease(t):  # Fluent decelerate, close enough
+    return 1 - (1 - t) ** 3
+
+
+class Snip:
+    def __init__(self):
+        self.frame, self.outputs = S.load_frame()
+        self._niri = {k: S.niri_json(k) for k in ("windows", "workspaces")}
+        self.skin = None
+        self.mode = "rect"
+        self.sel = None
+        self.path = []          # freeform points
+        self.press = None
+        self.ptr = None
+        self.hover = None
+        self.hot = None         # toolbar button under the pointer
+        self.done = False
+        self.work_areas = {}
+        self.windows_dirty = True
+        self._wins = []
+        self.t0 = time.monotonic()
+        self.overlays = []
+        display = Gdk.Display.get_default()
+        for i in range(display.get_n_monitors()):
+            mon = display.get_monitor(i)
+            geo = mon.get_geometry()
+            name = next((n for n, o in self.outputs.items()
+                         if (o.get("logical") or {}).get("x") == geo.x and (o.get("logical") or {}).get("y") == geo.y), None)
+            if name:
+                S.Probe(self, name, mon)
+            self.overlays.append(S.Overlay(self, mon, geo, keyboard=(i == 0)))
+        for ov in self.overlays:
+            ov.set_cursor("crosshair")
+        GLib.timeout_add(8, self._anim)
+
+    # ── shared with angelos-shot's Overlay / Probe ──
+    def windows(self):
+        if self.windows_dirty:
+            try:
+                self._wins = S.window_rects(self.outputs, self._niri["workspaces"], self._niri["windows"], self.work_areas)
+            except Exception:
+                self._wins = []
+            self.windows_dirty = False
+        return self._wins
+
+    def mon_rect(self, gx, gy):
+        for ov in self.overlays:
+            g = ov.geo
+            if g.x <= gx < g.x + g.width and g.y <= gy < g.y + g.height:
+                return g.x, g.y, g.width, g.height
+        g = self.overlays[0].geo
+        return g.x, g.y, g.width, g.height
+
+    def draw_skin(self, *_a):
+        pass
+
+    def redraw(self):
+        for ov in self.overlays:
+            ov.queue_draw()
+
+    def _anim(self):
+        if self.done:
+            return False
+        self.redraw()
+        return time.monotonic() - self.t0 < 0.4
+
+    # ── toolbar ──
+    def toolbar_rect(self, ov):
+        g = ov.geo
+        t = ease(min(1.0, (time.monotonic() - self.t0) / 0.3))
+        x = g.x + (g.width - TOOL_W) / 2
+        y = g.y - TOOL_H + (TOOL_H + 12) * t
+        return x, y, TOOL_W, TOOL_H
+
+    def buttons(self, ov):
+        x, y, w, h = self.toolbar_rect(ov)
+        out = []
+        bx = x + 8
+        for i, (mid, tip) in enumerate(MODES):
+            out.append((mid, (bx, y + 4, BTN, BTN), tip))
+            bx += BTN
+        bx += 1
+        out.append(("close", (bx, y + 4, BTN, BTN), "Закрыть"))
+        return out
+
+    def button_at(self, gx, gy):
+        for ov in self.overlays:
+            for b in self.buttons(ov):
+                if S.inside(gx, gy, b[1]):
+                    return b
+        return None
+
+    def draw_icon(self, cr, kind, cx, cy, color):
+        cr.save()
+        cr.set_source_rgba(*color)
+        cr.set_line_width(1.4)
+        if kind == "rect":
+            S.rrect(cr, cx - 8, cy - 6, 16, 12, 2)
+            cr.stroke()
+        elif kind == "free":
+            cr.move_to(cx - 7, cy + 3)
+            cr.curve_to(cx - 9, cy - 8, cx + 2, cy - 9, cx + 6, cy - 4)
+            cr.curve_to(cx + 10, cy + 1, cx + 2, cy + 8, cx - 3, cy + 5)
+            cr.stroke()
+        elif kind == "window":
+            S.rrect(cr, cx - 8, cy - 7, 16, 14, 2)
+            cr.stroke()
+            cr.move_to(cx - 8, cy - 3)
+            cr.line_to(cx + 8, cy - 3)
+            cr.stroke()
+        elif kind == "screen":
+            S.rrect(cr, cx - 8, cy - 7, 16, 11, 1.5)
+            cr.stroke()
+            cr.move_to(cx - 4, cy + 7)
+            cr.line_to(cx + 4, cy + 7)
+            cr.move_to(cx, cy + 4)
+            cr.line_to(cx, cy + 7)
+            cr.stroke()
+        elif kind == "close":
+            cr.move_to(cx - 5, cy - 5)
+            cr.line_to(cx + 5, cy + 5)
+            cr.move_to(cx + 5, cy - 5)
+            cr.line_to(cx - 5, cy + 5)
+            cr.stroke()
+        cr.restore()
+
+    def draw_toolbar(self, cr, ov):
+        x, y, w, h = self.toolbar_rect(ov)
+        # shadow
+        for i in range(8, 0, -1):
+            S.rrect(cr, x - i, y - i + 4, w + 2 * i, h + 2 * i, 8 + i)
+            cr.set_source_rgba(0, 0, 0, 0.025)
+            cr.fill()
+        S.rrect(cr, x, y, w, h, 8)
+        cr.set_source_rgba(0.17, 0.17, 0.17, 0.98)
+        cr.fill_preserve()
+        cr.set_source_rgba(1, 1, 1, 0.09)
+        cr.set_line_width(1)
+        cr.stroke()
+        for mid, (bx, by, bw, bh), _tip in self.buttons(ov):
+            on = mid == self.mode
+            hot = self.hot is not None and self.hot[0] == mid
+            if on:
+                S.rrect(cr, bx + 4, by + 4, bw - 8, bh - 8, 4)
+                cr.set_source_rgba(*ACCENT, 1)
+                cr.fill()
+            elif hot:
+                S.rrect(cr, bx + 4, by + 4, bw - 8, bh - 8, 4)
+                cr.set_source_rgba(1, 1, 1, 0.08)
+                cr.fill()
+            if mid == "close":
+                cr.set_source_rgba(1, 1, 1, 0.09)
+                cr.rectangle(bx - 1, by + 8, 1, bh - 16)
+                cr.fill()
+            self.draw_icon(cr, mid, bx + bw / 2, by + bh / 2, (0, 0, 0, 1) if on else (1, 1, 1, 0.95))
+        if self.hot is not None:
+            tip = self.hot[2]
+            bx, by, bw, bh = self.hot[1]
+            tw, th = S.text_size(cr, tip, 12)
+            tx, ty = bx + bw / 2 - (tw + 16) / 2, y + h + 8
+            S.rrect(cr, tx, ty, tw + 16, th + 10, 4)
+            cr.set_source_rgba(0.17, 0.17, 0.17, 0.98)
+            cr.fill_preserve()
+            cr.set_source_rgba(1, 1, 1, 0.09)
+            cr.stroke()
+            S.text(cr, tip, tx + 8, ty + 5, 12, (1, 1, 1, 1))
+
+    # ── drawing ──
+    def shown(self):
+        if self.mode in ("rect",) and self.sel:
+            return self.sel
+        if self.mode in ("window", "screen") and self.hover:
+            return self.hover
+        return None
+
+    def draw(self, cr, ov):
+        g = ov.geo
+        cr.save()
+        # dim everything, then cut the selection back to the frozen frame
+        cr.set_source_rgba(0, 0, 0, 0.55)
+        cr.rectangle(g.x, g.y, g.width, g.height)
+        cr.fill()
+        r = self.shown()
+        if self.mode == "free" and len(self.path) > 2:
+            cr.save()
+            cr.move_to(*self.path[0])
+            for p in self.path[1:]:
+                cr.line_to(*p)
+            cr.close_path()
+            cr.clip()
+            self.frame.paint(cr)
+            cr.restore()
+            cr.move_to(*self.path[0])
+            for p in self.path[1:]:
+                cr.line_to(*p)
+            cr.set_source_rgba(1, 1, 1, 0.95)
+            cr.set_line_width(1.5)
+            cr.stroke()
+        elif r is not None:
+            x, y, w, h = r
+            cr.save()
+            cr.rectangle(x, y, w, h)
+            cr.clip()
+            self.frame.paint(cr)
+            cr.restore()
+            cr.rectangle(x + 0.5, y + 0.5, w - 1, h - 1)
+            cr.set_source_rgba(1, 1, 1, 0.95)
+            cr.set_line_width(1)
+            cr.stroke()
+        cr.restore()
+        self.draw_toolbar(cr, ov)
+
+    # ── input ──
+    def on_motion(self, e, gx, gy):
+        self.ptr = (gx, gy)
+        hot = self.button_at(gx, gy)
+        if (hot and hot[0]) != (self.hot and self.hot[0]):
+            self.hot = hot
+            for ov in self.overlays:
+                ov.set_cursor("default" if hot else "crosshair")
+        if self.press and self.mode == "rect":
+            self.sel = S.norm(self.press, (gx, gy))
+        elif self.press and self.mode == "free":
+            if not self.path or math.hypot(gx - self.path[-1][0], gy - self.path[-1][1]) > 2:
+                self.path.append((gx, gy))
+        elif self.mode == "window" and not hot:
+            for rect, _t in self.windows():
+                if S.inside(gx, gy, rect):
+                    self.hover = rect
+                    break
+            else:
+                self.hover = self.mon_rect(gx, gy)
+        elif self.mode == "screen":
+            self.hover = self.mon_rect(gx, gy)
+        self.redraw()
+
+    def on_press(self, e, gx, gy):
+        if e.button == 3:
+            return self.cancel()
+        if e.button != 1:
+            return
+        b = self.button_at(gx, gy)
+        if b:
+            if b[0] == "close":
+                return self.cancel()
+            self.mode = b[0]
+            self.sel, self.path, self.hover = None, [], None
+            self.on_motion(e, gx, gy)
+            return
+        self.press = (gx, gy)
+        if self.mode == "free":
+            self.path = [(gx, gy)]
+
+    def on_release(self, e, gx, gy):
+        if e.button != 1 or self.press is None:
+            return
+        press, self.press = self.press, None
+        if self.mode == "rect":
+            r = S.norm(press, (gx, gy))
+            if r[2] < 4 or r[3] < 4:
+                self.sel = None
+                self.redraw()
+                return
+            self.finish(r)
+        elif self.mode == "free":
+            if len(self.path) < 3:
+                self.path = []
+                return
+            xs, ys = [p[0] for p in self.path], [p[1] for p in self.path]
+            self.finish((min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)), self.path)
+        elif self.mode in ("window", "screen"):
+            self.finish(self.hover or self.mon_rect(gx, gy))
+
+    def on_scroll(self, _e):
+        pass
+
+    def on_key(self, e):
+        name = Gdk.keyval_name(e.keyval) or ""
+        if name == "Escape":
+            self.cancel()
+        elif name in ("Return", "KP_Enter"):
+            p = self.ptr or (self.overlays[0].geo.x, self.overlays[0].geo.y)
+            self.finish(self.mon_rect(*p))
+        elif e.hardware_keycode in (10, 11, 12, 13):
+            self.mode = MODES[e.hardware_keycode - 10][0]
+            self.sel, self.path, self.hover = None, [], None
+            self.redraw()
+
+    # ── result ──
+    def finish(self, rect, path=None):
+        x, y, w, h = (int(round(v)) for v in rect)
+        if w < 2 or h < 2:
+            return
+        self.done = True
+        img = self.frame.crop((x, y, w, h))
+        if path:
+            # freeform: keep the outline, the rest transparent
+            fx = img.get_width() / max(1, w)
+            out = cairo.ImageSurface(cairo.FORMAT_ARGB32, img.get_width(), img.get_height())
+            c = cairo.Context(out)
+            c.scale(fx, fx)
+            c.move_to(path[0][0] - x, path[0][1] - y)
+            for p in path[1:]:
+                c.line_to(p[0] - x, p[1] - y)
+            c.close_path()
+            c.clip()
+            c.scale(1 / fx, 1 / fx)
+            c.set_source_surface(img, 0, 0)
+            c.paint()
+            img = out
+        for ov in self.overlays:
+            ov.hide()
+        buf = S.io.BytesIO()
+        img.write_to_png(buf)
+        data = buf.getvalue()
+        S.copy_bytes(data, "image/png")
+        os.makedirs(S.OUTDIR, exist_ok=True)
+        path_out = os.path.join(S.OUTDIR, time.strftime("Снимок экрана %Y-%m-%d %H%M%S.png"))
+        with open(path_out, "wb") as f:
+            f.write(data)
+        S.sound("shot")
+        script = r'''a=$(notify-send -a "Ножницы" -i "$1" -A edit="Изменить" -A folder="В папке" "Снимок скопирован в буфер обмена" "Он также сохранён в папке «Снимки экрана». Выберите здесь, чтобы изменить.")
+case "$a" in
+  edit|default) exec satty --filename "$1" --output-filename "$1" ;;
+  folder) nautilus --select "$1" 2>/dev/null || exec xdg-open "$(dirname "$1")" ;;
+esac'''
+        subprocess.Popen(["sh", "-c", script, "sh", path_out], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        GLib.timeout_add(60, self.quit)
+
+    def cancel(self):
+        self.done = True
+        self.quit()
+
+    def quit(self):
+        Gtk.main_quit()
+        return False
+
+
+def main():
+    S.signal.signal(S.signal.SIGINT, S.signal.SIG_DFL)
+    Snip()
+    Gtk.main()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

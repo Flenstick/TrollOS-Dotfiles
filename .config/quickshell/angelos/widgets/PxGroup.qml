@@ -1,5 +1,6 @@
 import QtQuick
 import qs.config
+import qs.services
 
 // Win98 group box: etched frame with the title cut into the top edge.
 // `advanced` groups fold into a "▸ Дополнительно" header in the simple settings
@@ -14,16 +15,18 @@ Item {
     property bool open: false
     readonly property bool folded: advanced && !open && !Config.settingsUi.expert
     default property alias content: col.data
+    // Windows 11 Settings: a plain section title over stacked cards (SettingRow draws its card)
+    readonly property bool fluent: WinExtras.fluentSettings && !!Window.window && Window.window === Shell.fluentWindow
 
     implicitWidth: col.implicitWidth + Theme.pad * 2
-    implicitHeight: folded ? head.height + Theme.u * 4 : col.implicitHeight + head.height + Theme.pad * 2
+    implicitHeight: fluent ? (folded ? fhead.height : fhead.height + 8 + col.implicitHeight) : folded ? head.height + Theme.u * 4 : col.implicitHeight + head.height + Theme.pad * 2
 
     readonly property int lineY: head.height / 2
     readonly property int b: Math.max(1, Theme.u / 2)
 
     // etched frame: lo line + hi line offset by one
     Repeater {
-        model: 2
+        model: root.fluent ? 0 : 2
         Item {
             required property int index
             readonly property color c: index === 0 ? Theme.lo : Theme.hi
@@ -41,7 +44,46 @@ Item {
     }
 
     Row {
+        id: fhead
+        visible: root.fluent
+        height: root.fluent ? (root.title !== "" ? 28 : 0) : 0
+        spacing: 6
+        Text {
+            visible: root.advanced && !Config.settingsUi.expert
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.folded ? "›" : "⌄"
+            color: WinStyle.text
+            font.family: WinStyle.font
+            font.pixelSize: 14
+        }
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.title
+            color: WinStyle.text
+            font.family: WinStyle.font
+            font.pixelSize: 14
+            font.weight: Font.DemiBold
+            renderType: Text.NativeRendering
+        }
+        Text {
+            visible: root.folded
+            anchors.verticalCenter: parent.verticalCenter
+            text: I18n.t("· дополнительно", "· advanced")
+            color: WinStyle.text2
+            font.family: WinStyle.font
+            font.pixelSize: 12
+        }
+    }
+    MouseArea {
+        visible: root.fluent && root.advanced && !Config.settingsUi.expert
+        width: fhead.width
+        height: fhead.height
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.open = !root.open
+    }
+    Row {
         id: head
+        visible: !root.fluent
         x: Theme.u * 6
         spacing: Theme.u * 3
         leftPadding: Theme.u * 2
@@ -73,7 +115,7 @@ Item {
         }
     }
     MouseArea {
-        visible: root.advanced && !Config.settingsUi.expert
+        visible: !root.fluent && root.advanced && !Config.settingsUi.expert
         x: head.x
         width: head.width
         height: head.height
@@ -84,9 +126,9 @@ Item {
     Column {
         id: col
         visible: !root.folded
-        x: Theme.pad
-        y: head.height + Theme.u * 4
-        width: root.width - Theme.pad * 2
-        spacing: root.spacing
+        x: root.fluent ? 0 : Theme.pad
+        y: root.fluent ? fhead.height + 8 : head.height + Theme.u * 4
+        width: root.width - (root.fluent ? 0 : Theme.pad * 2)
+        spacing: root.fluent ? 4 : root.spacing
     }
 }

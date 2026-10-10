@@ -39,7 +39,7 @@ tint_intensity = 0.0
 # one, even when the wallpaper collection is skipped. The picker browses ~/Pictures.
 
 [wallpaper.default]
-path = "@HOME@/Pictures/Pixel/wallhaven-p9qj59.png"
+path = "@HOME@/Pictures/wallpapers/TrollOS/trollos-dark.png"
 
 [theme]
 builtin = "Gruvbox"

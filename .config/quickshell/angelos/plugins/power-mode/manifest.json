@@ -1,0 +1,16 @@
+{
+  "id": "power-mode",
+  "name": "Режим питания",
+  "version": "1.0.0",
+  "author": "flen",
+  "description": "Энергосбережение / баланс / производительность (power-profiles-daemon) прямо с панели. Клик — выбор, колёсико — листать режимы.",
+  "icon": "power",
+  "enabledByDefault": true,
+  "barWidget": "BarWidget.qml",
+  "main": "Main.qml",
+  "menu": [
+    { "label": "Режим: энергосбережение", "icon": "power", "exec": "qs -c angelos ipc call power set power-saver" },
+    { "label": "Режим: баланс", "icon": "power", "exec": "qs -c angelos ipc call power set balanced" },
+    { "label": "Режим: производительность", "icon": "power", "exec": "qs -c angelos ipc call power set performance" }
+  ]
+}

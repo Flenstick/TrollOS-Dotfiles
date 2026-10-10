@@ -12,6 +12,8 @@ Singleton {
     id: root
 
     property var popups: []      // Notification objects currently on screen
+    // полноэкранная игра/видео в фокусе: карточки не всплывают (иначе отбирают у игры захват мыши)
+    readonly property bool gaming: MetaTap.coversOutput(Niri.focusedWindow)
     // every incoming notification ({appName, summary, urgency, quiet}); the Y2K
     // sounds and the angel listen here
     signal arrived(var info)
@@ -104,7 +106,7 @@ Singleton {
                 root.history = [entry].concat(root.history).slice(0, 80);
                 root.save();
             }
-            const dnd = Config.notifications.dnd && n.urgency !== NotificationUrgency.Critical;
+            const dnd = (Config.notifications.dnd || root.gaming) && n.urgency !== NotificationUrgency.Critical;
             if (!dnd)
                 root.popups = root.popups.concat([n]).slice(-Config.notifications.maxPopups);
             n.closed.connect(() => root.dismissPopup(n));

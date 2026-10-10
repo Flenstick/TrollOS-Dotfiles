@@ -75,6 +75,11 @@ PxPage {
                 onClicked: Shell.settingsPage = "wallpaper"
             }
             PxButton {
+                icon: "grid"
+                text: I18n.t("Раскладка стола", "Desktop layout")
+                onClicked: Shell.settingsPage = "layouts"
+            }
+            PxButton {
                 icon: Theme.dark ? "sun" : "moon"
                 text: Theme.dark ? I18n.t("Светлая тема", "Light theme") : I18n.t("Тёмная тема", "Dark theme")
                 onClicked: Config.appearance.mode = Theme.dark ? "light" : "dark"

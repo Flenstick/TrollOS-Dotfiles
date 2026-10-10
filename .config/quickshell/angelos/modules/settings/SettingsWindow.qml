@@ -24,7 +24,8 @@ FloatingWindow {
     BackgroundEffect.blurRegion: Config.appearance.blur ? blurRegion : null
     Region {
         id: blurRegion
-        item: view.frame
+        item: view.blurItem
+        radius: view.fluent ? 8 : 0
     }
 
     SettingsView {

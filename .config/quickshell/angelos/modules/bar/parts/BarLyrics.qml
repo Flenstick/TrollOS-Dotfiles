@@ -14,8 +14,16 @@ Item {
     property real maxWidth: Theme.u * 250
     property bool fixedWidth: false        // keep one width per song so the bar doesn't jump
     readonly property bool onThisScreen: !Config.lyrics.screens || Config.lyrics.screens.length === 0 || Config.lyrics.screens.includes(screenName)
-    readonly property bool active: Config.lyrics.enabled && Lyrics.visibleToggle && Lyrics.hasLyrics && onThisScreen
-    readonly property string line: Lyrics.current !== "" ? Lyrics.current : "♪ ~ ♪"
+    readonly property bool lyricsMode: Lyrics.visibleToggle && Lyrics.hasLyrics
+    // with the island plugin the line never hides: lyrics → track → the plugin's idle text
+    readonly property var hook: Shell.lyricsHook
+    readonly property bool active: Config.lyrics.enabled && onThisScreen && (lyricsMode || !!hook)
+    readonly property string idleLine: {
+        if (Lyrics.title !== "")
+            return Lyrics.artist !== "" ? Lyrics.artist + " — " + Lyrics.title : Lyrics.title;
+        return hook && hook.idleText ? hook.idleText : "♪ ~ ♪";
+    }
+    readonly property string line: lyricsMode ? (Lyrics.current !== "" ? Lyrics.current : "♪ ~ ♪") : idleLine
     readonly property real chrome: note.width + Theme.u * 6
 
     // widest line of the current song, measured once per song
@@ -41,7 +49,7 @@ Item {
     }
 
     visible: active && maxWidth >= Theme.u * 50
-    implicitWidth: Math.min(maxWidth, (fixedWidth ? songText : fullW) + chrome)
+    implicitWidth: Math.min(maxWidth, (fixedWidth && lyricsMode ? songText : fullW) + chrome)
     implicitHeight: Theme.u * 13
     clip: true
 
@@ -71,6 +79,7 @@ Item {
         slide.restart();
     }
     Component.onCompleted: {
+        Shell.lyricsItems[screenName] = root;
         shown = line;
         typed = shown.length;
         measureSong();
@@ -136,7 +145,7 @@ Item {
         }
         PxIcon {
             anchors.centerIn: parent
-            name: Lyrics.playing ? "music" : "pause"
+            name: !Lyrics.player ? "pill" : Lyrics.playing ? "music" : "pause"
             visible: cover.status !== Image.Ready || !Lyrics.playing
             pixel: Math.max(1, Theme.u - 1)
         }
@@ -168,7 +177,7 @@ Item {
             x: typer.running ? -Math.max(0, root.typedW + Theme.u * 3 - textBox.width) : -Math.min(root.scrollX, root.overflowW)
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.StyledText
-            color: Lyrics.current === "" || !Lyrics.playing ? Theme.textDim : Theme.text
+            color: (root.lyricsMode && Lyrics.current === "") || !Lyrics.playing ? Theme.textDim : Theme.text
             text: {
                 const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
                 const t = root.shown;
@@ -208,12 +217,22 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         cursorShape: Qt.PointingHandCursor
+        hoverEnabled: !!root.hook
+        onContainsMouseChanged: if (root.hook && root.hook.warm)
+            root.hook.warm(root.screenName, containsMouse)
         onClicked: m => {
             if (m.button === Qt.RightButton) {
                 if (Lyrics.player && Lyrics.player.canTogglePlaying)
                     Lyrics.player.togglePlaying();
-            } else
+            } else if (Shell.lyricsHook)
+                Shell.lyricsHook.toggle(root, root.screenName);
+            else
                 Shell.openSettings("lyrics");
         }
+    }
+    // the island (dynamic-island plugin) grows out of this line
+    Component.onDestruction: {
+        if (Shell.lyricsItems[screenName] === root)
+            delete Shell.lyricsItems[screenName];
     }
 }

@@ -1,0 +1,13 @@
+{
+  "id": "emoji-panel",
+  "name": "Эмодзи (Win + .)",
+  "version": "1.0.0",
+  "author": "flen",
+  "description": "Как в Windows: Win + . открывает панель с эмодзи, каомодзи, символами и историей буфера обмена. Поиск по-русски и по-английски, недавние, тон кожи. Клик — вставить туда, где курсор (и заодно в буфер обмена), ПКМ — только скопировать.",
+  "icon": "heart",
+  "enabledByDefault": true,
+  "main": "Main.qml",
+  "menu": [
+    { "label": "Эмодзи и символы (Win + .)", "icon": "heart", "exec": "qs -c angelos ipc call emoji toggle" }
+  ]
+}

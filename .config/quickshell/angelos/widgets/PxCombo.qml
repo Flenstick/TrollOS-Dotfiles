@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Templates as T
 import qs.config
+import qs.services
 
 // Dropdown. model: array of strings or {label, value, icon}.
 Item {
@@ -18,15 +19,33 @@ Item {
     readonly property int currentIndex: items.findIndex(i => i.value === currentValue)
     readonly property string currentLabel: currentIndex >= 0 ? items[currentIndex].label : placeholder
 
-    implicitWidth: Theme.u * 100
-    implicitHeight: Theme.sizeBody + Theme.u * 10
+    readonly property bool fluent: WinExtras.fluentSettings && !!Window.window && Window.window === Shell.fluentWindow
+    implicitWidth: fluent ? fcombo.implicitWidth : Theme.u * 100
+    implicitHeight: fluent ? 32 : Theme.sizeBody + Theme.u * 10
+    x: fluent && parent && parent.objectName === "settingSlot" ? parent.width - width : 0
+
+    FluentCombo {
+        id: fcombo
+        visible: root.fluent
+        z: 10
+        anchors.fill: parent
+        model: root.fluent ? root.model : []
+        currentValue: root.currentValue
+        placeholder: root.placeholder
+        onActivated: v => {
+            root.currentValue = v;
+            root.activated(v);
+        }
+    }
 
     PxBox {
         anchors.fill: parent
+        visible: !root.fluent
         sunken: true
         color: Theme.sunken
     }
     PxText {
+        visible: !root.fluent
         anchors.left: parent.left
         anchors.right: arrow.left
         anchors.leftMargin: Theme.u * 5
@@ -36,6 +55,7 @@ Item {
     }
     PxBox {
         id: arrow
+        visible: !root.fluent
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.bottom: parent.bottom
@@ -50,6 +70,7 @@ Item {
     }
     MouseArea {
         id: mouse
+        enabled: !root.fluent
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
         onClicked: popup.opened ? popup.close() : popup.open()

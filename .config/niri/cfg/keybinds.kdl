@@ -10,6 +10,7 @@ binds {
 
     // ─── Applications ───
     Mod+T                          hotkey-overlay-title="Open Terminal: kitty" { spawn "kitty"; }
+    Mod+Return                     hotkey-overlay-title="Open Terminal: kitty" { spawn "kitty"; }
     Mod+B                               hotkey-overlay-title="Open Browser: default" { spawn-sh "xdg-open about:blank"; }
 
     // --- Noctalia ---
@@ -43,7 +44,8 @@ binds {
     // XF86MonBrightnessDown               allow-when-locked=true { spawn-sh "noctalia msg brightness-down"; }
 
     // ─── Window Movement and Focus ───
-    Mod+Q                               { close-window; }
+    Mod+Q                               hotkey-overlay-title="Закрыть окно (claude/codex — с вопросом)" { spawn-sh "qs -c angelos ipc call closeconfirm ask"; }
+    Mod+Ctrl+Q                          hotkey-overlay-title="Закрыть окно сразу" { close-window; }
 
     Mod+Left                            { focus-column-left; }
     Mod+H                               { focus-column-left; }
@@ -83,11 +85,13 @@ binds {
     Mod+BracketRight                    { consume-or-expel-window-right; }
 
     Mod+Comma                           { consume-window-into-column; }
-    Mod+Period                          { expel-window-from-column; }
+    Mod+Shift+Period                    { expel-window-from-column; }
+    Mod+Period                          hotkey-overlay-title="TrollOS: эмодзи и символы" { spawn-sh "qs -c angelos ipc call emoji toggle"; }
 
     Mod+R                               { switch-preset-column-width; }
     Mod+Alt+R                           { switch-preset-column-width-back; }
     Mod+Shift+R                         repeat=false hotkey-overlay-title="Record region → Videos (toggle)" { spawn "@HOME@/.local/bin/niri-record-region"; }
+    Mod+G                               repeat=false hotkey-overlay-title="TrollOS: оверлей (заметки, гифки, видео)" { spawn-sh "qs -c angelos ipc call angelos overlay"; }
 
     Mod+Ctrl+Shift+R                    { switch-preset-window-height; }
     Mod+Ctrl+R                          { reset-window-height; }
@@ -150,7 +154,8 @@ binds {
     Mod+M                               { maximize-window-to-edges; }
 
     // ─── Screenshots (Win+Shift+S style) ───
-    Mod+Shift+S                         repeat=false hotkey-overlay-title="Screenshot: region → Screenshots (ropes)" { spawn "@HOME@/.local/bin/niri-screenshot-region"; }
+    Mod+Shift+S                         repeat=false hotkey-overlay-title="Скриншот как в ShareX (экран замирает)" { spawn "@HOME@/.local/bin/angelos-shot"; }
+    Print                               repeat=false hotkey-overlay-title="Скриншот как в ShareX" { spawn "@HOME@/.local/bin/angelos-shot"; }
     Mod+Shift+T                         hotkey-overlay-title="OCR: region to clipboard" { spawn "@HOME@/.local/bin/niri-ocr"; }
     Mod+Shift+V                         repeat=false hotkey-overlay-title="Voice: toggle dictation" { spawn "@HOME@/.local/bin/voxtype" "record" "toggle"; }
     CTRL+Shift+2                        { screenshot-screen; }
@@ -165,6 +170,7 @@ binds {
     CTRL+ALT+Delete                     { quit; } // Also quits Niri
     Mod+Shift+P                         { power-off-monitors; } // Turn off screens (useful for OLED or privacy)
     Mod+Shift+X                         repeat=false allow-inhibiting=false hotkey-overlay-title="Privacy: block Telegram Bitwarden Helium Discord" { spawn "@HOME@/.local/bin/niri-cast-privacy"; }
+    Mod+Alt+C                           hotkey-overlay-title="Кофеин: не спать вкл/выкл" { spawn-sh "qs -c angelos ipc call caffeine toggle"; }
     Mod+O                               hotkey-overlay-title="Previous workspace" { focus-workspace-previous; }
 
     // ─── angelOS extras ───

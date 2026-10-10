@@ -1,0 +1,13 @@
+{
+  "id": "dynamic-island",
+  "name": "Dynamic Island",
+  "version": "2.0.0",
+  "author": "flen",
+  "description": "Клик по строке текста песни на панели раскрывает остров: трек, перемотка, текст, телефон. Притащи файл на строку — он улетит на телефон через KDE Connect.",
+  "icon": "pill",
+  "enabledByDefault": true,
+  "main": "Main.qml",
+  "menu": [
+    { "label": "Остров", "icon": "pill", "exec": "qs -c angelos ipc call island toggle" }
+  ]
+}

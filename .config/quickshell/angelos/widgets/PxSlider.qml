@@ -1,5 +1,6 @@
 import QtQuick
 import qs.config
+import qs.services
 
 // Pixel slider: sunken track, pink fill, heart thumb.
 Item {
@@ -17,6 +18,7 @@ Item {
     readonly property bool dragging: mouse.pressed
     signal moved(real value)
     signal released(real value)
+    readonly property bool fluent: WinExtras.fluentSettings && !!Window.window && Window.window === Shell.fluentWindow
 
     implicitWidth: Theme.u * 110
     implicitHeight: Theme.u * 12
@@ -41,6 +43,7 @@ Item {
         height: Theme.u * 6
         sunken: true
         color: Theme.sunken
+        opacity: root.fluent ? 0 : 1
 
         Rectangle {
             x: 0
@@ -51,8 +54,49 @@ Item {
         }
     }
 
+    // Fluent look: thin track, accent fill, round thumb with a growing dot
+    Rectangle {
+        visible: root.fluent
+        anchors.verticalCenter: track.verticalCenter
+        x: track.x
+        width: track.width
+        height: 4
+        radius: 2
+        color: WinStyle.dark ? Qt.rgba(1, 1, 1, 0.54) : Qt.rgba(0, 0, 0, 0.45)
+        Rectangle {
+            width: thumb.x + thumb.width / 2 - track.x
+            height: 4
+            radius: 2
+            color: WinStyle.accent
+        }
+    }
+    Rectangle {
+        visible: root.fluent
+        width: 20
+        height: 20
+        radius: 10
+        anchors.verticalCenter: track.verticalCenter
+        x: thumb.x + thumb.width / 2 - 10
+        color: WinStyle.dark ? "#454545" : "#ffffff"
+        border.width: 1
+        border.color: WinStyle.controlLine
+        Rectangle {
+            anchors.centerIn: parent
+            property real d: mouse.pressed ? 10 : mouse.containsMouse ? 14 : 12
+            width: d
+            height: d
+            radius: d / 2
+            color: WinStyle.accent
+            Behavior on d {
+                NumberAnimation {
+                    duration: WinStyle.fast
+                }
+            }
+        }
+    }
     PxBox {
         id: thumb
+        opacity: root.fluent ? 0 : 1
         width: Theme.u * 9
         height: Theme.u * 12
         anchors.verticalCenter: track.verticalCenter
@@ -70,7 +114,7 @@ Item {
         visible: root.showValue
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        width: Theme.u * 26
+        width: root.fluent ? 56 : Theme.u * 26
         horizontalAlignment: Text.AlignRight
         text: (root.value * root.valueScale).toFixed(root.decimals) + root.suffix
     }

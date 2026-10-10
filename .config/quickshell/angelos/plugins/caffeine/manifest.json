@@ -1,0 +1,18 @@
+{
+  "id": "caffeine",
+  "name": "Кофеин",
+  "version": "1.0.0",
+  "author": "flen",
+  "description": "Как Caffeine в GNOME: чашка на панели не даёт экрану гаснуть, блокироваться и ПК засыпать от простоя. Mod+Alt+C — вкл/выкл.",
+  "icon": "power",
+  "enabledByDefault": true,
+  "barWidget": "BarWidget.qml",
+  "main": "Main.qml",
+  "menu": [
+    {
+      "label": "Кофеин вкл/выкл",
+      "icon": "power",
+      "exec": "qs -c angelos ipc call caffeine toggle"
+    }
+  ]
+}

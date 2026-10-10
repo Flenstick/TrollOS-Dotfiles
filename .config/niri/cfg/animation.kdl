@@ -7,7 +7,8 @@
             curve "cubic-bezier" 0.22 1 0.36 1
         }
         window-open {
-            duration-ms 280
+            // TrollOS: было 280 — окна открывались медленно
+            duration-ms 140
             curve "ease-out-cubic"
         }
         window-close {

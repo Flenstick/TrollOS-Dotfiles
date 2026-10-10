@@ -1,3 +1,68 @@
+<p align="center">
+  <img src="docs/trollos/logo.png" width="160" alt="TrollOS">
+</p>
+
+# TrollOS
+
+**TrollOS** — сборка рабочего стола для CachyOS / Arch на [Niri](https://github.com/YaLTeR/niri) с оболочкой на Quickshell.
+Это форк [**AngelOS-Dotfiles**](https://github.com/MixaDoDs/AngelOS-Dotfiles) от **MixaDoDs**: всё, что ниже раздела «angelOS», — его работа,
+TrollOS добавляет свой вид, исправления и несколько плагинов.
+
+*TrollOS is a fork of [AngelOS-Dotfiles](https://github.com/MixaDoDs/AngelOS-Dotfiles) by MixaDoDs (MIT) — a Niri + Quickshell rice
+with its own splat logo, wallpapers, fixes and extra plugins. The original documentation follows below.*
+
+<p align="center">
+  <img src="docs/trollos/wallpapers.png" alt="Обои TrollOS">
+</p>
+
+## Чем TrollOS отличается от angelOS
+
+- **Логотип** — красная клякса вместо ангельского сердечка (на панели, в Пуске, на экране загрузки), надпись «TrollOS».
+- **Обои** — `Pictures/wallpapers/TrollOS/`: тёмные (по умолчанию), пиксельные и светлые, 4K.
+  Нарисованы скриптом `scripts/trollos/make-wallpapers.py`.
+- **Раскладки рабочего стола** — Настройки → Раскладки: Windows 11, macOS, Ubuntu, ChromeOS и другие пресеты панели.
+- **Вид Windows 11** — панель, Пуск, Alt+Tab, «Ножницы» для скриншотов.
+- **Док** (снизу или слева) и **оверлей** (Mod+G: заметки, гифки, видео поверх окон).
+- **Скриншоты как в ShareX** (`~/.local/bin/angelos-shot`, Mod+Shift+S / Print): экран замирает, пометки, OCR, закрепление.
+- **Исправления**: быстрее анимация окон (140 мс вместо 280), игровой режим не выключает анимации и быстрее возвращает эффекты,
+  CS2 и игры Steam сразу открываются на весь экран, мелкие правки виджетов и настроек.
+
+### Плагины TrollOS
+
+Лежат в `.config/quickshell/angelos/plugins/`, включаются в Настройки → Плагины.
+
+| Плагин | Что делает |
+|---|---|
+| `caffeine` | Чашка на панели: экран не гаснет и ПК не засыпает. Mod+Alt+C — вкл/выкл |
+| `power-mode` | Энергосбережение / баланс / производительность прямо с панели (нужен `power-profiles-daemon`) |
+| `emoji-panel` | Mod+. — эмодзи, каомодзи, символы и история буфера, как Win + . |
+| `close-confirm` | Mod+Q в окне с `claude` или `codex` сначала спрашивает; Mod+Ctrl+Q — закрыть сразу |
+| `dynamic-island` | Клик по строке песни на панели — «остров»: трек, перемотка, текст; файлы на телефон через KDE Connect, экран телефона через scrcpy |
+| `friend-runner` | Друг заходит в Discord — по панели пробегает человечек с его аватаркой |
+| `panel-shooter` | Пистолет у трея: тир по человечкам на панели |
+
+`friend-runner` (и друзья в `panel-shooter`) работают через плагин для Discord-клиента Equicord — он в
+[`extras/equicord/`](extras/equicord/), ставится командой `sh extras/equicord/install.sh`.
+
+## Установка
+
+```sh
+git clone https://github.com/Flenstick/TrollOS-Dotfiles.git
+cd TrollOS-Dotfiles
+./install.sh
+```
+
+Установщик тот же, что у angelOS — все его переключатели описаны ниже.
+
+## Лицензия и авторы
+
+- Оригинал: © 2026 MixaDoDs, MIT — [`LICENSE`](LICENSE).
+- Изменения TrollOS: © 2026 Flenstick, тоже MIT.
+- Чужие шрифты, иконки, тема SDDM и прочее — со своими лицензиями, список в [`THIRD-PARTY.md`](THIRD-PARTY.md).
+- Плагин для Equicord (`extras/equicord/angelosFriends`) — GPL-3.0-or-later, как и сам Equicord.
+
+---
+
 <div align="center">
 
 # ♡ PixelStreetArt ✧ angelOS ♡
@@ -247,8 +312,8 @@ The helper scripts use `grim` and `slurp` (screenshots), `wf-recorder` (recordin
 ## ✧ Installation
 
 ```bash
-git clone https://github.com/MixaDoDs/PixelStreetArt_Dotfiles_Niri.git
-cd PixelStreetArt_Dotfiles_Niri
+git clone https://github.com/Flenstick/TrollOS-Dotfiles.git
+cd TrollOS-Dotfiles
 ./.install
 ```
 

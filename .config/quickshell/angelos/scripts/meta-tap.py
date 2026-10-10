@@ -6,8 +6,11 @@ key, mouse button or wheel in between; holding Meta or using it as a modifier
 (Mod+Space, Mod+drag, …) never triggers. niri has no binds for a bare modifier,
 so this reads evdev devices directly (needs the `input` group).
 
+Also prints "alt1" / "alt0" when Alt goes down / up (the Windows-style Alt+Tab
+switcher closes on Alt release, which the compositor does not tell the shell).
+
 Privacy: no key codes are stored, logged or printed; the only state kept is
-"Meta is down" and "something else happened while it was down". Devices are
+"Meta is down", "something else happened while it was down" and "Alt is down". Devices are
 opened read-only and never grabbed.
 """
 import argparse
@@ -24,6 +27,7 @@ except ImportError:
     sys.exit(2)
 
 META = {ecodes.KEY_LEFTMETA, ecodes.KEY_RIGHTMETA}
+ALT = {ecodes.KEY_LEFTALT, ecodes.KEY_RIGHTALT}
 
 
 def say(word):
@@ -128,6 +132,11 @@ def main():
                 drop(device.path)
                 continue
             for event in events:
+                if event.type == ecodes.EV_KEY and event.code in ALT and event.value in (0, 1):
+                    say("alt1" if event.value == 1 else "alt0")
+                    if event.value == 1:
+                        detector.other()
+                    continue
                 if event.type == ecodes.EV_KEY and event.code in META:
                     if event.value == 1:
                         # Ctrl/Shift/… already held: a combo, not a tap

@@ -205,6 +205,12 @@ Singleton {
             "icon": "document"
         },
         {
+            "id": "overlay",
+            "label": I18n.t("Оверлей: заметки и гифки на экране", "Overlay: notes and GIFs on screen"),
+            "call": "overlay",
+            "icon": "layers"
+        },
+        {
             "id": "lock",
             "label": I18n.t("Заблокировать", "Lock"),
             "call": "lock",

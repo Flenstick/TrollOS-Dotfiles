@@ -10,6 +10,9 @@ import qs.config
 // Holding Meta or using it in a shortcut does nothing.
 Singleton {
     id: root
+    // Alt state from the same evdev listener (Windows-style Alt+Tab closes on release)
+    property bool altDown: false
+    signal altReleased
 
     property string status: "off"      // off | starting | ready | noperm | noevdev | error
     // a dev instance next to the live one would open a second menu on every tap
@@ -46,6 +49,12 @@ Singleton {
             onRead: line => {
                 if (line === "tap")
                     root.tap();
+                else if (line === "alt1")
+                    root.altDown = true;
+                else if (line === "alt0") {
+                    root.altDown = false;
+                    root.altReleased();
+                }
                 else if (["ready", "noperm", "noevdev"].includes(line))
                     root.status = line;
             }

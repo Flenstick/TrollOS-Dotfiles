@@ -12,6 +12,26 @@ Item {
     property string variant: Config.bar.logoStyle === "angel" ? "angel" : "classic"
     property int fontSize: Theme.sizeTitle
     readonly property bool angel: variant === "angel"
+    // TrollOS emblem: "splat" (red paint splat) or "angel" (the angelOS angel-heart)
+    property string emblemStyle: "splat"
+
+    // 13×13 art pixels: 'r' paint splat (the TrollOS sign)
+    readonly property var splatRows: [
+        ".rr..........",
+        ".rrr....r..rr",
+        "..rr......rrr",
+        "...rr..r.rr..",
+        ".r..rrrrrr...",
+        "..rrrrrrrr.r.",
+        "rr.rrrrrrrrr.",
+        "rrrrrrrrrrr..",
+        "...rrrrrrrr..",
+        "..rrrrrrrrrrr",
+        "..r..rrr.r.rr",
+        ".....r...r...",
+        "....rr......."
+    ]
+
 
     // 19×12 art pixels: '#' outline, 'o' heart, 'w' wings/shine, 'y' halo
     readonly property var emblemRows: [
@@ -30,7 +50,8 @@ Item {
     ]
 
     implicitWidth: emblemOnly ? emblem.width : row.implicitWidth
-    implicitHeight: Math.max(emblem.height, wordmark.implicitHeight)
+    // the 13×13 splat is 1 row taller — don't let it grow the bar
+    implicitHeight: Math.max(Math.min(emblem.height, root.pixel * 12), wordmark.implicitHeight)
 
     Row {
         id: row
@@ -40,12 +61,13 @@ Item {
         PxIcon {
             id: emblem
             anchors.verticalCenter: parent.verticalCenter
-            bitmap: root.emblemRows
+            bitmap: root.emblemStyle === "splat" ? root.splatRows : root.emblemRows
             pixel: root.pixel
             ink: Theme.dark ? Theme.mix(Theme.accent, Theme.edge, 0.55) : Theme.edge
             fill: Theme.accent
             light: "#ffffff"
             fill3: Theme.mix(Theme.accent3, Qt.color("#ffd84a"), 0.6)
+            bad: Theme.mix(Theme.danger, Qt.color("#d00010"), 0.55)
         }
 
         Row {
@@ -56,7 +78,7 @@ Item {
 
             PxText {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "angel"
+                text: "Troll"
                 font.family: Theme.fontTitle
                 font.pixelSize: root.fontSize
                 color: root.angel ? Theme.accent : Theme.text

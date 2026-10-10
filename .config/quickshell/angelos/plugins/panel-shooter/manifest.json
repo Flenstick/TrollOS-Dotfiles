@@ -1,0 +1,29 @@
+{
+  "id": "panel-shooter",
+  "name": "Тир на панели",
+  "version": "1.0.0",
+  "author": "flen",
+  "description": "Пистолет у трея: стреляй по друзьям, которые выбегают из Discord (плагин «Друг в сети»). Попал по тому, кто сидит в войсе, — его кикает из войса (нужно право «Перемещать участников»); кто заходит в твой войс, пробегает по панели. ЛКМ — огонь, ПКМ/R — перезарядка, Esc — убрать. По желанию — ещё и случайные человечки. IPC: qs -c angelos ipc call shooter arm|holster|toggle",
+  "icon": "gamepad",
+  "enabledByDefault": true,
+  "barWidget": "BarWidget.qml",
+  "settings": "Settings.qml",
+  "main": "Main.qml",
+  "menu": [
+    {
+      "label": "Тир: взять/убрать пистолет",
+      "icon": "gamepad",
+      "exec": "qs -c angelos ipc call shooter toggle"
+    },
+    {
+      "label": "Тир: выпустить людей из войса",
+      "icon": "gamepad",
+      "exec": "qs -c angelos ipc call friends voice"
+    },
+    {
+      "label": "Тир: тестовый друг",
+      "icon": "gamepad",
+      "exec": "qs -c angelos ipc call friends test"
+    }
+  ]
+}

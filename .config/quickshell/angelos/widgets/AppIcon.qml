@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import qs.config
+import qs.services
 
 // App icon by app-id / icon name; falls back to a pixel window.
 Item {
@@ -11,23 +12,33 @@ Item {
     property int size: Theme.u * 8
     property string tint: "off"   // off | mono | accent
 
-    readonly property string resolved: {
-        let name = iconName;
-        if (!name && appId) {
+    readonly property string name: {
+        let n = iconName;
+        if (!n && appId) {
             const e = DesktopEntries.heuristicLookup(appId);
-            name = e && e.icon ? e.icon : appId;
+            n = e && e.icon ? e.icon : appId;
         }
-        if (!name)
-            return "";
-        if (name.startsWith("/") || name.includes("://"))
-            return name.startsWith("/") ? "file://" + name : name;
-        return Quickshell.iconPath(name, true) || Quickshell.iconPath(name.toLowerCase(), true) || "";
+        return n || "";
     }
+    readonly property string themed: {
+        const n = name;
+        if (!n)
+            return "";
+        if (n.startsWith("/") || n.includes("://"))
+            return n.startsWith("/") ? "file://" + n : n;
+        return Quickshell.iconPath(n, true) || Quickshell.iconPath(n.toLowerCase(), true) || "";
+    }
+    // Windows 11 layout with Windows icons: the Win11 icon theme first, the usual icon if it has none
+    readonly property bool winIcons: Config.bar.style === "windows" && Config.win.icons === "windows"
+    property string winTried: ""
+    readonly property string winPath: winIcons && name && !!WinExtras.winIconSet[name] && winTried !== name ? "file://" + Quickshell.env("HOME") + "/.local/share/icons/Win11/apps/scalable/" + name + ".svg" : ""
+    readonly property string resolved: winPath || themed
 
     implicitWidth: size
     implicitHeight: size
 
     TintedImage {
+        id: img
         anchors.fill: parent
         visible: root.resolved !== ""
         source: root.resolved
@@ -39,5 +50,15 @@ Item {
         visible: root.resolved === ""
         name: "window"
         pixel: Math.max(1, Math.floor(root.size / 10))
+    }
+    // no Win11 icon for this app: fall back to the normal one
+    Connections {
+        target: img.children.length ? img.children[0] : null
+        ignoreUnknownSignals: true
+        function onStatusChanged() {
+            const i = img.children[0];
+            if (root.winPath && i && i.status === Image.Error)
+                root.winTried = root.name;
+        }
     }
 }

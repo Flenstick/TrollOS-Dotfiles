@@ -13,6 +13,7 @@ import qs.modules.launcher
 import qs.modules.lock
 import qs.modules.notifications
 import qs.modules.osd
+import qs.modules.overlay
 import qs.modules.polkit
 import qs.modules.session
 import qs.modules.settings
@@ -23,6 +24,8 @@ import qs.modules.idle
 import qs.modules.sidebar
 import qs.modules.y2k
 import qs.widgets
+import qs.config
+import qs.modules.bar.win
 
 // angelOS — pixel pink shell for niri.
 ShellRoot {
@@ -32,6 +35,15 @@ ShellRoot {
     Background {}
     Bar {}
     StartOverlay {}
+    // Windows 11 copy: its own Alt+Tab (niri binds it through cfg/win-alttab.kdl)
+    LazyLoader {
+        active: Config.bar.style === "windows" && Config.win.altTab
+        WinAltTab {}
+    }
+    LazyLoader {
+        active: Config.bar.style === "windows" && Config.win.edgeResize
+        WinResize {}
+    }
     SidebarHost {}
     WorkspaceFx {}
     NotificationPopups {}
@@ -39,6 +51,7 @@ ShellRoot {
     VoxIndicator {}
     Launcher {}
     ClipboardPanel {}
+    OverlayLayer {}
     SessionMenu {}
     IdleScreen {}
     Lock {}
