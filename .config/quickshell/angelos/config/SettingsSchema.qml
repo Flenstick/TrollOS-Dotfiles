@@ -196,7 +196,7 @@ JsonAdapter {
     }
 
     property JsonObject alttab: JsonObject {
-        property string style: "angelos"    // angelos | ngo | y2k — angelOS's own switcher; niri = niri's with live previews
+        property string style: "niri"       // TrollOS: niri's own with live previews (cfg/alt-tab.kdl); angelos | ngo | y2k — angelOS's switchers
         property string scope: "all"        // all | output (this monitor) | workspace (this desk)
         property int delayMs: 150           // a quick Alt+Tab tap switches without showing anything
         property bool titles: true          // window titles under the icons
