@@ -1,0 +1,84 @@
+{
+  "id": "close-gluttony-1",
+  "title": {
+    "ru": "Чревоугодие: знакомая",
+    "en": "Gluttony: acquainted"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"gluttony\" and closeness == 1",
+      "next": "ask",
+      "note": "the demon of gluttony and the player: closeness acquainted (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Я испекла это из того, что нашла под дождём. Попробуете?",
+        "en": "I baked this from what I found in the rain. Will you try it?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Попробую",
+            "en": "I'll try it"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Ну как? Нет, не говорите. Я вижу по лицу.",
+              "en": "Well? No, don't say. I can see it on your face."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Ни за что",
+            "en": "No way"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Больше мне.",
+              "en": "More for me."
+            }
+          },
+          "next": "end",
+          "set": {
+            "gluttony": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Возьмёте потом. Я оставлю.",
+              "en": "Take it later. I'll keep it."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

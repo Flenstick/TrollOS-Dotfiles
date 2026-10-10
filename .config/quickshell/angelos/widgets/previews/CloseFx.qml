@@ -2,7 +2,7 @@ import QtQuick
 import qs.config
 import qs.widgets
 
-// Close animations (services/CloseAnim ids): default | pixel | heart | crt |
+// Close animations (services/WindowAnim close ids): default | pixel | heart | crt |
 // glitch | fall | minimize | off. The × is clicked, then the window goes.
 Scene {
     id: root

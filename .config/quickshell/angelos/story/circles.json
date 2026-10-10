@@ -1,0 +1,1016 @@
+{
+  "_comment": "How hell looks: one entry per circle (config/HellLook.qml). 'base' is hell before any circle and the defaults every circle starts from — a circle lists only what it changes. n: the circle's number (1 at the top, 9 at the bottom); name, where: its title and one line about it; sin: the story variable that leads a fall here (services/Game); voice: how the demon talks here (story/voices.json); palette: the hell tokens (Theme.hell*); bar: the stone behind the bar (shaders/hell_texture.frag: stone ash water ice iron sand pitch whirl); edge: the rim of windows and widgets (shaders/hell_edge.frag); backdrop: the dark laid over the wallpaper (shaders/hell_backdrop.frag: dim, desat, vignette 0..1, tint), its paintings from the Hell pack (pictures: landscape and portrait names — scripts/hell-wallpaper.py --prefer) and its ambient — fog wind rain dust ripple embers sand pitch ice, still but for a rare event; labels: the word after a reading on hell's widgets; cursor: the pointer while the demon rules (Config.cursor.hell \"circle\": scripts/cursors.py builds angelOS-Circle-<Circle> from its palette — primary fill, secondary shade, border — its shapes and its rare animation fx in the cursor's own frames: fog wisp drip glint boil embers blink, fxColour; still: false plays it always); breakage: what the demon's fist breaks in this circle (Config.y2k.breakage \"circle\": one of these each punch — widgets/BreakageArt, shaders/breakage.frag: glass tv burn claws sigil fog whirl ooze coin ripple spatter pitch frost); palette may also set the hell bar's roles barIcon, barHover, barActive, sprite, spriteHi (config/HellLook.qml barRoles). dress: how hell dresses Settings and the right-click menu in this circle (Config.y2k.hellSettings / hellMenu \"circle\"): settings — grimoire (the book) or the circle's own (modules/settings/dresses: registry letter bill ledger tablet tomb thorns playbill ice), menu — pentagram or the circle's own (modules/background/circles: queue whirl plate roulette ripples tombs blades masks shards).",
+  "base": {
+    "name": {
+      "ru": "Ад",
+      "en": "Hell"
+    },
+    "palette": {
+      "body": "#0b0809",
+      "plate": "#0f0a0b",
+      "face": "#16100f",
+      "faceAlt": "#1f1716",
+      "sunken": "#070505",
+      "edge": "#040303",
+      "hi": "#2c211f",
+      "lo": "#060404",
+      "rim": "#3b2a26",
+      "text": "#d9cbbd",
+      "textDim": "#9c8f85",
+      "accent": "#e2703f",
+      "blood": "#6b2420",
+      "ember": "#e2703f",
+      "flame": "#c99a5e",
+      "gold": "#8a7444"
+    },
+    "bar": {
+      "texture": "stone",
+      "colors": [
+        "#0c0909",
+        "#110d0d",
+        "#1a1413",
+        "#33201b"
+      ],
+      "scale": 10,
+      "crack": 0.35,
+      "glow": 0.12,
+      "seed": 3
+    },
+    "edge": {
+      "kind": "scorch",
+      "colors": [
+        "#040303",
+        "#3b2a26",
+        "#e2703f",
+        "#24130f"
+      ]
+    },
+    "backdrop": {
+      "dim": 0.5,
+      "desat": 0.35,
+      "vignette": 0.6,
+      "tint": "#0b0809"
+    },
+    "breakage": [
+      "glass",
+      "tv",
+      "burn",
+      "claws",
+      "sigil"
+    ],
+    "dress": {
+      "settings": "grimoire",
+      "menu": "pentagram"
+    },
+    "labels": {
+      "cpu": {
+        "ru": "жар",
+        "en": "heat"
+      },
+      "gpu": {
+        "ru": "пекло",
+        "en": "inferno"
+      },
+      "ram": {
+        "ru": "души",
+        "en": "souls"
+      },
+      "vram": {
+        "ru": "котёл",
+        "en": "cauldron"
+      }
+    }
+  },
+  "limbo": {
+    "n": 1,
+    "name": {
+      "ru": "Лимб",
+      "en": "Limbo"
+    },
+    "where": {
+      "ru": "Пепельный туман. Почти нет цвета. Тишина.",
+      "en": "Ash-grey fog. Almost no colour. Silence."
+    },
+    "sin": "limbo",
+    "voice": "registry",
+    "palette": {
+      "body": "#0c0c0d",
+      "plate": "#101011",
+      "face": "#171718",
+      "faceAlt": "#1e1e20",
+      "sunken": "#080809",
+      "edge": "#050505",
+      "hi": "#2a2a2c",
+      "lo": "#070707",
+      "rim": "#38383c",
+      "text": "#d0d0cf",
+      "textDim": "#9a9a9a",
+      "accent": "#bcb6a8",
+      "blood": "#3c3c3f",
+      "ember": "#bcb6a8",
+      "flame": "#9c9a96",
+      "gold": "#7a776f"
+    },
+    "bar": {
+      "texture": "ash",
+      "colors": [
+        "#0d0d0e",
+        "#141415",
+        "#1d1d1f",
+        "#2c2c2e"
+      ],
+      "scale": 8,
+      "crack": 0.15,
+      "glow": 0.0,
+      "seed": 11
+    },
+    "edge": {
+      "kind": "ash",
+      "colors": [
+        "#050505",
+        "#38383c",
+        "#9a9a9a",
+        "#2a2a2c"
+      ]
+    },
+    "backdrop": {
+      "dim": 0.55,
+      "desat": 0.92,
+      "vignette": 0.55,
+      "tint": "#0c0c0d",
+      "ambient": "fog",
+      "pictures": [
+        "hell-limbo",
+        "hell-limbo-portrait"
+      ]
+    },
+    "breakage": [
+      "fog",
+      "glass"
+    ],
+    "dress": {
+      "settings": "registry",
+      "menu": "queue"
+    },
+    "cursor": {
+      "palette": {
+        "primary": "#d0d0cf",
+        "secondary": "#7a7a7c",
+        "border": "#101011"
+      },
+      "fx": "fog",
+      "fxColour": "#9a9a9a",
+      "about": {
+        "ru": "пепельный; изредка тает в тумане",
+        "en": "ash grey; now and then it thins into the fog"
+      }
+    },
+    "labels": {
+      "cpu": {
+        "ru": "туман",
+        "en": "fog"
+      },
+      "gpu": {
+        "ru": "тень",
+        "en": "shade"
+      },
+      "ram": {
+        "ru": "души",
+        "en": "souls"
+      },
+      "vram": {
+        "ru": "ожидание",
+        "en": "waiting"
+      }
+    }
+  },
+  "lust": {
+    "n": 2,
+    "name": {
+      "ru": "Похоть",
+      "en": "Lust"
+    },
+    "where": {
+      "ru": "Чёрный вихрь. Тёмный пурпур. Всё слегка сносит ветром.",
+      "en": "A black whirlwind. Dark purple. Everything drifts a little in the wind."
+    },
+    "sin": "lust",
+    "voice": "close",
+    "palette": {
+      "body": "#0d0710",
+      "plate": "#110a14",
+      "face": "#1a0f1e",
+      "faceAlt": "#231428",
+      "sunken": "#08040a",
+      "edge": "#050206",
+      "hi": "#2e1a35",
+      "lo": "#070308",
+      "rim": "#40244a",
+      "text": "#e0cde6",
+      "textDim": "#a68fae",
+      "accent": "#cf78b9",
+      "blood": "#4a1c3a",
+      "ember": "#cf78b9",
+      "flame": "#b07a9e",
+      "gold": "#8a6a7e"
+    },
+    "bar": {
+      "texture": "whirl",
+      "colors": [
+        "#0c070f",
+        "#140a17",
+        "#24122a",
+        "#3a1c44"
+      ],
+      "scale": 12,
+      "crack": 0.25,
+      "glow": 0.08,
+      "seed": 21
+    },
+    "edge": {
+      "kind": "wind",
+      "colors": [
+        "#050206",
+        "#40244a",
+        "#cf78b9",
+        "#2a1530"
+      ]
+    },
+    "backdrop": {
+      "dim": 0.5,
+      "desat": 0.55,
+      "vignette": 0.6,
+      "tint": "#0d0710",
+      "ambient": "wind",
+      "pictures": [
+        "hell-lust",
+        "hell-lust-portrait"
+      ]
+    },
+    "breakage": [
+      "whirl",
+      "claws"
+    ],
+    "dress": {
+      "settings": "letter",
+      "menu": "whirl"
+    },
+    "cursor": {
+      "palette": {
+        "primary": "#ecbfe2",
+        "secondary": "#9b3f86",
+        "border": "#1a0b1e"
+      },
+      "fx": "wisp",
+      "fxColour": "#cf78b9",
+      "about": {
+        "ru": "тёмный пурпур; ветер треплет его хвост",
+        "en": "dark purple; the wind tugs at its tail"
+      }
+    },
+    "labels": {
+      "cpu": {
+        "ru": "вихрь",
+        "en": "whirl"
+      },
+      "gpu": {
+        "ru": "жар",
+        "en": "heat"
+      },
+      "ram": {
+        "ru": "желания",
+        "en": "wants"
+      },
+      "vram": {
+        "ru": "тоска",
+        "en": "longing"
+      }
+    }
+  },
+  "gluttony": {
+    "n": 3,
+    "name": {
+      "ru": "Чревоугодие",
+      "en": "Gluttony"
+    },
+    "where": {
+      "ru": "Ледяной дождь. Грязь. Гнилостная зелень.",
+      "en": "Icy rain. Mud. A rotten green."
+    },
+    "sin": "gluttony",
+    "voice": "registry",
+    "palette": {
+      "body": "#0a0c08",
+      "plate": "#0d100b",
+      "face": "#151a11",
+      "faceAlt": "#1c2317",
+      "sunken": "#060805",
+      "edge": "#040503",
+      "hi": "#26301e",
+      "lo": "#050604",
+      "rim": "#36432b",
+      "text": "#d3d9c5",
+      "textDim": "#95a284",
+      "accent": "#a3bd4e",
+      "blood": "#3d4520",
+      "ember": "#a3bd4e",
+      "flame": "#8e9c5a",
+      "gold": "#7d7a48"
+    },
+    "bar": {
+      "texture": "water",
+      "colors": [
+        "#0a0c08",
+        "#10140d",
+        "#1a2214",
+        "#2e3a22"
+      ],
+      "scale": 10,
+      "crack": 0.3,
+      "glow": 0.0,
+      "seed": 31
+    },
+    "edge": {
+      "kind": "grime",
+      "colors": [
+        "#040503",
+        "#36432b",
+        "#a3bd4e",
+        "#262e1c"
+      ]
+    },
+    "backdrop": {
+      "dim": 0.52,
+      "desat": 0.6,
+      "vignette": 0.55,
+      "tint": "#0a0c08",
+      "ambient": "rain",
+      "pictures": [
+        "hell-gluttony",
+        "hell-gluttony-portrait"
+      ]
+    },
+    "breakage": [
+      "ooze",
+      "glass"
+    ],
+    "dress": {
+      "settings": "bill",
+      "menu": "plate"
+    },
+    "cursor": {
+      "palette": {
+        "primary": "#c9d39a",
+        "secondary": "#6d7a33",
+        "border": "#0d100b"
+      },
+      "fx": "drip",
+      "fxColour": "#b0861c",
+      "still": false,
+      "about": {
+        "ru": "гнилая зелень; с него капает масло",
+        "en": "rotten green; oil drips off it"
+      }
+    },
+    "labels": {
+      "cpu": {
+        "ru": "голод",
+        "en": "hunger"
+      },
+      "gpu": {
+        "ru": "грязь",
+        "en": "mire"
+      },
+      "ram": {
+        "ru": "сытость",
+        "en": "fill"
+      },
+      "vram": {
+        "ru": "гниль",
+        "en": "rot"
+      }
+    }
+  },
+  "greed": {
+    "n": 4,
+    "name": {
+      "ru": "Жадность",
+      "en": "Greed"
+    },
+    "where": {
+      "ru": "Потускневшее золото. Камень. Тяжесть.",
+      "en": "Tarnished gold. Stone. Weight."
+    },
+    "sin": "greed",
+    "voice": "registry",
+    "palette": {
+      "body": "#0c0a07",
+      "plate": "#100d09",
+      "face": "#19140d",
+      "faceAlt": "#211a11",
+      "sunken": "#070604",
+      "edge": "#050403",
+      "hi": "#2e2516",
+      "lo": "#060503",
+      "rim": "#4a3b22",
+      "text": "#e2d5b6",
+      "textDim": "#aa9a72",
+      "accent": "#cfa64c",
+      "blood": "#4a3518",
+      "ember": "#cfa64c",
+      "flame": "#b8995a",
+      "gold": "#9a7e3e"
+    },
+    "bar": {
+      "texture": "stone",
+      "colors": [
+        "#0c0a07",
+        "#130f0a",
+        "#1f1910",
+        "#4a3b22"
+      ],
+      "scale": 11,
+      "crack": 0.4,
+      "glow": 0.1,
+      "seed": 41
+    },
+    "edge": {
+      "kind": "tarnish",
+      "colors": [
+        "#050403",
+        "#4a3b22",
+        "#cfa64c",
+        "#2e2516"
+      ]
+    },
+    "backdrop": {
+      "dim": 0.5,
+      "desat": 0.5,
+      "vignette": 0.6,
+      "tint": "#0c0a07",
+      "ambient": "dust",
+      "pictures": [
+        "hell-greed",
+        "hell-greed-portrait"
+      ]
+    },
+    "breakage": [
+      "coin",
+      "glass"
+    ],
+    "dress": {
+      "settings": "ledger",
+      "menu": "roulette"
+    },
+    "cursor": {
+      "palette": {
+        "primary": "#f3d36b",
+        "secondary": "#b8862a",
+        "border": "#2a1a06"
+      },
+      "fx": "glint",
+      "fxColour": "#fff6c8",
+      "about": {
+        "ru": "золотой; по нему пробегает блик",
+        "en": "gold; a glint runs down it"
+      }
+    },
+    "labels": {
+      "cpu": {
+        "ru": "груз",
+        "en": "weight"
+      },
+      "gpu": {
+        "ru": "золото",
+        "en": "gold"
+      },
+      "ram": {
+        "ru": "казна",
+        "en": "hoard"
+      },
+      "vram": {
+        "ru": "долг",
+        "en": "debt"
+      }
+    }
+  },
+  "wrath": {
+    "n": 5,
+    "name": {
+      "ru": "Гнев",
+      "en": "Wrath"
+    },
+    "where": {
+      "ru": "Стикс. Чёрно-зелёная вода. Под поверхностью что-то шевелится.",
+      "en": "The Styx. Black-green water. Something moves under the surface."
+    },
+    "sin": "wrath",
+    "voice": "scripture",
+    "palette": {
+      "body": "#060b0a",
+      "plate": "#08100e",
+      "face": "#0e1916",
+      "faceAlt": "#13211d",
+      "sunken": "#040706",
+      "edge": "#020404",
+      "hi": "#1a2d28",
+      "lo": "#030605",
+      "rim": "#24443d",
+      "text": "#c9ddd6",
+      "textDim": "#84a59a",
+      "accent": "#58b8a0",
+      "blood": "#1e3a33",
+      "ember": "#58b8a0",
+      "flame": "#6e9a8c",
+      "gold": "#5f7a5a"
+    },
+    "bar": {
+      "texture": "water",
+      "colors": [
+        "#060b0a",
+        "#0a1311",
+        "#112420",
+        "#24443d"
+      ],
+      "scale": 12,
+      "crack": 0.25,
+      "glow": 0.05,
+      "seed": 51
+    },
+    "edge": {
+      "kind": "wet",
+      "colors": [
+        "#020404",
+        "#24443d",
+        "#58b8a0",
+        "#14302a"
+      ]
+    },
+    "backdrop": {
+      "dim": 0.55,
+      "desat": 0.6,
+      "vignette": 0.6,
+      "tint": "#060b0a",
+      "ambient": "ripple",
+      "pictures": [
+        "hell-wrath",
+        "hell-wrath-portrait"
+      ]
+    },
+    "breakage": [
+      "ripple",
+      "tv"
+    ],
+    "dress": {
+      "settings": "tablet",
+      "menu": "ripples"
+    },
+    "cursor": {
+      "palette": {
+        "primary": "#a4d9c8",
+        "secondary": "#2f6f60",
+        "border": "#06100e"
+      },
+      "fx": "boil",
+      "fxColour": "#1d4a40",
+      "about": {
+        "ru": "вода Стикса; в нём поднимается пузырь",
+        "en": "Styx water; a bubble rises in it"
+      }
+    },
+    "labels": {
+      "cpu": {
+        "ru": "ярость",
+        "en": "rage"
+      },
+      "gpu": {
+        "ru": "Стикс",
+        "en": "Styx"
+      },
+      "ram": {
+        "ru": "топь",
+        "en": "mire"
+      },
+      "vram": {
+        "ru": "глубина",
+        "en": "depth"
+      }
+    }
+  },
+  "heresy": {
+    "n": 6,
+    "name": {
+      "ru": "Ересь",
+      "en": "Heresy"
+    },
+    "where": {
+      "ru": "Город Дит: железные стены, раскалённые гробницы. Здесь впервые появляется огонь.",
+      "en": "The city of Dis: iron walls, red-hot tombs. Fire appears here for the first time."
+    },
+    "sin": "heresy",
+    "voice": "scripture",
+    "palette": {
+      "body": "#0b0807",
+      "plate": "#0f0b0a",
+      "face": "#171210",
+      "faceAlt": "#201816",
+      "sunken": "#070504",
+      "edge": "#040303",
+      "hi": "#2c201c",
+      "lo": "#060404",
+      "rim": "#4d2c22",
+      "text": "#e4d0c3",
+      "textDim": "#ab9081",
+      "accent": "#ec7650",
+      "blood": "#5a2418",
+      "ember": "#ec7650",
+      "flame": "#cf8a52",
+      "gold": "#8a6a44"
+    },
+    "bar": {
+      "texture": "iron",
+      "colors": [
+        "#0b0807",
+        "#120d0b",
+        "#1f1612",
+        "#4d2c22"
+      ],
+      "scale": 10,
+      "crack": 0.35,
+      "glow": 0.3,
+      "seed": 61
+    },
+    "edge": {
+      "kind": "iron",
+      "colors": [
+        "#040303",
+        "#4d2c22",
+        "#ec7650",
+        "#2c201c"
+      ]
+    },
+    "backdrop": {
+      "dim": 0.48,
+      "desat": 0.4,
+      "vignette": 0.6,
+      "tint": "#0b0807",
+      "ambient": "embers",
+      "pictures": [
+        "hell-heresy",
+        "hell-heresy-portrait"
+      ]
+    },
+    "breakage": [
+      "burn",
+      "sigil"
+    ],
+    "dress": {
+      "settings": "tomb",
+      "menu": "tombs"
+    },
+    "cursor": {
+      "palette": {
+        "primary": "#ddd0c6",
+        "secondary": "#7a5a4c",
+        "border": "#0f0b0a"
+      },
+      "fx": "embers",
+      "about": {
+        "ru": "железо Дита; от него летят искры",
+        "en": "the iron of Dis; sparks fly off it"
+      }
+    },
+    "labels": {
+      "cpu": {
+        "ru": "жар",
+        "en": "heat"
+      },
+      "gpu": {
+        "ru": "гробницы",
+        "en": "tombs"
+      },
+      "ram": {
+        "ru": "ересь",
+        "en": "heresy"
+      },
+      "vram": {
+        "ru": "пламя",
+        "en": "flame"
+      }
+    }
+  },
+  "violence": {
+    "n": 7,
+    "name": {
+      "ru": "Насилие",
+      "en": "Violence"
+    },
+    "where": {
+      "ru": "Кровавая река, лес сухих ветвей, горящий песок.",
+      "en": "A river of blood, a wood of dry branches, burning sand."
+    },
+    "sin": "violence",
+    "voice": "scripture",
+    "palette": {
+      "body": "#0d0606",
+      "plate": "#120808",
+      "face": "#1b0c0c",
+      "faceAlt": "#251111",
+      "sunken": "#080404",
+      "edge": "#050202",
+      "hi": "#331616",
+      "lo": "#070303",
+      "rim": "#4a1a18",
+      "text": "#e7cfc8",
+      "textDim": "#b08d85",
+      "accent": "#ec6a5a",
+      "blood": "#6e1e1a",
+      "ember": "#ec6a5a",
+      "flame": "#c4704e",
+      "gold": "#8a5a40"
+    },
+    "bar": {
+      "texture": "sand",
+      "colors": [
+        "#0d0606",
+        "#150909",
+        "#240e0d",
+        "#4a1a18"
+      ],
+      "scale": 9,
+      "crack": 0.3,
+      "glow": 0.25,
+      "seed": 71
+    },
+    "edge": {
+      "kind": "blood",
+      "colors": [
+        "#050202",
+        "#4a1a18",
+        "#ec6a5a",
+        "#3a1210"
+      ]
+    },
+    "backdrop": {
+      "dim": 0.5,
+      "desat": 0.4,
+      "vignette": 0.62,
+      "tint": "#0d0606",
+      "ambient": "sand",
+      "pictures": [
+        "hell-violence",
+        "hell-violence-portrait"
+      ]
+    },
+    "breakage": [
+      "spatter",
+      "claws"
+    ],
+    "dress": {
+      "settings": "thorns",
+      "menu": "blades"
+    },
+    "cursor": {
+      "palette": {
+        "primary": "#f2cdc5",
+        "secondary": "#a3241c",
+        "border": "#140404"
+      },
+      "fx": "drip",
+      "fxColour": "#c4231b",
+      "shapes": {
+        "hand-pointing": "claw",
+        "hand-open": "claw-open",
+        "hand-closed": "claw-closed"
+      },
+      "about": {
+        "ru": "кровь; руки — когти, с кончика капает",
+        "en": "blood; the hands are claws, drops fall off the tip"
+      }
+    },
+    "labels": {
+      "cpu": {
+        "ru": "кровь",
+        "en": "blood"
+      },
+      "gpu": {
+        "ru": "песок",
+        "en": "sand"
+      },
+      "ram": {
+        "ru": "лес",
+        "en": "wood"
+      },
+      "vram": {
+        "ru": "река",
+        "en": "river"
+      }
+    }
+  },
+  "fraud": {
+    "n": 8,
+    "name": {
+      "ru": "Обман",
+      "en": "Fraud"
+    },
+    "where": {
+      "ru": "Злые Щели: каменные рвы, смола, темнота.",
+      "en": "Malebolge: stone ditches, pitch, darkness."
+    },
+    "sin": "fraud",
+    "voice": "close",
+    "palette": {
+      "body": "#060606",
+      "plate": "#090808",
+      "face": "#100f0e",
+      "faceAlt": "#161413",
+      "sunken": "#040404",
+      "edge": "#020202",
+      "hi": "#211e1b",
+      "lo": "#030303",
+      "rim": "#2c2824",
+      "text": "#cbc4ba",
+      "textDim": "#8f887e",
+      "accent": "#c8b45c",
+      "blood": "#2e2a1c",
+      "ember": "#c8b45c",
+      "flame": "#a8985e",
+      "gold": "#8a7a48"
+    },
+    "bar": {
+      "texture": "pitch",
+      "colors": [
+        "#060606",
+        "#0b0a09",
+        "#141210",
+        "#2c2824"
+      ],
+      "scale": 12,
+      "crack": 0.2,
+      "glow": 0.0,
+      "seed": 81
+    },
+    "edge": {
+      "kind": "pitch",
+      "colors": [
+        "#020202",
+        "#2c2824",
+        "#c8b45c",
+        "#161413"
+      ]
+    },
+    "backdrop": {
+      "dim": 0.68,
+      "desat": 0.7,
+      "vignette": 0.75,
+      "tint": "#060606",
+      "ambient": "pitch",
+      "pictures": [
+        "hell-fraud",
+        "hell-fraud-portrait"
+      ]
+    },
+    "breakage": [
+      "pitch",
+      "sigil"
+    ],
+    "dress": {
+      "settings": "playbill",
+      "menu": "masks"
+    },
+    "cursor": {
+      "palette": {
+        "primary": "#2a2622",
+        "secondary": "#8a7a48",
+        "border": "#d4bf68"
+      },
+      "fx": "blink",
+      "fxColour": "#ffd84a",
+      "about": {
+        "ru": "смола в золотом контуре; в ней открываются глаза",
+        "en": "pitch in a gold outline; eyes open in it"
+      }
+    },
+    "labels": {
+      "cpu": {
+        "ru": "смола",
+        "en": "pitch"
+      },
+      "gpu": {
+        "ru": "рвы",
+        "en": "ditches"
+      },
+      "ram": {
+        "ru": "маски",
+        "en": "masks"
+      },
+      "vram": {
+        "ru": "тьма",
+        "en": "dark"
+      }
+    }
+  },
+  "treachery": {
+    "n": 9,
+    "name": {
+      "ru": "Предательство",
+      "en": "Treachery"
+    },
+    "where": {
+      "ru": "Коцит: лёд, холодный синий. Почти ничего не движется.",
+      "en": "Cocytus: ice, a cold blue. Almost nothing moves."
+    },
+    "sin": "treachery",
+    "voice": "silent",
+    "palette": {
+      "body": "#070a0e",
+      "plate": "#0a0e13",
+      "face": "#10161d",
+      "faceAlt": "#151d26",
+      "sunken": "#05070a",
+      "edge": "#030405",
+      "hi": "#1d2835",
+      "lo": "#04060a",
+      "rim": "#2c3d50",
+      "text": "#d7e3ef",
+      "textDim": "#90a5ba",
+      "accent": "#85bbea",
+      "blood": "#1c2c40",
+      "ember": "#85bbea",
+      "flame": "#7a9ab8",
+      "gold": "#6a7e94"
+    },
+    "bar": {
+      "texture": "ice",
+      "colors": [
+        "#070a0e",
+        "#0c1117",
+        "#16202b",
+        "#2c3d50"
+      ],
+      "scale": 11,
+      "crack": 0.45,
+      "glow": 0.12,
+      "seed": 91
+    },
+    "edge": {
+      "kind": "frost",
+      "colors": [
+        "#030405",
+        "#2c3d50",
+        "#6a8299",
+        "#1d2835"
+      ]
+    },
+    "backdrop": {
+      "dim": 0.5,
+      "desat": 0.75,
+      "vignette": 0.65,
+      "tint": "#070a0e",
+      "ambient": "ice",
+      "pictures": [
+        "hell-treachery",
+        "hell-treachery-portrait"
+      ]
+    },
+    "breakage": [
+      "frost",
+      "glass"
+    ],
+    "dress": {
+      "settings": "ice",
+      "menu": "shards"
+    },
+    "cursor": {
+      "palette": {
+        "primary": "#e8f3ff",
+        "secondary": "#85bbea",
+        "border": "#0a1a2a"
+      },
+      "fx": "glint",
+      "fxColour": "#4f86c6",
+      "about": {
+        "ru": "лёд Коцита; по нему ползёт иней",
+        "en": "the ice of Cocytus; frost creeps down it"
+      }
+    },
+    "labels": {
+      "cpu": {
+        "ru": "лёд",
+        "en": "ice"
+      },
+      "gpu": {
+        "ru": "холод",
+        "en": "cold"
+      },
+      "ram": {
+        "ru": "забвение",
+        "en": "oblivion"
+      },
+      "vram": {
+        "ru": "Коцит",
+        "en": "Cocytus"
+      }
+    }
+  }
+}

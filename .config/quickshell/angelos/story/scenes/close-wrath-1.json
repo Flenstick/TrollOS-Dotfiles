@@ -1,0 +1,84 @@
+{
+  "id": "close-wrath-1",
+  "title": {
+    "ru": "Гнев: знакомая",
+    "en": "Wrath: acquainted"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"wrath\" and closeness == 1",
+      "next": "ask",
+      "note": "the demon of wrath and the player: closeness acquainted (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Сказано: кто гневается — тонет. Ты тонешь?",
+        "en": "It is written: whoever rages, drowns. Are you drowning?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Нет, я на берегу",
+            "en": "No, I'm on the shore"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Стой там. Я приду.",
+              "en": "Stay there. I'll come."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Тону",
+            "en": "I am"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Держись за меня.",
+              "en": "Hold on to me."
+            }
+          },
+          "next": "end",
+          "set": {
+            "wrath": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Вода спокойна. Значит, нет.",
+              "en": "The water is calm. So you're not."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

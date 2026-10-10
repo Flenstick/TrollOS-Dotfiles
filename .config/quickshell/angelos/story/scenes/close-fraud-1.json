@@ -1,0 +1,84 @@
+{
+  "id": "close-fraud-1",
+  "title": {
+    "ru": "Обман: знакомая",
+    "en": "Fraud: acquainted"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"fraud\" and closeness == 1",
+      "next": "ask",
+      "note": "the demon of fraud and the player: closeness acquainted (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Угадай, какое из моих лиц настоящее. Ошибёшься — останешься.",
+        "en": "Guess which of my faces is real. Guess wrong — you stay."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Вот это",
+            "en": "This one"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "…Как ты угадал{g:|а|(а)}?",
+              "en": "…How did you guess?"
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Все фальшивые",
+            "en": "They're all fake"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Почти. Почти.",
+              "en": "Almost. Almost."
+            }
+          },
+          "next": "end",
+          "set": {
+            "fraud": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Не угадывать — тоже стратегия.",
+              "en": "Not guessing is a strategy too."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

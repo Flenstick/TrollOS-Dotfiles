@@ -1,0 +1,84 @@
+{
+  "id": "close-lust-3",
+  "title": {
+    "ru": "Похоть: своя",
+    "en": "Lust: your own"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"lust\" and closeness == 3",
+      "next": "ask",
+      "note": "the demon of lust and the player: closeness own (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Если я перестану кружиться — ты не уйдёшь?",
+        "en": "If I stop whirling — you won't leave?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Не уйду",
+            "en": "I won't"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Тогда я стою.",
+              "en": "Then I stand still."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Не обещаю",
+            "en": "I can't promise"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Честно. Больно. Ладно.",
+              "en": "Honest. It hurts. All right."
+            }
+          },
+          "next": "end",
+          "set": {
+            "lust": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Я подожду, пока скажешь.",
+              "en": "I'll wait until you say it."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

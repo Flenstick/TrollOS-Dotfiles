@@ -1,0 +1,84 @@
+{
+  "id": "close-heresy-3",
+  "title": {
+    "ru": "Ересь: своя",
+    "en": "Heresy: your own"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"heresy\" and closeness == 3",
+      "next": "ask",
+      "note": "the demon of heresy and the player: closeness own (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Если я отрекусь от всего, во что верила, — ты будешь рядом?",
+        "en": "If I renounce all I believed in — will you be by me?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Буду",
+            "en": "I will"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Тогда отрекаюсь.",
+              "en": "Then I renounce it."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Не отрекайся",
+            "en": "Don't renounce it"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Ты прав{g:|а|(а)}… Нет. Я всё равно.",
+              "en": "You're right… No. I will anyway."
+            }
+          },
+          "next": "end",
+          "set": {
+            "heresy": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Я приму это как «да».",
+              "en": "I'll take that as a yes."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

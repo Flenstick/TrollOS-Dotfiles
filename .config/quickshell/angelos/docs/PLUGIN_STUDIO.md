@@ -40,6 +40,71 @@
 Выключение режима разработчика скрывает мастер и отменяет запрос к ИИ,
 но установленные плагины продолжают работать.
 
+## Доработка готового плагина
+
+Свой плагин (из `~/.config/angelos/plugins`) можно менять прямо в системе:
+**Настройки → Плагины → «Доработать»** или блок **«Доработать готовый плагин»**
+в мастере.
+
+- **Сразу переделать** — пишешь, что поменять («добавь выбор цвета», «сделай
+  меньше»), ИИ возвращает обновлённые файлы. **Сначала обсудить** — сперва план
+  «что изменится», вопросы, потом «План подходит — переделать».
+- **Изменения**: список изменённых файлов (`+` добавлен, `~` изменён, `−` удалён)
+  и разница построчно (зелёное — добавлено, красное — убрано).
+- **Править вручную** — встроенный редактор: любой файл черновика, новый файл,
+  удаление; «Сохранить и проверить» сразу прогоняет проверки и песочницу.
+  Работает и для черновика нового плагина до установки.
+- **Обновить плагин** — прошлая версия уходит в
+  `~/.local/state/angelos/plugin-backups/<id>/` (последние 10), новая
+  ставится атомарно и **перезагружается без перезапуска оболочки** (QML грузит
+  её по новому пути `~/.cache/angelos/plugin-load/<id>.<n>`, поэтому кэш
+  компонентов не мешает). Можно дорабатывать дальше — следующая разница
+  считается от новой версии.
+- **Вернуть прошлую версию** — одной кнопкой; заменённая версия тоже
+  сохраняется (второе нажатие возвращает её обратно).
+- Картинки, звуки и другие файлы, которые мастер не редактирует, переносятся
+  как есть. Если плагин изменили на диске после начала доработки, обновление
+  остановится и попросит открыть его заново.
+- Кнопка **↻** у своего плагина в «Плагинах» перезагружает его файлы после
+  ручной правки во внешнем редакторе (режим разработчика не нужен).
+
+### Рай и ад
+
+Каждый новый виджет рабочего стола мастер делает в двух измерениях: обычный
+и адский — для демоницы (`"realms": ["heaven", "hell"]`, вид по `Theme.hell`,
+см. [PLUGINS.md](PLUGINS.md#два-измерения-рай-и-ад)). Проверка требует оба и
+грузит виджет в раю и в аду. У старых своих плагинов, где ада нет, есть кнопка
+**«Адская версия»** в «Плагинах» (и **«Сделать адскую версию»** в мастере при
+доработке): ИИ дорисовывает только адский облик, остальное не трогает. Пока её
+не нажали, angelOS в аду просто перекрашивает такой виджет шейдером.
+
+### Пиксель и macOS
+
+У angelOS две темы — исходная пиксельная (Win98 / NEEDY GIRL OVERDOSE) и macOS
+(Golden Gate, Liquid Glass), — и пользователь переключает их на ходу. Каждый
+новый плагин мастер делает для обеих: `"themes": ["pixel", "mac"]` в
+manifest.json, а цвета, шрифты, размеры, скругления и отступы — только из
+**Theme API** (`Skin`, см. [PLUGINS.md](PLUGINS.md#theme-api-пиксель-и-macos)).
+Что это значит для сгенерированного кода — системный промт
+(`docs/STUDIO_CONTRACT.md`, раздел «Two looks») требует:
+
+- никаких `#rrggbb`, имён шрифтов и голых пикселей — `Skin.text`, `Skin.accent`,
+  `Skin.px(n)`, `PxText { kind }`; светлое/тёмное, акцентный цвет и «Уменьшить
+  прозрачность» токены учитывают сами;
+- общие компоненты, которые меняют вид сами: `PxButton`, `PxToggle`,
+  `PxSlider`, `PxField`, `PxText`…, карточка `SkinCard`, попап `BarPopup`;
+- в macOS — ни «name.exe», ни пиксель-арта: заголовки через `Skin.title()`,
+  значки `MacIcon`, виджет панели — одноцветный «menu bar extra» в
+  `Skin.ink(screenName)`;
+- память: ленивые `Loader`, ничего не работает, пока скрыто, опрос не чаще,
+  чем меняются данные (сеть ≥ 60 с), у каждой картинки `sourceSize`.
+
+Проверка это и смотрит: статически (поле `themes`, есть ли обращения к `Skin`,
+нет ли захардкоженных цветов, шрифтов, `I18n.exe`, картинок без `sourceSize`) и
+в песочнице — каждая видимая точка входа грузится в пиксельной теме и в macOS
+(виджет рабочего стола ещё и в аду). Ошибка в одной из тем уходит модели с
+пометкой, в какой.
+
 ## Модель, уровень, проверка
 
 - **Модель** выбирается карточками: для Claude Code — Haiku / Sonnet / Opus / Fable,
@@ -51,10 +116,12 @@
   `output_config.effort` (Anthropic API), `reasoning.effort` (OpenAI API).
 - **Проверка**: JSON/Python/shell и `qmlformat`, затем каждая точка входа
   загружается в Quickshell offscreen внутри bubblewrap (без сети, без домашней
-  папки и сокетов). Ошибки — неизвестные свойства и типы, импорты, ошибки в
-  привязках, нулевой размер — уходят модели на **автоисправление** (0–2 попытки).
+  папки и сокетов) — в пиксельной теме и в macOS. Ошибки — неизвестные свойства
+  и типы, импорты, ошибки в привязках, нулевой размер, нарушения Theme API —
+  уходят модели на **автоисправление** (0–2 попытки).
 - В контекст модели попадает справочник API, собранный из текущих исходников
-  (виджеты, Theme, сервисы, имена иконок), и живой пример плагина.
+  (виджеты, Theme, сервисы, имена иконок), исходники Theme API (`services/Skin.qml`,
+  `widgets/SkinCard.qml`) и живые примеры: шаблон, работающий в обеих темах, и котик.
 
 ## Пример с лимитами Codex
 
@@ -88,9 +155,9 @@ Python, JSON и shell. Проверка синтаксиса не гаранти
 правами текущего пользователя.
 
 Установка не заменяет существующий ID и не запускает установочные скрипты.
-После ручных правок нужно нажать **Проверить ещё раз**: установка сверяет
-файлы с просмотренным результатом. Сейчас мастер создаёт новые плагины;
-обновление уже установленного плагина под тем же ID выполняется вручную.
+После ручных правок во внешнем редакторе нужно нажать **Проверить ещё раз**:
+установка сверяет файлы с просмотренным результатом. Установленный плагин
+меняется через «Доработать» (см. выше) — с бэкапом и откатом.
 
 При ошибке синтаксиса доступно **Исправить с ИИ**. При неполном ответе
 увеличь лимит ответа или упрости задачу. Ошибка 401 означает отклонённый
@@ -131,8 +198,34 @@ Drafts are checked without executing them. The checks cover manifest structure,
 file paths, required entry points and QML/Python/JSON/shell syntax. They do not
 prove runtime correctness. Installed plugins run as your desktop user. Existing
 plugin IDs are never overwritten. After editing files externally, use
-**Recheck files** before installing. Studio creates new plugins; updating an
-installed ID is currently a manual operation.
+**Recheck files** before installing.
+
+**Improving an installed plugin**: Settings → Plugins → Improve (or the
+"Improve an installed plugin" list in Studio). "Change it now" applies a
+request directly; "Discuss first" plans the change. The Changes view lists
+added/changed/removed files with a line diff; "Edit by hand" is a built-in
+editor (save = recheck). "Update plugin" backs the old version up to
+`~/.local/state/angelos/plugin-backups/<id>/` (last 10), swaps the new one in
+atomically and hot-reloads it through a fresh load path (QML caches
+components by URL). "Restore previous version" undoes it (and can redo).
+Files Studio cannot edit ride along untouched.
+
+**Heaven and hell**: every new desktop widget comes in both realms, the usual
+one and a hell look for the demon (`"realms": ["heaven", "hell"]`, drawn by
+`Theme.hell`); the check requires both and loads the widget in each. Your older
+plugins without hell get **Hell version** in Settings → Plugins (and **Make the
+hell version** while improving one): the AI adds only the hell look. Until then
+angelOS re-inks such a widget with a shader in hell.
+
+**Pixel and macOS**: angelOS has two themes, the original pixel one and macOS
+(Golden Gate), switched while it runs. Every new plugin draws both
+(`"themes": ["pixel", "mac"]`) and takes colours, fonts, sizes, radii and
+spacing only from the **Theme API** (`Skin`, see PLUGINS.md): no hex colours,
+font names or bare pixels; the shared controls, `SkinCard` and `BarPopup` change
+by themselves; no ".exe" or pixel art in macOS (`Skin.title()`, `MacIcon`, a
+monochrome menu bar extra in `Skin.ink(screenName)`); lazy loading, no polling
+faster than the data, `sourceSize` on every image. The check verifies this
+statically and loads every visual entry point in both looks.
 
 For “remaining Codex tokens,” Studio must clarify the actual metric and data
 source instead of inventing a subscription-balance API. Its own token counter

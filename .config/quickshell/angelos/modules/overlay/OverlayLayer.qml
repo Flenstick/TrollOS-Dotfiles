@@ -150,7 +150,7 @@ Variants {
                 width: Math.min(parent.width - Theme.u * 20, tools.implicitWidth + Theme.pad * 2 + Theme.u * 6)
                 height: titleHeight + tools.implicitHeight + hint.implicitHeight + Theme.pad * 3 + Theme.u * 6
                 compact: true
-                title: "overlay.exe"
+                title: I18n.exe("overlay")
                 icon: "layers"
                 onCloseClicked: Overlay.open = false
 

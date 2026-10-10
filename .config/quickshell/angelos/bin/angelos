@@ -1,11 +1,44 @@
 #!/bin/sh
 # angelOS control. `angelos help` lists IPC functions.
-#   angelos launcher | settings [page] | lock | session | clipboard | lyrics
+#   angelos launcher | settings [page] | setup [skip] | lock | session | clipboard | lyrics
+#   angelos settingsView win11|sidebar|controlpanel|properties|tiles | settingsSkin classic|windose|stream
 #   angelos theme light|dark|auto|toggle | wallpaper <path|random> | bar taskbar|top|island
 #   angelos startMenu | sidebar | idle | lockPreview | fontPreset arcade|soft|block|angelos
-#   angelos ws <n|up|down|prev> | start | restart | stop | run | log | switch angelos|noctalia | status
+#   angelos browser — the default browser (Mod+B; Settings → Default apps), an installed one when it isn't
+#   angelos ws <n|up|down|prev> | alttab next|prev|cancel|apps|appsback|appwin|appwinback | lens in|out|close|toggle | start | restart | stop | run | status | log | report | sprites | switch angelos|noctalia
+#   angelOS is also a game played over your desktop (an angel, a demon, a story that follows
+#   your choices). Out of it at once, any time: `angelos game off` or Mod+Ctrl+Shift+Escape;
+#   back: `angelos game on`. `angelos game status | reset` (the save, ~/.config/angelos/save.json).
+#   Achievements (the game on only): `angelos ach status | list | events | validate | streak`.
+#   The Angel's diary (its key is an achievement's): `angelos diary open [page] | list | validate`.
+#   angelos motion full|calm|off — how much moves: calm = no flashes, shaking or sudden loud
+#   sounds; off = no animations at all (the shell, niri, hell), an optimisation mode
+#   angelos scene edit [picture] | mcp — the author's live-wallpaper scene editor and its MCP server
+#   angelos author status|fetch|login — the author's own tools (the chapter editor), only for
+#   the GitHub account with access to the author's private repository; gh keeps the login
+#   angelos setup — the setup wizard again (full screen, with Close); `angelos setup skip` — out of the
+#   first-run wizard at once, also from a text console (Ctrl+Alt+F3) when it is broken
+#   angelos keys [status] | pixel | macos | sync — the niri key profile of a theme (cfg/keybinds-*.kdl):
+#   it follows `angelos settingsSkin …` by itself while the shell runs; sync = the one settings.json asks for
+#   angelos updates [status] | check | update — Settings → Updates from the terminal: follows the
+#   run to its end and says what happened (without a running shell the update runs right here)
+#   angelos events [signal] — follow angelOS (stream, awake, realm, circle, locked, angelSaid…) line by
+#   line; angelos eventsNow — the same state right now, as JSON
+#   angelos awake on|off|toggle|status — stay awake: no idle screen, lock or sleep (also by itself
+#   while streaming or with a full-screen window: Settings → Lock → Stay awake)
+#   angelos brightness up|down|0…100 | kbdLight up|down|cycle — a laptop's backlight and keyboard light
+#   angelos laptop info | battery | eco on|off|auto | touchpad on|off|toggle | airplane | project … |
+#   lid close|open | tablet on|off | rotate … — the rest of a laptop (`angelos laptop help`)
+#   angelos cobweb [status | grow [id] [minutes] | demo | clear [id|all] | qte [id]] — the cobwebs
+#   on windows (Settings → Windows → Cobwebs)
+#   angelos sddm [status] | build | install [--palette ngo|system] [--look L] | look L — the login
+#   screen (SDDM) in one of angelOS's looks (stream heaven retro hell quiet); install asks for the
+#   admin password (pkexec), `look` after that needs none
 SHELL_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/angelos"
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/angelos"
+RUN_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/angelos"
+UNIT="${ANGELOS_UNIT:-angelos.service}"   # another name only for tests
+UNIT_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$UNIT"
 
 # Renderer for the shell only (Settings → System → Rendering, file ~/.config/angelos/renderer):
 #   auto   — Qt's OpenGL; on NVIDIA with Qt < 6.12 the patched wayland-egl plugin
@@ -16,6 +49,14 @@ CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/angelos"
 shell_env() {
   mode="$(cat "$CONF_DIR/renderer" 2>/dev/null | tr -cd 'a-z')"
   export ANGELOS_PRE_QT_PLUGIN_PATH="${QT_PLUGIN_PATH:-}" ANGELOS_PRE_QSG_RHI_BACKEND="${QSG_RHI_BACKEND:-}"
+  # the shell's own windows (Settings…) draw their own title bars: never Qt's frame around them,
+  # also where the apps draw theirs (Golden Gate turns niri's prefer-no-csd off)
+  export ANGELOS_PRE_QT_WAYLAND_DISABLE_WINDOWDECORATION="${QT_WAYLAND_DISABLE_WINDOWDECORATION:-}" QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+  # Qt apps may use qt6ct (Settings → Appearance → Qt apps, scripts/qt-theme.py); the
+  # shell keeps the GTK platform theme it was made with, apps get theirs back (Shell.childEnv)
+  if [ "${QT_QPA_PLATFORMTHEME:-}" = qt6ct ]; then
+    export ANGELOS_PRE_QT_QPA_PLATFORMTHEME=qt6ct QT_QPA_PLATFORMTHEME=gtk3
+  fi
   case "$mode" in
     vulkan) export QSG_RHI_BACKEND=vulkan ;;
     opengl) ;;
@@ -32,15 +73,180 @@ shell_env() {
   esac
 }
 
+qs_bin() { command -v qs 2>/dev/null || echo "$HOME/.local/bin/qs"; }
+
+# ---- systemd user service: the shell comes back when it dies ----
+# Off with `echo off > ~/.config/angelos/service` (then plain setsid, as before).
+use_service() {
+  [ "$(cat "$CONF_DIR/service" 2>/dev/null | tr -cd 'a-z')" != off ] || return 1
+  [ -f "$SHELL_DIR/systemd/angelos.service.in" ] || return 1
+  command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1 || return 1
+  unit="$(sed -e "s|@BIN@|$SHELL_DIR/bin/angelos|g" "$SHELL_DIR/systemd/angelos.service.in")"
+  if [ "$(cat "$UNIT_FILE" 2>/dev/null)" != "$unit" ]; then
+    mkdir -p "${UNIT_FILE%/*}" && printf '%s\n' "$unit" > "$UNIT_FILE" && systemctl --user daemon-reload || return 1
+  fi
+}
+service_active() { systemctl --user is-active --quiet "$UNIT" 2>/dev/null; }
+main_pid() { systemctl --user show -p MainPID --value "$UNIT" 2>/dev/null; }
+# pids of running angelOS instances (qs list)
+instances() { "$(qs_bin)" -c angelos list 2>/dev/null | sed -n 's/^ *Process ID: *\([0-9]*\).*/\1/p'; }
+# R running, S sleeping, T stopped (kill -STOP, a debugger) … of a pid
+proc_state() { sed 's/^.*) //' "/proc/$1/stat" 2>/dev/null | cut -c1; }
+# close an instance the clean way; one that doesn't answer (hung, stopped) is woken and
+# terminated, then killed — its windows (a dock, a bar) stay on screen as long as the
+# process lives (#46)
+end_instance() {
+  timeout 2 "$(qs_bin)" kill --pid "$1" >/dev/null 2>&1
+  for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$1" 2>/dev/null || return 0; sleep 0.2; done
+  kill -CONT "$1" 2>/dev/null; kill -TERM "$1" 2>/dev/null
+  for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$1" 2>/dev/null || return 0; sleep 0.2; done
+  kill -KILL "$1" 2>/dev/null
+}
+# a copy started outside the service (older login, `angelos run` by hand, a plain
+# `qs -c angelos`) would keep the service's copy from starting (-n), or leave a second
+# dock and bar. Quickshell restarted after a crash runs as `quickshell` with no arguments,
+# so `pkill -x qs` misses it — `qs list` knows it by its config.
+stop_strays() {
+  main="$(main_pid)"
+  for p in $(instances); do
+    [ "$p" = "$main" ] || end_instance "$p" &
+  done
+  wait
+}
+save_env() { python3 "$SHELL_DIR/scripts/session-env.py" "$1" "$RUN_DIR/session.env" 2>/dev/null; }
+
 case "$1" in
-  ""|help|-h|--help) sed -n '2,6p' "$0"; exec qs -c angelos ipc show ;;
-  run)     shell_env; exec qs -c angelos -n ;;
-  start)   exec setsid -f "$0" run >/dev/null 2>&1 ;;
-  stop)    exec qs -c angelos kill ;;
-  restart) qs -c angelos kill >/dev/null 2>&1; sleep 0.5; exec setsid -f "$0" run >/dev/null 2>&1 ;;
+  ""|help|-h|--help) sed -n '2,16p' "$0"; exec qs -c angelos ipc show ;;
+  run)
+    shell_env
+    # under the service, a watchdog for a shell that stops answering (see guard below)
+    if [ "${ANGELOS_SERVICE:-}" = 1 ] && [ "$(cat "$CONF_DIR/guard" 2>/dev/null | tr -cd 'a-z')" != off ]; then
+      "$0" guard "$$" </dev/null &
+    fi
+    exec qs -c angelos -n ;;
+  # A hung main thread (2026-10-01: a Qt socket notifier spun on a closed fd, the
+  # shell froze and flooded its log in /run at ~6 MB/s) answers no IPC, so even
+  # `angelos quit` cannot stop it. Three missed probes in a row (about 15 s)
+  # → SIGABRT: Quickshell writes a crash report with the stack and the log tail
+  # (~/.cache/quickshell/crashes, `angelos report`) and starts itself again in the
+  # same process. Off with `echo off > ~/.config/angelos/guard`.
+  guard)
+    pid="${2:?pid}" misses=0 first="${ANGELOS_GUARD_FIRST:-25}" tick="${ANGELOS_GUARD_TICK:-3}" probe_timeout="${ANGELOS_GUARD_TIMEOUT:-2}"
+    sleep "$first"
+    while kill -0 "$pid" 2>/dev/null; do
+      # stopped on purpose (kill -STOP, a debugger): a SIGABRT would wait for SIGCONT and
+      # crash it the moment it wakes (#46)
+      case "$(proc_state "$pid")" in
+        T|t) misses=0; sleep "$tick"; continue ;;
+      esac
+      if timeout "$probe_timeout" "$(qs_bin)" ipc --pid "$pid" show >/dev/null 2>&1; then
+        misses=0
+      else
+        misses=$((misses + 1))
+      fi
+      if [ "$misses" -ge 3 ]; then
+        echo "angelOS guard: pid $pid has not answered IPC for ~15 s, SIGABRT (crash report + restart)" >&2
+        kill -ABRT "$pid" 2>/dev/null
+        misses=0
+        sleep "$first"
+      fi
+      sleep "$tick"
+    done ;;
+  start)
+    if use_service; then
+      # started by niri at login: its environment is what the shell should have
+      [ -n "${WAYLAND_DISPLAY:-}" ] && save_env self
+      stop_strays
+      systemctl --user reset-failed "$UNIT" >/dev/null 2>&1
+      systemctl --user start "$UNIT" && exit 0
+    fi
+    exec setsid -f "$0" run >/dev/null 2>&1 ;;
+  stop)
+    if service_active; then systemctl --user stop "$UNIT"; fi
+    for p in $(instances); do end_instance "$p" & done
+    wait ;;
+  restart)
+    if use_service; then
+      # keep the login's environment; moving an older instance under the service takes its one
+      if [ ! -s "$RUN_DIR/session.env" ]; then
+        p="$(instances | head -n 1)"
+        { [ -n "$p" ] && save_env "$p"; } || save_env self
+      fi
+      if service_active; then
+        stop_strays
+        systemctl --user restart "$UNIT" && exit 0
+      else
+        stop_strays
+        systemctl --user reset-failed "$UNIT" >/dev/null 2>&1
+        systemctl --user start "$UNIT" && exit 0
+      fi
+    fi
+    for p in $(instances); do end_instance "$p" & done
+    wait; exec setsid -f "$0" run >/dev/null 2>&1 ;;
+  # ExecStop of the service: a clean exit, so Quickshell stops its helper processes
+  quit)
+    [ -n "${2:-}" ] || exit 0
+    # a hung shell never answers, and the client would wait for it past TimeoutStopSec
+    timeout 2 "$(qs_bin)" kill --pid "$2" >/dev/null 2>&1
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+      kill -0 "$2" 2>/dev/null || exit 0
+      sleep 0.2
+    done
+    kill -TERM "$2" 2>/dev/null ;;
+  # ExecStopPost: helpers left behind by a hard kill (their parent is gone)
+  reap)
+    # programs left turned down by hell's circles (services/AppDuck) get their volume back
+    python3 "$SHELL_DIR/scripts/duck-restore.py" 2>/dev/null
+    cg="/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)"
+    [ "${cg##*/}" = "$UNIT" ] || exit 0
+    for p in $(cat "$cg/cgroup.procs" 2>/dev/null); do
+      [ "$p" = "$$" ] && continue
+      cmd="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)" || continue
+      # the shell's own long-running helpers (night light, the sleep watch and its
+      # inhibitor, the guard, usb-watch's udevadm); anything else in here is left alone
+      case "$cmd" in
+        *"$SHELL_DIR/scripts/"*|*"$SHELL_DIR/plugins/"*|cava\ *angelos*|*/cava\ *angelos*|*"$SHELL_DIR/bin/angelos guard "*|\
+        wlsunset\ *|*/wlsunset\ *|*"gdbus monitor --system --dest org.freedesktop.login1"*|*systemd-inhibit\ *--who=angelOS*|\
+        "udevadm monitor --udev --subsystem-match=usb/usb_device --property "*) kill "$p" 2>/dev/null ;;
+      esac
+    done ;;
+  status)
+    if service_active; then
+      echo "angelOS: systemd service, pid $(main_pid) ($(systemctl --user show -p NRestarts --value "$UNIT") restarts since login)"
+    elif [ -n "$(instances)" ]; then
+      echo "angelOS: running outside the service, pid $(instances | tr '\n' ' ')"
+    else
+      echo "angelOS: not running"
+    fi
+    n="$(find "${XDG_CACHE_HOME:-$HOME/.cache}/quickshell/crashes" -mindepth 1 -maxdepth 1 -newer "$RUN_DIR" 2>/dev/null | wc -l)"
+    [ "$n" = 0 ] || echo "crashes this login: $n (angelos report packs them)"
+    exit 0 ;;
   log)     exec qs -c angelos log -f ;;
+  # the author's two repositories (owner/admin-sync.sh; nothing without owner/):
+  #   status        public main on GitHub, the public commit the private admin repo carries, owner/ changed
+  #   admin         bring admin to GitHub's main + this owner/ (also after an owner/-only change)
+  #   install-hook  pushes to main made by hand bring admin along (the repo's reference-transaction hook)
+  dotfiles)
+    s="$SHELL_DIR/owner/admin-sync.sh"
+    [ -f "$s" ] || { echo "owner tools are not here"; exit 1; }
+    repo="${ANGELOS_DOTFILES_REPO:-$HOME/AngelOS-Dotfiles}"
+    case "${2:-status}" in
+      status) exec bash "$s" status "$repo" ;;
+      admin) exec bash "$s" sync "$repo" ;;
+      install-hook) exec bash "$s" install-hook "$repo" ;;
+      *) echo "angelos dotfiles status|admin|install-hook"; exit 2 ;;
+    esac ;;
+  report)  shift; exec python3 "$SHELL_DIR/scripts/report.py" "$@" ;;
+  # the circles' demons from the author's sheets (~/Pictures/angelos-sprites/<circle>/)
+  sprites) shift; [ $# -gt 0 ] || set -- skins; exec python3 "$SHELL_DIR/scripts/sprite-rig.py" "$@" ;;
   switch)  shift; exec python3 "$SHELL_DIR/scripts/switch.py" "$@" ;;
+  sddm)    shift; [ $# -gt 0 ] || set -- status; exec python3 "$SHELL_DIR/scripts/sddm-theme.py" "$@" ;;
   settings) exec qs -c angelos ipc call angelos settings "${2:-}" ;;
+  browser) exec python3 "$SHELL_DIR/scripts/default-apps.py" open-browser ;;
+  setup)
+    [ $# -eq 1 ] && exec qs -c angelos ipc call angelos setup
+    shift
+    exec python3 "$SHELL_DIR/scripts/setup-cli.py" "$@" ;;
   ws)
     # workspace switch through the shell (animated transitions), niri directly as a fallback
     target="$(printf '%s' "${2:-}" | tr -cd 'a-z0-9-')"
@@ -55,5 +261,102 @@ case "$1" in
       *) exec niri msg action focus-workspace "$target" ;;
     esac
     ;;
+  alttab)
+    # Alt+Tab through the shell's switcher (niri's binds from Settings → Windows), ⌘Tab (apps)
+    # and ⌘` (appwin) of the Golden Gate skin's Mac keys; niri's "previous window" as a
+    # fallback when the shell is not running
+    dir="$(printf '%s' "${2:-next}" | tr -cd 'a-z')"
+    sock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/angelos/ctl.sock"
+    if [ -S "$sock" ] && command -v socat >/dev/null 2>&1 && printf 'alttab %s\n' "$dir" | socat -t1 - "UNIX-CONNECT:$sock" 2>/dev/null | grep -q '^ok'; then
+      exit 0
+    fi
+    case "$dir" in
+      cancel|appwin*) ;;
+      *) exec niri msg action focus-window-previous ;;
+    esac
+    ;;
+  scene)
+    # which parts of a wallpaper come alive: the scene editor (`angelos scene edit [picture]`)
+    # and its MCP server for Claude (`angelos scene mcp`) — the author's tools (owner/)
+    ed="$SHELL_DIR/owner/scene-editor"
+    [ -d "$ed" ] || { echo "the scene editor is the author's tool, not part of angelOS (angelos author)" >&2; exit 1; }
+    case "${2:-edit}" in
+      edit) shift; [ $# -gt 0 ] && shift; exec python3 "$ed/scene-editor.py" "$@" ;;
+      mcp)  exec python3 "$ed/scene-mcp.py" ;;
+      *)    echo "usage: angelos scene edit [picture] | mcp" >&2; exit 2 ;;
+    esac ;;
+  novel)
+    # the novel's dialogue editor runs without the shell (the author's tool: owner/, see
+    # `angelos author`); the rest goes over IPC
+    if [ "${2:-}" = edit ]; then
+      [ -f "$SHELL_DIR/owner/novel-editor/nov-editor.py" ] && exec python3 "$SHELL_DIR/owner/novel-editor/nov-editor.py"
+      echo "the chapter editor is the author's tool, not part of angelOS (angelos author)" >&2
+      exit 1
+    fi
+    shift
+    exec qs -c angelos ipc call angelos novel "$*" ;;
+  motion) exec qs -c angelos ipc call angelos motion "${2:-status}" ;;
+  laptop)  shift; exec qs -c angelos ipc call angelos laptop "$*" ;;
+  cobweb)  shift; exec qs -c angelos ipc call angelos cobweb "$*" ;;
+  updates) shift; exec python3 "$SHELL_DIR/scripts/updates-cli.py" "$@" ;;
+  keys)
+    case "${2:-status}" in
+      status|sync|init|path) exec python3 "$SHELL_DIR/scripts/keyprofile.py" "${2:-status}" ;;
+      pixel|macos) exec python3 "$SHELL_DIR/scripts/keyprofile.py" apply "$2" ;;
+      *) echo "angelos keys [status] | pixel | macos | sync" >&2; exit 2 ;;
+    esac ;;
+  author)
+    # the author's tools (the chapter editor, owner/): status | fetch | login — only for a
+    # GitHub account that can see the author's private repository; nothing for anyone else
+    shift
+    exec sh "$SHELL_DIR/scripts/author-tools.sh" "$@" ;;
+  game)
+    # the game: off | on | calm on|off | status | reset (+ dev: circle, scene, sin, outcome, try)
+    shift
+    exec qs -c angelos ipc call angelos game "$*" ;;
+  ach|achievements)
+    # the achievements: status | list | events | check | validate | streak (+ owner/dev: grant,
+    # revoke, toast <id> [hell|heaven], note <event> [key] [n], reset [counts])
+    shift
+    exec qs -c angelos ipc call angelos ach "$*" ;;
+  wellbeing|screentime)
+    # screen time and breaks: status | water | unwater | test eyes|move|water|limit | clear
+    shift
+    exec qs -c angelos ipc call angelos wellbeing "$*" ;;
+  diary)
+    # the Angel's diary: open [page] | close | list | validate | status | watch
+    # (+ owner/dev: read-reset, preview on|off, away [min], back, trust [reset])
+    shift
+    exec qs -c angelos ipc call angelos diary "$*" ;;
+  debug)
+    # the game's debug panel, the author's only (owner/debug, after `angelos author login`):
+    # open | close | toggle | snapshot | restore | restart | tab <id> | status;
+    # cycles [N] [PATTERN]: heaven ⇄ hell N times, then every app must be in heaven's colours
+    shift
+    if [ "${1:-}" = cycles ]; then
+      [ -f "$SHELL_DIR/owner/debug/theme-cycles.py" ] || { echo "owner only" >&2; exit 1; }
+      shift; exec python3 "$SHELL_DIR/owner/debug/theme-cycles.py" "$@"
+    fi
+    exec qs -c angelos ipc call angelos debug "$*" ;;
+  lens)
+    # the lens at the pointer (niri keys Mod+Alt+= / - / 0): the shell's socket, else qs ipc
+    what="$(printf '%s' "${2:-toggle}" | tr -cd 'a-z')"
+    sock="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/angelos/ctl.sock"
+    if [ -S "$sock" ] && command -v socat >/dev/null 2>&1 && printf 'lens %s\n' "$what" | socat -t1 - "UNIX-CONNECT:$sock" 2>/dev/null | grep -q '^ok'; then
+      exit 0
+    fi
+    exec qs -c angelos ipc call angelos lens "$what" ;;
+  events)
+    # follow angelOS: one line per event (stream, awake, realm, character, circle, locked,
+    # idle, theme, dnd, angelSaid); a signal name narrows it; `angelos eventsNow` = the state now
+    shift
+    [ $# -gt 0 ] && exec qs -c angelos ipc listen events "$@"
+    # all of them: a listener per signal, each line as "<signal> <value>"
+    trap 'kill 0' INT TERM
+    for sig in stream awake realm character circle locked idle theme dnd angelSaid; do
+      qs -c angelos ipc listen events "$sig" | sed -u "s/^/$sig /" &
+    done
+    wait ;;
+  eventsNow) exec qs -c angelos ipc call events now ;;
   *)       exec qs -c angelos ipc call angelos "$@" ;;
 esac

@@ -9,6 +9,8 @@ Row {
 
     property int maxWidth: Theme.u * 160
     property bool showTitle: true
+    // the hell bar (BarItem): its buttons and words in the circle's colours
+    property bool barInk: false
     readonly property var player: Lyrics.player
 
     visible: !!player && Lyrics.title !== "" && Config.bar.showMedia
@@ -17,6 +19,7 @@ Row {
     PxButton {
         compact: true
         flat: true
+        barInk: root.barInk
         icon: "prev"
         iconPixel: Math.max(1, Theme.u - 1)
         onClicked: root.player.previous()
@@ -24,6 +27,7 @@ Row {
     PxButton {
         compact: true
         flat: true
+        barInk: root.barInk
         icon: root.player && root.player.isPlaying ? "pause" : "play"
         iconPixel: Math.max(1, Theme.u - 1)
         onClicked: root.player.togglePlaying()
@@ -31,6 +35,7 @@ Row {
     PxButton {
         compact: true
         flat: true
+        barInk: root.barInk
         icon: "next"
         iconPixel: Math.max(1, Theme.u - 1)
         onClicked: root.player.next()
@@ -43,6 +48,11 @@ Row {
             id: note
             name: "music"
             pixel: Math.max(1, Theme.u - 1)
+            ink: root.barInk ? Theme.hellBarIcon : Theme.dark ? Theme.text : Theme.edge
+            palette: root.barInk ? ({
+                    "o": "none",
+                    "w": "none"
+                }) : ({})
             anchors.verticalCenter: parent.verticalCenter
         }
         PxText {
@@ -53,6 +63,7 @@ Row {
             anchors.verticalCenter: parent.verticalCenter
             text: Lyrics.title + (Lyrics.artist ? " — " + Lyrics.artist : "")
             elide: Text.ElideRight
+            color: root.barInk ? Theme.hellText : Theme.text
         }
         // left: lyrics on/off, right: pause / play
         MouseArea {

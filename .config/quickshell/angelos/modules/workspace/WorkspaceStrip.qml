@@ -14,7 +14,7 @@ PanelWindow {
     required property string screenName
     property int serial: 0
     property bool shown: false
-    readonly property var list: Niri.workspacesOn(screenName).filter(w => w.name !== "privacy")
+    readonly property var list: Niri.workspacesOn(screenName)
 
     onSerialChanged: {
         if (!Config.workspaces.indicator)
@@ -67,7 +67,7 @@ PanelWindow {
         Behavior on x {
             NumberAnimation {
                 id: slide
-                duration: Theme.normal
+                duration: Motion.ms(Theme.normal)
                 easing.type: Easing.OutBack
             }
         }
@@ -91,11 +91,10 @@ PanelWindow {
                         visible: cell.lit
                         color: Qt.alpha(Theme.accent, 0.25)
                     }
-                    PxIcon {
+                    WsSprite {
                         anchors.centerIn: parent
-                        name: "heart"
+                        lit: cell.lit
                         hollow: !cell.lit && Niri.windowsOn(cell.modelData.id).length === 0
-                        fill: cell.lit ? Theme.accent : Theme.accent4
                     }
                 }
             }
@@ -105,6 +104,7 @@ PanelWindow {
             anchors.fill: col
             vertical: true
             style: Config.workspaces.heartAnim
+            sprite: Config.workspaces.sprite
             cellRect: i => {
                 col.forceLayout();
                 const c = cells.itemAt(i);

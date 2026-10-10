@@ -1,0 +1,84 @@
+{
+  "id": "close-limbo-2",
+  "title": {
+    "ru": "Лимб: близкая",
+    "en": "Limbo: close"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"limbo\" and closeness == 2",
+      "next": "ask",
+      "note": "the demon of limbo and the player: closeness close (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Туман сегодня густой. Если я потеряюсь — вы меня найдёте?",
+        "en": "The fog is thick today. If I get lost — will you find me?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Найду",
+            "en": "I will"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Тогда я не боюсь.",
+              "en": "Then I'm not afraid."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Тут все теряются",
+            "en": "Everyone gets lost here"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Да. Все.",
+              "en": "Yes. Everyone."
+            }
+          },
+          "next": "end",
+          "set": {
+            "limbo": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "…Я тоже не нашла бы слов.",
+              "en": "…I wouldn't find the words either."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

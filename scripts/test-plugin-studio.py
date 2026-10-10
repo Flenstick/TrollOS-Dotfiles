@@ -7,12 +7,15 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 import urllib.error
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+# the sandboxed runtime check lets timers fire for 2.5 s after loading; these fixtures have none
+os.environ.setdefault("ANGELOS_CHECK_SETTLE_MS", "300")
 WORKER = ROOT / ".config/quickshell/angelos/scripts/plugin-studio.py"
 spec = importlib.util.spec_from_file_location("studio", WORKER)
 studio = importlib.util.module_from_spec(spec)
@@ -31,6 +34,7 @@ PLAN = {
 }
 DESKTOP = """import QtQuick
 import qs.config
+import qs.services
 import qs.widgets
 Item {
     id: root
@@ -39,9 +43,15 @@ Item {
     property var widget
     implicitWidth: Theme.u * 150
     implicitHeight: Theme.u * 80
+    PxText {
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: I18n.t("счётчик", "counter")
+        color: Skin.text
+    }
     PxButton {
         anchors.centerIn: parent
-        text: I18n.t("Кликов: ", "Clicks: ") + (root.plugin ? root.plugin.get("count", 0) : 0)
+        hell: Theme.hell
+        text: (Theme.hell ? I18n.t("Душ: ", "Souls: ") : I18n.t("Кликов: ", "Clicks: ")) + (root.plugin ? root.plugin.get("count", 0) : 0)
         onClicked: if (root.plugin) root.plugin.set("count", root.plugin.get("count", 0) + 1)
     }
 }
@@ -67,7 +77,8 @@ BUNDLE = {
             "id": PLAN["spec"]["id"], "name": "Counter", "version": "1.0.0",
             "description": "A themed counter", "icon": "heart",
             "enabledByDefault": False, "desktopWidget": "DesktopWidget.qml",
-            "settings": "Settings.qml", "desktopTitle": "counter.exe",
+            "settings": "Settings.qml", "desktopTitle": "counter.exe", "realms": ["heaven", "hell"],
+            "themes": ["pixel", "mac"],
         })},
         {"path": "DesktopWidget.qml", "content": DESKTOP},
         {"path": "Settings.qml", "content": SETTINGS},
@@ -190,6 +201,21 @@ class StudioTest(unittest.TestCase):
         self.assertEqual(fixed["errors"], [])
         self.assertIn("broken syntax", self.calls[-1][0].data.decode())
 
+    def test_desktop_widget_needs_both_realms(self):
+        # no "realms": the shell would only re-ink it in hell — sent back to the model
+        flat = copy.deepcopy(BUNDLE)
+        m = json.loads(flat["files"][0]["content"]); m.pop("realms"); flat["files"][0]["content"] = json.dumps(m)
+        draft = self.generate(flat)
+        self.assertTrue(any("both realms" in e for e in draft["errors"]))
+        # "hell" declared, but nothing reads Theme.hell / Theme.realm
+        fake = copy.deepcopy(BUNDLE)
+        fake["files"][1]["content"] = fake["files"][1]["content"].replace("hell: Theme.hell\n", "").replace("Theme.hell ? I18n.t(\"Душ: \", \"Souls: \") : ", "")
+        self.reply = fake
+        draft = self.request("generate")["session"]["draft"]
+        self.assertTrue(any("Theme.hell" in e for e in draft["errors"]))
+        self.reply = BUNDLE
+        self.assertEqual(self.request("generate")["session"]["draft"]["errors"], [])
+
     def test_path_traversal_duplicates_and_limits(self):
         for path in ("../escape.qml", "/tmp/escape.qml", "a/../../escape.qml",
                      "a//b.qml", ".hidden.qml", "a\\b.qml", "a/b.exe"):
@@ -239,7 +265,7 @@ class StudioTest(unittest.TestCase):
         result = subprocess.run(["python3", str(WORKER)], input=json.dumps({
             "action": "status", "language": "en",
         }) + "\n", text=True, capture_output=True,
-            env={**os.environ, "HOME": str(self.home)}, timeout=5)
+            env={**os.environ, "HOME": str(self.home)}, timeout=30)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stderr, "")
         self.assertEqual(json.loads(result.stdout)["event"], "result")
@@ -312,5 +338,160 @@ class ProviderTest(unittest.TestCase):
             None, None, 307, "", {}, "https://other.example/"))
 
 
+class EditTest(StudioTest):
+    """Improving an installed plugin: edit, diff, the built-in editor, update, rollback, reload."""
+    def install_counter(self):
+        draft = self.generate()
+        self.request("install", digest=draft["digest"])
+        pid = PLAN["spec"]["id"]
+        # a picture Studio cannot edit rides along
+        (self.worker.plugins / pid / "cat.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00\x01binary")
+        return pid
+
+    def edited_bundle(self, text="Taps: "):
+        bundle = copy.deepcopy(BUNDLE)
+        for row in bundle["files"]:
+            if row["path"] == "DesktopWidget.qml":
+                row["content"] = row["content"].replace("Clicks: ", text)
+            if row["path"] == "manifest.json":
+                m = json.loads(row["content"]); m["version"] = "1.1.0"; row["content"] = json.dumps(m)
+        bundle["summary"] = "Renamed the label."
+        return bundle
+
+    def test_edit_update_rollback(self):
+        pid = self.install_counter()
+        target = self.worker.plugins / pid
+        s = self.request("edit_start", id=pid)["session"]
+        self.assertEqual(s["mode"], "edit")
+        self.assertEqual(s["kept"], ["cat.png"])
+        self.assertEqual(s["draft"]["errors"], [])
+        self.assertFalse(s["draft"]["changed"])
+        with self.assertRaises(studio.StudioError):
+            self.request("update", digest=s["draft"]["digest"])   # nothing changed
+        # direct change request
+        self.reply = self.edited_bundle()
+        s = self.request("generate", prompt="Call them taps")["session"]
+        d = s["draft"]
+        self.assertTrue(d["changed"])
+        self.assertEqual({c["path"] for c in d["changes"]}, {"DesktopWidget.qml", "manifest.json"})
+        self.assertIn("+", d["changes"][0]["diff"])
+        # kept picture exists in the draft dir, not in the bundle
+        self.assertTrue((Path(d["directory"]) / "cat.png").exists())
+        self.assertNotIn("cat.png", [f["path"] for f in d["files"]])
+        # the instruction carried the current files
+        wire = json.loads(self.calls[-1][0].data)
+        self.assertIn("CURRENT FILES", json.dumps(wire["input"]))
+        r = self.request("update", digest=d["digest"])
+        self.assertIn("Taps: ", (target / "DesktopWidget.qml").read_text())
+        self.assertEqual((target / "cat.png").read_bytes()[:4], b"\x89PNG")
+        link = Path(r["reloaded"]["loadDir"])
+        self.assertTrue(link.is_symlink() and link.resolve() == target.resolve())
+        self.assertEqual(r["backups"][pid], 1)
+        self.assertFalse(r["session"]["draft"]["changed"])       # new base
+        self.assertEqual(len(r["session"]["messages"]), 2)
+        # manual editor
+        s = self.request("save_file", path="DesktopWidget.qml",
+                         content=(target / "DesktopWidget.qml").read_text().replace("Taps: ", "Boops: "))["session"]
+        self.assertTrue(s["draft"]["changed"])
+        s = self.request("save_file", path="extra.txt", content="hi")["session"]
+        self.assertIn("extra.txt", [c["path"] for c in s["draft"]["changes"]])
+        s = self.request("delete_file", path="extra.txt")["session"]
+        with self.assertRaises(studio.StudioError):
+            self.request("delete_file", path="manifest.json")
+        with self.assertRaises(studio.StudioError):
+            self.request("save_file", path="../evil.qml", content="x")
+        with self.assertRaises(studio.StudioError):
+            self.request("save_file", path="cat.png", content="x")
+        self.request("update", digest=s["draft"]["digest"])
+        self.assertIn("Boops: ", (target / "DesktopWidget.qml").read_text())
+        # rollback → Taps, again → Boops (redo)
+        r = self.request("rollback", id=pid)
+        self.assertIn("Taps: ", (target / "DesktopWidget.qml").read_text())
+        self.assertEqual(r["session"]["mode"], "edit")
+        self.request("rollback", id=pid)
+        self.assertIn("Boops: ", (target / "DesktopWidget.qml").read_text())
+        self.assertEqual((target / "cat.png").read_bytes()[:4], b"\x89PNG")
+
+    def test_disk_change_blocks_update(self):
+        pid = self.install_counter()
+        self.request("edit_start", id=pid)
+        self.reply = self.edited_bundle()
+        d = self.request("generate", prompt="x")["session"]["draft"]
+        (self.worker.plugins / pid / "Settings.qml").write_text("// changed elsewhere\n")
+        with self.assertRaises(studio.StudioError):
+            self.request("update", digest=d["digest"])
+
+    def test_edit_cannot_change_id_and_plan_flow(self):
+        pid = self.install_counter()
+        self.request("edit_start", id=pid)
+        self.reply = copy.deepcopy(PLAN)
+        s = self.request("plan", prompt="add a reset button")["session"]
+        self.assertTrue(s["draft"])                       # the working copy stays
+        self.assertIn("EDIT MODE", self.calls[-1][0].data.decode())
+        bad = copy.deepcopy(PLAN); bad["spec"]["id"] = "other-id"
+        self.reply = bad
+        with self.assertRaises(studio.StudioError):
+            self.request("plan", prompt="rename it")
+        bundle = self.edited_bundle()
+        for row in bundle["files"]:
+            if row["path"] == "manifest.json":
+                m = json.loads(row["content"]); m["id"] = "other-id"; row["content"] = json.dumps(m)
+        self.reply = bundle
+        d = self.request("generate")["session"]["draft"]
+        self.assertTrue(any("must stay" in e for e in d["errors"]))
+
+    def test_bundled_or_missing_not_editable(self):
+        with self.assertRaises(studio.StudioError):
+            self.request("edit_start", id="cat")
+        with self.assertRaises(studio.StudioError):
+            self.request("edit_start", id="../x")
+
+    def test_reload_without_developer_mode(self):
+        pid = self.install_counter()
+        self.settings.write_text('{"developer":{"enabled":false}}')
+        r = self.request("reload", id=pid)
+        self.assertTrue(Path(r["reloaded"]["loadDir"]).is_symlink())
+        with self.assertRaises(studio.StudioError):
+            self.request("edit_start", id=pid)
+
+
+# the inherited StudioTest cases run once, in StudioTest
+for _name in [n for n in vars(StudioTest) if n.startswith("test_")]:
+    setattr(EditTest, _name, None)
+
+
+def run_one(name):
+    """One test in its own process: (passed, its verbose report)."""
+    import io
+    stream = io.StringIO()
+    suite = unittest.defaultTestLoader.loadTestsFromName(name, sys.modules[__name__])
+    result = unittest.TextTestRunner(stream=stream, verbosity=2).run(suite)
+    return result.wasSuccessful(), stream.getvalue()
+
+
+def run_parallel():
+    """Every test at once (each one starts quickshell for its runtime check: one after the
+    other they took minutes); reports in the usual order, exit 1 when any failed."""
+    import multiprocessing
+
+    def ids(suite):
+        for t in suite:
+            yield from ids(t) if isinstance(t, unittest.TestSuite) else [t.id().split(".", 1)[1]]
+    names = list(ids(unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])))
+    # half the CPUs: each test starts quickshell, and the other checks run beside these
+    with multiprocessing.get_context("fork").Pool(max(2, min(len(names), (os.cpu_count() or 4) // 2))) as pool:
+        results = pool.map(run_one, names, chunksize=1)
+    failed = [n for n, (ok, _) in zip(names, results) if not ok]
+    for ok, report in results:
+        lines = report.splitlines()
+        # the runner's own footer ("Ran 1 test", "OK") once, below
+        print("\n".join(l for l in lines if not l.startswith(("Ran ", "---")) and l not in ("OK", "")))
+    print(f"Ran {len(names)} tests in parallel: " + (f"FAILED {', '.join(failed)}" if failed else "OK"))
+    sys.exit(1 if failed else 0)
+
+
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    if len(sys.argv) > 1:
+        unittest.main(verbosity=2)
+    else:
+        run_parallel()

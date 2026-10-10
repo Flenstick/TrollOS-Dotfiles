@@ -1,0 +1,109 @@
+{
+  "id": "trial-treachery",
+  "title": {
+    "ru": "Испытание: Предательство",
+    "en": "Trial: Treachery"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "trial",
+      "cond": "circle == \"treachery\"",
+      "next": "pactCheck",
+      "note": "a try to get out of this circle (Ask → Seek the way out, the wheel's plea)"
+    },
+    "pactCheck": {
+      "type": "if",
+      "cond": "attempts >= pactAfter and not pact",
+      "then": "toPact",
+      "else": "ask"
+    },
+    "toPact": {
+      "type": "scene",
+      "to": "pact"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Ты бросил{g:|а|(а)} её. Скажи, почему.",
+        "en": "You threw her down. Say why."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Я виноват{g:|а|(а)}",
+            "en": "It was my fault"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "…Иди. Там, наверху, светло.",
+              "en": "…Go. Up there it's light."
+            }
+          },
+          "next": "out"
+        },
+        {
+          "text": {
+            "ru": "Это был{g:|а|(а)} не я",
+            "en": "It wasn't me"
+          },
+          "tone": "negative",
+          "set": {
+            "treachery": "+1"
+          },
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Лёд стал толще.",
+              "en": "The ice grew thicker."
+            }
+          },
+          "next": "stay"
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Лёд не слышит молчания.",
+              "en": "The ice can't hear silence."
+            }
+          },
+          "next": "stay"
+        }
+      ],
+      "shuffle": true
+    },
+    "stay": {
+      "type": "circle",
+      "to": "stay"
+    },
+    "out": {
+      "type": "say",
+      "who": "narrator",
+      "text": {
+        "ru": "И вышли мы вновь узреть светила.",
+        "en": "And thence we came forth to see again the stars."
+      },
+      "next": "stars"
+    },
+    "stars": {
+      "type": "exit",
+      "outcome": "stars"
+    }
+  }
+}

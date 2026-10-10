@@ -1,5 +1,6 @@
 import QtQuick
 import qs.config
+import "A11y.js" as A11y
 
 Row {
     id: root
@@ -12,17 +13,26 @@ Row {
     property string suffix: ""
     signal moved(real value)
 
+    Accessible.role: Accessible.SpinBox
+    Accessible.name: A11y.rowLabel(root)
+    Accessible.description: value.toFixed(decimals) + suffix
+    Accessible.focusable: true
+    Accessible.onIncreaseAction: set(value + stepSize)
+    Accessible.onDecreaseAction: set(value - stepSize)
+
     spacing: Theme.u * 2
 
     function set(v) {
-        v = Math.max(from, Math.min(to, Math.round(v / stepSize) * stepSize));
-        value = Number(v.toFixed(Math.max(decimals, 3)));
-        moved(value);
+        v = Number(Math.max(from, Math.min(to, Math.round(v / stepSize) * stepSize)).toFixed(Math.max(decimals, 3)));
+        moved(v);
+        if (value !== v)
+            value = v;
     }
 
     PxButton {
         compact: true
         icon: "minus"
+        Accessible.name: I18n.t("Меньше", "Less")
         onClicked: root.set(root.value - root.stepSize)
     }
     PxBox {
@@ -42,6 +52,7 @@ Row {
     PxButton {
         compact: true
         icon: "plus"
+        Accessible.name: I18n.t("Больше", "More")
         onClicked: root.set(root.value + root.stepSize)
     }
 }

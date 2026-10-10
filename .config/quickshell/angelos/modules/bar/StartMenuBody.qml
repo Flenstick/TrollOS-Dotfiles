@@ -11,6 +11,8 @@ PxBox {
 
     signal closeRequested
     property int current: -1
+    // Settings → Bar → Start → Fine-tune (services/StartPrefs)
+    readonly property var prefs: StartPrefs.of("classic")
 
     readonly property var entries: [
         {
@@ -34,6 +36,7 @@ PxBox {
         },
         {
             "text": I18n.t("Обои", "Wallpaper"),
+            "extra": true,
             "icon": "image",
             "act": () => Shell.openSettings("wallpaper")
         },
@@ -44,35 +47,55 @@ PxBox {
         },
         {
             "text": I18n.t("Плагины", "Plugins"),
+            "extra": true,
             "icon": "plug",
             "act": () => Shell.openSettings("plugins")
         },
         {
             "text": I18n.t("Мастер плагинов…", "Plugin Studio…"),
+            "extra": true,
             "icon": "sparkle",
             "show": Config.developer.enabled,
             "act": () => Shell.openSettings("studio")
         },
         {
+            "text": I18n.t("Отладка игры…", "Game debug…"),
+            "extra": true,
+            "icon": "chip",
+            "show": GameDebug.allowed,
+            "act": () => GameDebug.open = true
+        },
+        {
+            "text": I18n.t("Сундуки ✦", "Chests ✦") + (Chests.count > 0 ? " · " + Chests.count : ""),
+            "extra": true,
+            "icon": "sparkleStar",
+            "show": Story.enabled && (Chests.freeReady || HeavenStars.stars >= Chests.cost),
+            "act": () => Chests.openOne()
+        },
+        {
             "text": "Dotfiles",
+            "extra": true,
             "icon": "package",
             "show": Owner.enabled,
             "act": () => Shell.openSettings("dotfiles")
         },
+        // always there: users looked for it before the daily check found anything
         {
-            "text": I18n.t("Обновление готово ♡", "Update available ♡"),
+            "text": Updates.available ? I18n.t("Обновление готово ♡", "Update available ♡") : I18n.t("Обновление", "Update"),
+            "extra": true,
             "icon": "download",
-            "show": Updates.available,
             "act": () => Shell.openSettings("updates")
         },
         {
             "text": I18n.t("Мини-игра osu!", "osu! mini game"),
+            "extra": true,
             "icon": "heart",
             "show": Plugins.enabledPlugins.some(p => p.id === "osu-mini"),
             "act": () => Shell.gameOpen = true
         },
         {
             "text": Theme.dark ? I18n.t("Светлая тема", "Light theme") : I18n.t("Тёмная тема", "Dark theme"),
+            "extra": true,
             "icon": Theme.dark ? "sun" : "moon",
             "act": () => Config.appearance.mode = Theme.dark ? "light" : "dark"
         },
@@ -81,21 +104,24 @@ PxBox {
         },
         {
             "text": I18n.t("Заблокировать", "Lock"),
+            "power": true,
             "icon": "lock",
             "hint": "Mod+Alt+L",
             "act": () => Shell.lock()
         },
         {
             "text": I18n.t("Заставка", "Idle screen"),
+            "power": true,
             "icon": "moon",
             "act": () => Idle.start()
         },
         {
             "text": I18n.t("Выключение…", "Power…"),
+            "power": true,
             "icon": "power",
             "act": () => Shell.sessionOpen = true
         }
-    ].filter(e => e.show === undefined || e.show)
+    ].filter(e => (e.show === undefined || e.show) && (prefs.extras || !e.extra) && (prefs.power || !e.power)).filter((e, i, a) => !e.separator || (i > 0 && i < a.length - 1 && !a[i - 1].separator))
     readonly property var actionable: entries.map((e, i) => e.separator ? -1 : i).filter(i => i >= 0)
 
     function run(index) {
@@ -136,18 +162,24 @@ PxBox {
         e.accepted = true;
     }
 
-    width: Math.round(Theme.u * 160 * Math.max(0.7, Math.min(1.8, (Config.bar.startWidth || 100) / 100)))
-    height: brand.height + Theme.u * 4 + col.implicitHeight + footer.height + inset * 2
-    color: Qt.alpha(Theme.menuSurface, Theme.panelAlpha)
+    property real room: 0                       // StartOverlay: the screen's room for it
+    width: Math.round(Theme.u * 160 * prefs.size)
+    height: brand.height + userRow.height + Theme.u * 4 + colView.height + footer.height + inset * 2
+    // the selected entry stays in view when the list scrolls
+    onCurrentChanged: if (current >= 0 && col.children[current]) {
+        const it = col.children[current];
+        colView.contentY = Math.max(0, Math.min(colView.contentHeight - colView.height, it.y < colView.contentY ? it.y : it.y + it.height > colView.contentY + colView.height ? it.y + it.height - colView.height : colView.contentY));
+    }
+    color: Qt.alpha(Theme.menuSurface, prefs.alpha)
     edgeColor: Theme.menuBorder
     flat: true
-    shadow: Config.appearance.shadows
+    shadow: Config.appearance.shadows && prefs.shadow
 
     Rectangle {
         id: brand
         width: parent.width
-        height: Theme.u * 27
-        color: Theme.menuHeader
+        height: Theme.fit(27)
+        color: root.prefs.accent ? Theme.mix(Theme.menuHeader, root.prefs.accentColor, 0.45) : Theme.menuHeader
         AngelLogo {
             anchors.centerIn: parent
         }
@@ -159,9 +191,42 @@ PxBox {
         }
     }
 
+    // the user: avatar and name under the logo (Fine-tune → Sections → User)
+    Item {
+        id: userRow
+        y: brand.height
+        width: parent.width
+        height: root.prefs.user ? user.height + Theme.u * 6 : 0
+        visible: root.prefs.user
+        StartUser {
+            id: user
+            x: Theme.u * 6
+            anchors.verticalCenter: parent.verticalCenter
+            size: Theme.u * 15
+            frameColor: root.prefs.accentColor
+            onOpened: root.closeRequested()
+        }
+        Rectangle {
+            anchors.bottom: parent.bottom
+            x: Theme.u * 4
+            width: parent.width - Theme.u * 8
+            height: Math.max(1, Theme.u / 2)
+            color: Theme.menuBorder
+        }
+    }
+
+    // the entries; on a screen too short for all of them (big fonts, a big art pixel) they scroll
+    Flickable {
+        id: colView
+        y: brand.height + userRow.height + Theme.u * 2
+        width: parent.width
+        height: root.room > 0 ? Math.max(Theme.fit(14), Math.min(col.implicitHeight, root.room - brand.height - userRow.height - Theme.u * 4 - footer.height - root.inset * 2)) : col.implicitHeight
+        contentHeight: col.implicitHeight
+        interactive: contentHeight > height
+        clip: interactive
+        boundsBehavior: Flickable.StopAtBounds
     Column {
         id: col
-        y: brand.height + Theme.u * 2
         width: parent.width
         Repeater {
             model: root.entries
@@ -173,11 +238,13 @@ PxBox {
                 icon: modelData.icon || ""
                 hint: modelData.hint || ""
                 highlighted: root.current === index
+                iconScale: root.prefs.icons
                 onHoveredChanged: if (hovered)
                     root.current = index
                 onTriggered: root.run(index)
             }
         }
+    }
     }
 
     PxText {

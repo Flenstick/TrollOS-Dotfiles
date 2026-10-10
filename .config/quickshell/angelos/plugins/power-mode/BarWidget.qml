@@ -47,7 +47,7 @@ Item {
         panelId: "power-mode"
         anchorItem: root
         above: Config.bar.style === "taskbar"
-        title: "power.exe"
+        title: I18n.exe("power")
         icon: "power"
         contentWidth: Theme.u * 130
         contentHeight: list.implicitHeight

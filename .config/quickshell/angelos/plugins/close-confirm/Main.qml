@@ -67,6 +67,7 @@ Item {
     }
 
     PanelWindow {
+        // takes input: the «close this tab?» question holds every click until it is answered
         id: win
         visible: !!root.target
         screen: Shell.focusedScreen
@@ -157,5 +158,7 @@ Item {
                 }
             }
         }
+        // a right click into the window's corner can crash Qt (widgets/RightClickGuard)
+        RightClickGuard {}
     }
 }

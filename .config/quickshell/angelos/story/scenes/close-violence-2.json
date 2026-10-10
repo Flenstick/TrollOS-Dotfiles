@@ -1,0 +1,84 @@
+{
+  "id": "close-violence-2",
+  "title": {
+    "ru": "Насилие: близкая",
+    "en": "Violence: close"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"violence\" and closeness == 2",
+      "next": "ask",
+      "note": "the demon of violence and the player: closeness close (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Сними с меня бинт. Посмотри. Не испугаешься?",
+        "en": "Take off my bandage. Look. Won't you be scared?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Не испугаюсь",
+            "en": "I won't"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "…Ты не {g:отвёл|отвела|отвёл(а)} глаз.",
+              "en": "…You didn't look away."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Не надо",
+            "en": "Don't"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Да. Не надо.",
+              "en": "Yes. Don't."
+            }
+          },
+          "next": "end",
+          "set": {
+            "violence": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Я сама. Потом.",
+              "en": "I'll do it myself. Later."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

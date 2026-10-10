@@ -1,0 +1,142 @@
+{
+  "_comment": "ЧЕРНОВИК — все реплики здесь черновики Claude, финальные тексты утверждает автор. How the demon talks in a circle (story/circles.json → voice). Situations: enter (she meets you in a circle; %1 its name, %2 its number), chatter (now and then), night (1–5 am), music (%1 the artist, %2 the song), back (you came back to the computer), wait (a try to get out before the time is up; %1 minutes), hint (how out — she says it with the button), refuse (asked to call the angel). Each line [ru, en]; templates as in scenes: {name} {g:m|f|unknown} {time} {daypart} {uptime} {song}. A situation a voice lacks falls back to the demon's usual lines (services/AngelLines.js). demons: each circle's demon with the player (item 12; services/Story.demonLine): talk — four lists, one per closeness step (a stranger, acquainted, close, your own); gift (%1: the gift, story/game.json → closeness.gifts), stay, wait (%m: minutes until she can again).",
+  "registry": {
+    "enter": [["Принят{g:|а|(а)}. Круг %2: %1. Ожидай.", "Admitted. Circle %2: %1. Wait."], ["Ваше дело передано в круг %2. %1. Номер в очереди не сообщается.", "Your case has been passed to circle %2. %1. Your place in the queue is not disclosed."]],
+    "chatter": [["Ожидайте. Ваше ожидание очень важно для нас.", "Please hold. Your wait is very important to us."], ["Записано.", "Noted."], ["Время приёма не установлено.", "Office hours: not set."], ["Здесь все ждут. Ты не исключение.", "Everyone waits here. You're no exception."]],
+    "night": [["{time}. Отметка о бессоннице внесена в дело.", "{time}. A note of sleeplessness has been added to your file."]],
+    "music": [["Записано: «%2». Приложено к делу.", "Noted: “%2”. Attached to your file."]],
+    "back": [["Отсутствие зафиксировано. Причина не важна.", "Absence recorded. The reason does not matter."]],
+    "wait": [["Прошение не рассматривается. Следующее — через %1 мин.", "Petition not considered. The next one in %1 min."]],
+    "hint": [["Выход один: вниз. Подавай прошение — рассмотрим.", "There is one way out: down. File a petition — we'll consider it."]],
+    "refuse": [["Ангел в этом круге не принимает.", "The angel does not receive in this circle."]]
+  },
+  "close": {
+    "enter": [["Тише. Ты здесь уже был{g:|а|(а)}. Просто не помнишь. %1.", "Hush. You've been here before. You just don't remember. %1."], ["Ближе. Ещё ближе. Вот. Это %1.", "Closer. Closer still. There. This is %1."]],
+    "chatter": [["Я рядом. Ты не оборачиваешься — и правильно.", "I'm right here. You don't turn around — good."], ["{uptime} у экрана. Я считала.", "{uptime} at the screen. I counted."], ["Ты дышишь чаще, когда думаешь, что я смотрю.", "You breathe faster when you think I'm watching."]],
+    "night": [["{time}. Все спят. Кроме нас.", "{time}. Everyone's asleep. Except us."]],
+    "music": [["Опять «%2». Здесь её тоже слышно.", "“%2” again. You can hear it here too."]],
+    "back": [["Вернул{g:ся|ась|ся(ась)}. Я никуда не уходила.", "You're back. I never left."]],
+    "wait": [["Рано. Ещё %1 мин. Посиди со мной.", "Too soon. %1 more min. Sit with me."]],
+    "hint": [["Хочешь наверх? Тогда вниз. Я покажу.", "You want to go up? Then down. I'll show you."]],
+    "refuse": [["Её здесь нет. Здесь только я.", "She isn't here. Only I am."]]
+  },
+  "scripture": {
+    "enter": [["И сош{g:ёл|ла|ёл(ла)} ты в круг %2, и имя ему — %1.", "And you went down to circle %2, and its name is %1."], ["Оставь надежду. Или не оставляй — здесь её всё равно не носят.", "Abandon hope. Or don't — nobody wears it here anyway."]],
+    "chatter": [["Сказано: всякий ждущий да ждёт.", "It is written: whoever waits shall wait."], ["Мольба записана в книгу. Книга не отвечает.", "The plea is written in the book. The book does not answer."]],
+    "night": [["Час третий по полуночи. Двери открыты.", "The third hour past midnight. The doors are open."]],
+    "music": [["Песнь «%2» внесена в списки.", "The song “%2” is entered in the rolls."]],
+    "back": [["Вернулся грешник к месту своему.", "The sinner has returned to their place."]],
+    "wait": [["Не время. Ещё %1 мин. Так записано.", "Not yet. %1 more min. So it is written."]],
+    "hint": [["Путь наверх лежит через дно. Иди.", "The way up lies through the bottom. Go."]],
+    "refuse": [["Ангелы сюда не сходят.", "Angels do not come down here."]]
+  },
+  "silent": {
+    "enter": [["…", "…"], ["%1.", "%1."]],
+    "chatter": [["…", "…"]],
+    "wait": [["…%1.", "…%1."]],
+    "hint": [["Вниз.", "Down."]],
+    "refuse": [["Нет.", "No."]]
+  },
+  "demons": {
+    "draft": true,
+    "limbo": {
+      "talk": [
+        [["Ваш вопрос зарегистрирован. Ответ не предусмотрен.", "Your question is registered. No answer is provided."], ["Говорите. Я записываю.", "Go on. I'm taking notes."], ["Здесь редко разговаривают. Непривычно.", "People rarely talk here. It's unusual."]],
+        [["А, это вы. Ваше дело я помню наизусть.", "Ah, it's you. I know your file by heart."], ["Сегодня в очереди только вы. Я не жалуюсь.", "Today you're the only one in the queue. I'm not complaining."], ["Я поставила вам галочку. Просто так.", "I put a tick by your name. Just because."]],
+        [["Я перестала вас регистрировать. Вы просто приходите.", "I stopped registering you. You just come."], ["Знаете, в тумане приятнее вдвоём.", "You know, the fog is nicer with two."], ["Я сохранила для вас стул. Здесь стульев нет. Я сохранила.", "I kept a chair for you. There are no chairs here. I kept one."]],
+        [["Вы — единственное, что я здесь не теряю.", "You're the only thing I don't lose here."], ["Без номера. Без очереди. Просто вы.", "No number. No queue. Just you."], ["Если вы уйдёте, я буду ждать. Я умею ждать. Но не хочу.", "If you leave, I'll wait. I'm good at waiting. But I don't want to."]]
+      ],
+      "gift": [["%1? …Это самое громкое, что мне дарили.", "%1? …That's the loudest thing anyone ever gave me."], ["Принято. Внесено в опись как «дорогое».", "Received. Entered in the inventory as 'precious'."]],
+      "stay": [["Остаётесь? Отмечу: «по собственному желанию».", "Staying? I'll note it: 'of their own accord'."], ["Хорошо. Ещё немного тумана вам не повредит.", "Fine. A little more fog won't hurt you."]],
+      "wait": [["Следующий приём через %m мин.", "Next appointment in %m min."]]
+    },
+    "lust": {
+      "talk": [
+        [["Ближе. Я не кусаюсь. Почти.", "Closer. I don't bite. Almost."], ["Ты дрожишь — это ветер. Или нет?", "You're shaking — it's the wind. Or is it?"], ["Говори тише. Здесь всё слышно.", "Speak softly. Everything carries here."]],
+        [["Ты пахнешь верхом. Светом. Мне нравится.", "You smell of up there. Of light. I like it."], ["Я узнаю тебя по шагам. Ветер их не уносит.", "I know you by your steps. The wind can't take them."], ["Не уходи сразу. Посиди.", "Don't leave right away. Sit."]],
+        [["Я перестала держаться за ветер. Держусь за тебя.", "I stopped holding on to the wind. I hold on to you."], ["Только тебя не сносит.", "You're the only one it can't carry off."], ["Шепни что-нибудь. Я сохраню.", "Whisper something. I'll keep it."]],
+        [["Ты мо{g:й|я|й(я)}. Не спорь — ветер со мной согласен.", "You're mine. Don't argue — the wind agrees."], ["Я больше не кружусь. С тобой — стою.", "I don't whirl any more. With you — I stand still."], ["Останься навсегда. Шучу. Нет.", "Stay forever. Joking. No, I'm not."]]
+      ],
+      "gift": [["%1? Я спрячу это там, где ветер не достанет.", "%1? I'll hide it where the wind can't reach."], ["Для меня? …Кто ты так{g:ой|ая|ой(ая)}, чтобы так со мной?", "For me? …Who are you to do this to me?"]],
+      "stay": [["Останься. Да. Вот так.", "Stay. Yes. Like that."], ["Ветер стих. Это ты сделал{g:|а|(а)}.", "The wind dropped. You did that."]],
+      "wait": [["Не торопи меня. Через %m мин.", "Don't rush me. In %m min."]]
+    },
+    "gluttony": {
+      "talk": [
+        [["Номерок возьмите. Обед у нас круглосуточно.", "Take a number. Lunch is served round the clock."], ["Вы голодны? Здесь все голодны. Это нормально.", "Are you hungry? Everyone's hungry here. That's normal."], ["Ваш запрос поставлен в меню.", "Your request has been put on the menu."]],
+        [["Я отложила вам кусочек. Не спрашивайте чего.", "I saved you a piece. Don't ask of what."], ["Вы опять тут. Похоже, вам у нас нравится.", "You're here again. Looks like you like it here."], ["Дождь сегодня жирный. Вы заметили?", "The rain is greasy today. Did you notice?"]],
+        [["Я делюсь только с вами. Это нарушение. Я нарушаю.", "I only share with you. It's against the rules. I'm breaking them."], ["С вами я забываю, что голодна.", "With you I forget I'm hungry."], ["Сядьте ближе. Тут теплее, где грязь.", "Sit closer. It's warmer where the mud is."]],
+        [["Вы — единственное, чего мне не хочется съесть. Это много значит.", "You're the only thing I don't want to eat. That means a lot."], ["Ваша порция — всегда моя. Моя — ваша.", "Your share is always mine. Mine is yours."], ["Я сыта. Впервые. Это вы.", "I'm full. For the first time. That's you."]]
+      ],
+      "gift": [["%1! Мне? Я съем это медленно. Очень медленно.", "%1! For me? I'll eat it slowly. Very slowly."], ["Принято с благодарностью и крошками.", "Received with gratitude and crumbs."]],
+      "stay": [["Остаётесь на ужин? Ужин — всегда.", "Staying for dinner? It's always dinner."], ["Хорошо. Ваш стул у котла.", "Good. Your seat's by the cauldron."]],
+      "wait": [["Кухня откроется через %m мин.", "The kitchen opens in %m min."]]
+    },
+    "greed": {
+      "talk": [
+        [["Разговор платный. Первый — в кредит.", "Conversation costs. The first one's on credit."], ["Вы ничего не стоите. Пока.", "You're worth nothing. Yet."], ["Всё, что вы скажете, будет учтено.", "Everything you say will be counted."]],
+        [["Ваш счёт пополняется. Я слежу.", "Your account is growing. I'm keeping track."], ["Вы — единственная статья, где я в плюсе.", "You're the only entry where I'm in the black."], ["Сегодня я не взяла с вас процент. Запомните.", "I didn't charge you interest today. Remember that."]],
+        [["Я пересчитала монеты. Одной не хватает. Потому что думала о вас.", "I counted the coins. One is missing. Because I was thinking of you."], ["Вам — без процентов. Навсегда.", "For you — no interest. Ever."], ["Колесо крутится. Я смотрю на вас.", "The wheel spins. I'm watching you."]],
+        [["Всё моё золото — пыль рядом с вами.", "All my gold is dust next to you."], ["Вы — то, что я не отдам ни за что.", "You're the one thing I won't give up for anything."], ["Я закрыла книгу учёта. Вас в ней больше нет. Вы — не долг.", "I closed the ledger. You're not in it any more. You're not a debt."]]
+      ],
+      "gift": [["%1! Настоящая. Я положу её отдельно от всех.", "%1! A real one. I'll keep it apart from all the others."], ["Записано в приход. С пометкой «от вас».", "Entered as income. Marked 'from you'."]],
+      "stay": [["Остаётесь? Это вложение. Я оценю.", "Staying? That's an investment. I'll appreciate it."], ["Время — деньги. Ваше — бесценно.", "Time is money. Yours is priceless."]],
+      "wait": [["Следующая операция через %m мин.", "Next transaction in %m min."]]
+    },
+    "wrath": {
+      "talk": [
+        [["Сказано: не тревожь воды. Ты тревожишь.", "It is written: do not stir the waters. You stir them."], ["Говори. Стикс слушает.", "Speak. The Styx is listening."], ["Гнев — тоже молитва. Только громкая.", "Wrath is a prayer too. Just a loud one."]],
+        [["Ты приш{g:ёл|ла|ёл(ла)} к воде снова. Вода запомнила.", "You came to the water again. The water remembers."], ["Сегодня вода тише. Это ты.", "The water is calmer today. That's you."], ["Сядь на берег. Не на дно.", "Sit on the shore. Not on the bottom."]],
+        [["Я перестала бить волной о камень. С тех пор как ты здесь.", "I stopped beating the waves on the stone. Since you've been here."], ["Писание говорит: держи гнев. Я держу тебя.", "Scripture says: hold your wrath. I'm holding you."], ["Под водой кто-то ворочается. Не бойся. Это я — рада.", "Something stirs under the water. Don't be afraid. It's me — glad."]],
+        [["Стикс расступился. Ступай по дну — я рядом.", "The Styx has parted. Walk the bottom — I'm beside you."], ["Ты — тихая вода во мне.", "You're the still water in me."], ["Аминь. Нет — не так. Ты.", "Amen. No — not that. You."]]
+      ],
+      "gift": [["%1? Я не брошу его. Впервые — не брошу.", "%1? I won't throw it. For the first time — I won't."], ["Положу на дно. Там его никто не тронет.", "I'll lay it on the bottom. No one will touch it there."]],
+      "stay": [["Останься. Вода тебя не тронет.", "Stay. The water won't touch you."], ["Сиди. Пусть волна утихнет.", "Sit. Let the wave die down."]],
+      "wait": [["Не время. Ещё %m мин.", "Not yet. %m more min."]]
+    },
+    "heresy": {
+      "talk": [
+        [["Здесь горят те, кто не верил. Ты во что веришь?", "Here burn those who didn't believe. What do you believe in?"], ["Не подходи к гробницам. Они горячие.", "Don't go near the tombs. They're hot."], ["Книга сгорела. Слова остались.", "The book burnt. The words remain."]],
+        [["Ты снова у стен Дита. Стены тебя впускают.", "You're at the walls of Dis again. The walls let you in."], ["Я прочла тебе страницу. Ты не услышал{g:|а|(а)}. Ничего.", "I read you a page. You didn't hear. It doesn't matter."], ["Огонь сегодня ровный. Ты его успокаиваешь.", "The fire is even today. You calm it."]],
+        [["Я усомнилась во всём. Кроме тебя.", "I've doubted everything. Except you."], ["Моя ересь — ты.", "My heresy is you."], ["Гробница открыта. Я не прячусь.", "The tomb is open. I'm not hiding."]],
+        [["Я верую. В тебя. Сожгите меня.", "I believe. In you. Burn me for it."], ["Новое писание: одна строка. Твоё имя.", "A new scripture: one line. Your name."], ["Пламя гаснет, когда ты рядом. Не уходи — замёрзну.", "The flame dies down when you're near. Don't leave — I'll freeze."]]
+      ],
+      "gift": [["%1… Её нельзя читать. Я прочту вслух. Тебе.", "%1… It mustn't be read. I'll read it aloud. To you."], ["Спрячу под гробницей. Это теперь наша тайна.", "I'll hide it under the tomb. It's our secret now."]],
+      "stay": [["Останься у стен. Они тёплые.", "Stay by the walls. They're warm."], ["Сядь у огня. Он не тронет того, кто со мной.", "Sit by the fire. It won't touch anyone who's with me."]],
+      "wait": [["Не время для ереси. Ещё %m мин.", "Not the time for heresy. %m more min."]]
+    },
+    "violence": {
+      "talk": [
+        [["Песок горит. Не стой босиком.", "The sand burns. Don't stand barefoot."], ["Кровь течёт рекой. Не пей.", "Blood runs like a river. Don't drink."], ["Сказано: поднявший руку — да будет здесь. Ты поднимал{g:|а|(а)}?", "It is written: whoever raised a hand shall be here. Did you?"]],
+        [["Ты прош{g:ёл|ла|ёл(ла)} лес и не сломал{g:|а|(а)} ни ветки. Я видела.", "You crossed the wood and didn't break a branch. I saw."], ["Сегодня я не точила когти. Не знаю почему.", "I didn't sharpen my claws today. I don't know why."], ["Сядь в тень. Её мало. Я поделюсь.", "Sit in the shade. There's little. I'll share."]],
+        [["Мои руки в бинтах. Под ними — ничего страшного. Для тебя.", "My hands are bandaged. Nothing terrible underneath. For you."], ["Я встала между тобой и дождём огня.", "I stood between you and the rain of fire."], ["Здесь всё ранит. Кроме тебя.", "Everything wounds here. Except you."]],
+        [["Я сложила клинок. Мне больше не нужно.", "I've put the blade down. I don't need it any more."], ["Если кто-то тронет тебя — песок станет красным.", "If anyone touches you, the sand will turn red."], ["Ты — моя река без крови.", "You're my river without blood."]]
+      ],
+      "gift": [["%1? Острый. Ты знаешь, что мне дарить.", "%1? Sharp. You know what to give me."], ["Я ношу его у сердца. Острой стороной наружу.", "I'll keep it by my heart. Sharp side out."]],
+      "stay": [["Останься. Я постерегу.", "Stay. I'll keep watch."], ["Здесь опасно. Рядом со мной — нет.", "It's dangerous here. Not next to me."]],
+      "wait": [["Рано. Ещё %m мин.", "Too soon. %m more min."]]
+    },
+    "fraud": {
+      "talk": [
+        [["Не верь ни одному моему слову. Этому тоже.", "Don't believe a word I say. This one included."], ["У меня много лиц. Тебе какое?", "I have many faces. Which one do you want?"], ["Тише. Смола слушает.", "Quiet. The pitch is listening."]],
+        [["Сегодня я говорю тебе правду. Наверное.", "Today I'm telling you the truth. Probably."], ["Я сняла одну маску. Для тебя. Их ещё девять.", "I took off one mask. For you. Nine more to go."], ["Я обманула всех. Кроме тебя. Пока.", "I've fooled everyone. Except you. So far."]],
+        [["Это моё лицо. Настоящее. Не смейся.", "This is my face. The real one. Don't laugh."], ["Я разучилась врать тебе. Это ужасно.", "I've forgotten how to lie to you. It's terrible."], ["В смоле видно отражение. Там мы вдвоём.", "There's a reflection in the pitch. The two of us in it."]],
+        [["Ни одной маски. Смотри.", "Not a single mask. Look."], ["Всё, что я тебе скажу, — правда. Это страшнее любой лжи.", "Everything I tell you is true. That's scarier than any lie."], ["Ты мо{g:й|я|й(я)}. Без подвоха.", "You're mine. No catch."]]
+      ],
+      "gift": [["%1? Надену. Но только когда тебя нет рядом.", "%1? I'll wear it. But only when you're not around."], ["Чужое лицо… Ты меня знаешь.", "Someone else's face… You know me."]],
+      "stay": [["Останься. Я никому не скажу, что ты здесь.", "Stay. I won't tell anyone you're here."], ["Хорошо. Пусть все думают, что ты уш{g:ёл|ла|ёл(ла)}.", "Good. Let them all think you left."]],
+      "wait": [["Не сейчас. Через %m мин. Честно.", "Not now. In %m min. Honestly."]]
+    },
+    "treachery": {
+      "talk": [
+        [["…", "…"], ["Холодно.", "Cold."], ["Уходи.", "Go away."]],
+        [["Ты.", "You."], ["…Снова.", "…Again."], ["Лёд треснул. Чуть-чуть.", "The ice cracked. A little."]],
+        [["Не уходи.", "Don't go."], ["Тепло. Странно.", "Warm. Strange."], ["Я помню твоё имя. {name}.", "I remember your name. {name}."]],
+        [["Мо{g:й|я|й(я)}.", "Mine."], ["Лёд тает. Пусть.", "The ice is melting. Let it."], ["Ты не предашь. Я знаю.", "You won't betray me. I know."]]
+      ],
+      "gift": [["%1… Я сберегу. Не выдам.", "%1… I'll keep it. I won't tell."], ["…Спасибо.", "…Thank you."]],
+      "stay": [["Останься.", "Stay."], ["…Да.", "…Yes."]],
+      "wait": [["…%m.", "…%m."]]
+    }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "id": "trial-limbo",
+  "title": {
+    "ru": "Испытание: Лимб",
+    "en": "Trial: Limbo"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "trial",
+      "cond": "circle == \"limbo\"",
+      "next": "pactCheck",
+      "note": "a try to get out of this circle (Ask → Seek the way out, the wheel's plea)"
+    },
+    "pactCheck": {
+      "type": "if",
+      "cond": "attempts >= pactAfter and not pact",
+      "then": "toPact",
+      "else": "ask"
+    },
+    "toPact": {
+      "type": "scene",
+      "to": "pact"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Цель визита? Здесь никто ничего не хочет. Ты — хочешь?",
+        "en": "Purpose of your visit? Nobody here wants anything. Do you?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Я пришёл за ней",
+            "en": "I came for her"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Хотеть — уже грех. Проходи ниже.",
+              "en": "Wanting is already a sin. Go further down."
+            }
+          },
+          "next": "down"
+        },
+        {
+          "text": {
+            "ru": "Мне всё равно",
+            "en": "I don't care"
+          },
+          "tone": "negative",
+          "set": {
+            "limbo": "+1"
+          },
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Вот и останься. Тут всем всё равно.",
+              "en": "Then stay. Nobody here cares either."
+            }
+          },
+          "next": "stay"
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Молчание принято. Ожидай дальше.",
+              "en": "Silence accepted. Keep waiting."
+            }
+          },
+          "next": "stay"
+        }
+      ],
+      "shuffle": true
+    },
+    "stay": {
+      "type": "circle",
+      "to": "stay"
+    },
+    "down": {
+      "type": "circle",
+      "to": "deeper"
+    }
+  }
+}

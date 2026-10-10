@@ -13,7 +13,10 @@ Item {
     property int segments: 24
     property real floorDb: -60
     readonly property real peak: monitor.peak || 0
-    readonly property real db: peak > 0 ? 20 * Math.log(peak) / Math.LN10 : -120
+    // Quickshell gives the peak on PipeWire's cubic volume scale (a 0.1 sine reads 0.464,
+    // its cube root): the amplitude is peak³, so dB = 60·log10(peak). Read as amplitude
+    // the meter showed a quiet room at -24 dB instead of -66 dB
+    readonly property real db: peak > 0 ? 60 * Math.log(peak) / Math.LN10 : -120
     // 0..1 along the meter
     readonly property real level: Math.max(0, Math.min(1, (db - floorDb) / -floorDb))
     property real shown: 0          // smoothed: fast attack, slower release
@@ -28,18 +31,18 @@ Item {
         node: root.node
         enabled: root.active && !!root.node
     }
-    Timer {
-        // ~60 Hz while there is something to animate, idle otherwise
-        interval: 16
-        repeat: true
+    FrameAnimation {
+        // every frame while there is something to animate, idle otherwise; the falls were
+        // tuned per 16 ms (`k` keeps their speed at any refresh rate)
         running: root.active && (root.level > 0 || root.shown > 0.001 || root.hold > 0.001)
         onTriggered: {
-            root.shown = root.level > root.shown ? root.level : Math.max(root.level, root.shown - 0.035);
+            const k = Math.min(frameTime, 0.1) / 0.016;
+            root.shown = root.level > root.shown ? root.level : Math.max(root.level, root.shown - 0.035 * k);
             if (root.shown >= root.hold) {
                 root.hold = root.shown;
                 holdTimer.restart();
             } else if (!holdTimer.running) {
-                root.hold = Math.max(root.shown, root.hold - 0.02);
+                root.hold = Math.max(root.shown, root.hold - 0.02 * k);
             }
         }
     }

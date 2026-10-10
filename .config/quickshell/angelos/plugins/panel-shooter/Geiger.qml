@@ -318,6 +318,8 @@ Item {
         mask: Region {}
         WlrLayershell.namespace: "angelos-geiger-probe"
         WlrLayershell.layer: WlrLayer.Background
+        // a right click into the window's corner can crash Qt (widgets/RightClickGuard)
+        RightClickGuard {}
     }
 
     PanelWindow {
@@ -689,5 +691,7 @@ Item {
                 text: I18n.t("☢ найдено изотопов: ", "☢ isotopes found: ") + root.isotopes.filter(s => s.found).length + "/" + root.isotopes.length + "   " + I18n.t("ЛКМ — замер · ПКМ/Esc — убрать", "LMB — reading · RMB/Esc — put away")
             }
         }
+        // a right click into the window's corner can crash Qt (widgets/RightClickGuard)
+        RightClickGuard {}
     }
 }

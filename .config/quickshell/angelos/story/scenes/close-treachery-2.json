@@ -1,0 +1,84 @@
+{
+  "id": "close-treachery-2",
+  "title": {
+    "ru": "Предательство: близкая",
+    "en": "Treachery: close"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"treachery\" and closeness == 2",
+      "next": "ask",
+      "note": "the demon of treachery and the player: closeness close (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Здесь все кого-то предали. Ты?",
+        "en": "Everyone here betrayed someone. Did you?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Нет",
+            "en": "No"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Я верю.",
+              "en": "I believe you."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Да",
+            "en": "Yes"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "…Я тоже.",
+              "en": "…So did I."
+            }
+          },
+          "next": "end",
+          "set": {
+            "treachery": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Молчи. Лёд всё слышит.",
+              "en": "Hush. The ice hears everything."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

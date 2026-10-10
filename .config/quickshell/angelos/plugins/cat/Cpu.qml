@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.services
 
 // CPU load 0..100 from /proc/stat.
 Singleton {
@@ -14,7 +15,7 @@ Singleton {
 
     Timer {
         interval: root.intervalMs
-        running: true
+        running: !Shell.locked   // nothing to show behind the lock screen
         repeat: true
         triggeredOnStart: true
         onTriggered: stat.reload()

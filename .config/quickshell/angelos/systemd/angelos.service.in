@@ -1,0 +1,28 @@
+# angelOS shell as a systemd user service: brought back up whenever it dies
+# (killed, crashed past Quickshell's own restart). `angelos start` installs this
+# file with the paths filled in and starts it; `angelos stop|restart` go through
+# systemctl. Template: ~/.config/quickshell/angelos/systemd/angelos.service.in
+[Unit]
+Description=angelOS shell (Quickshell)
+PartOf=graphical-session.target
+After=graphical-session.target
+# a crash loop (broken Qt, missing libraries) gives up after 5 tries a minute
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# the environment niri gives the programs it starts (see scripts/session-env.py)
+EnvironmentFile=-%t/angelos/session.env
+Environment=ANGELOS_SERVICE=1
+ExecStart="@BIN@" run
+# a clean exit through Quickshell (its helper processes go with it) …
+ExecStop="@BIN@" quit $MAINPID
+# … and helpers orphaned by a hard kill are cleaned up afterwards
+ExecStopPost="@BIN@" reap
+Restart=always
+RestartSec=1
+# Only the shell is stopped: apps started from it run in their own scopes and
+# must survive a shell restart.
+KillMode=process
+TimeoutStopSec=6

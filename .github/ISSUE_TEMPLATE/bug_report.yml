@@ -1,0 +1,47 @@
+name: Bug report / Сообщить об ошибке
+description: Something in angelOS or the dotfiles broke / Что-то сломалось в angelOS или конфигах
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report ♡ The fastest way to a fix is the report archive:
+        run `angelos report` in a terminal (or Settings → System → Report a problem)
+        and drop the `.tar.gz` into the field below. It has versions, the shell log and
+        crash reports; your home path and user name are replaced.
+
+        Спасибо ♡ Быстрее всего поможет архив: `angelos report` в терминале
+        (или Настройки → System → Сообщить о проблеме) — перетащите `.tar.gz` в поле ниже.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / Что случилось?
+      description: What you did, what you saw, what you expected / Что делали, что увидели, что ожидали
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Как повторить
+      placeholder: |
+        1. Open Settings → …
+        2. Click …
+        3. …
+  - type: textarea
+    id: report
+    attributes:
+      label: angelos report
+      description: Attach the archive from `angelos report` (drag the file here) / Прикрепите архив из `angelos report`
+  - type: dropdown
+    id: shell
+    attributes:
+      label: Desktop shell / Оболочка
+      options:
+        - angelOS
+        - Noctalia
+        - none / без оболочки
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU (if it's about drawing or crashes) / Видеокарта
+      placeholder: NVIDIA RTX 4060 / AMD RX 7800 / Intel …

@@ -23,6 +23,17 @@ Singleton {
     readonly property string accelProfile: (block("mouse").match(/^\s*accel-profile\s+"([^"]*)"/m) || [])[1] || "adaptive"
     readonly property real accelSpeed: parseFloat((block("mouse").match(/^\s*accel-speed\s+(-?[\d.]+)/m) || [])[1] || "0")
     readonly property bool focusFollowsMouse: /^\s*focus-follows-mouse\b/m.test(text)
+    readonly property bool naturalScroll: /^\s*natural-scroll\b/m.test(block("touchpad"))
+    // the touchpad (Settings → Devices → Touchpad): niri's `touchpad { }` lines
+    readonly property string tpBlock: block("touchpad")
+    readonly property bool touchpadOff: tpFlag("off")
+    function tpFlag(name) {
+        return new RegExp("^\\s*" + name + "\\b(?!-)", "m").test(tpBlock);
+    }
+    function tpValue(name, def) {
+        const m = tpBlock.match(new RegExp("^\\s*" + name + "\\s+(\"[^\"]*\"|[-\\w.]+)", "m"));
+        return m ? m[1].replace(/^"|"$/g, "") : def;
+    }
 
     readonly property var switchOptions: [
         {
@@ -113,11 +124,23 @@ Singleton {
         }
         return re.test(src) ? src.replace(re, (m, indent) => indent + line) : src;
     }
+    // `name { }` inside `parent { … }` when it isn't there yet: the shipped input.kdl
+    // has no mouse block (only a commented example), and a setting can't be put into
+    // a block that doesn't exist (issue #27: acceleration and speed did nothing)
+    function ensureBlock(src, name, parent) {
+        if (blockRange(name, src))
+            return src;
+        const r = blockRange(parent, src);
+        if (!r)
+            return src;
+        const inner = src.slice(r[0], r[1]).replace(/\s*$/, "\n\n    " + name + " {\n    }\n");
+        return src.slice(0, r[0]) + inner + src.slice(r[1]);
+    }
     function removeLine(src, re) {
         return src.replace(re, "");
     }
 
-    // changes: {layouts, options, repeatDelay, repeatRate, numlock, accelProfile, accelSpeed, focusFollowsMouse}
+    // changes: {layouts, options, repeatDelay, repeatRate, numlock, accelProfile, accelSpeed, focusFollowsMouse, naturalScroll}
     function save(ch) {
         let t = text;
         if (ch.layouts !== undefined)
@@ -128,10 +151,16 @@ Singleton {
             else
                 t = t.replace(/^(\s*)(layout\s+"[^"]*".*)$/m, (m, i, l) => i + l + "\n" + i + 'options "' + ch.options + '"');
         }
+        // a file without the line gets it in `keyboard { }` (before, the slider moved and
+        // nothing was written: back to the old value on the next open)
+        if (ch.repeatDelay !== undefined || ch.repeatRate !== undefined)
+            t = ensureBlock(t, "keyboard", "input");
         if (ch.repeatDelay !== undefined)
-            t = /^\s*repeat-delay\s+\d+/m.test(t) ? t.replace(/^(\s*)repeat-delay\s+\d+/m, (m, i) => i + "repeat-delay " + Math.round(ch.repeatDelay)) : t;
+            t = setLine(t, /^(\s*)repeat-delay\s+\d+/m, "repeat-delay " + Math.round(ch.repeatDelay), "keyboard");
         if (ch.repeatRate !== undefined)
-            t = /^\s*repeat-rate\s+\d+/m.test(t) ? t.replace(/^(\s*)repeat-rate\s+\d+/m, (m, i) => i + "repeat-rate " + Math.round(ch.repeatRate)) : t;
+            t = setLine(t, /^(\s*)repeat-rate\s+\d+/m, "repeat-rate " + Math.round(ch.repeatRate), "keyboard");
+        if (ch.numlock)
+            numlockKick.restart();          // turn it on now too, not only at the next login
         if (ch.numlock !== undefined) {
             const kr = blockRange("keyboard", t);
             const has = kr ? /^\s*numlock\b/m.test(t.slice(kr[0], kr[1])) : false;
@@ -140,10 +169,61 @@ Singleton {
             else if (!ch.numlock && has)
                 t = t.replace(/^\s*numlock\b.*\n/m, "");
         }
+        if (ch.accelProfile !== undefined || ch.accelSpeed !== undefined)
+            t = ensureBlock(t, "mouse", "input");
         if (ch.accelProfile !== undefined)
             t = setLine(t, /^(\s*)accel-profile\s+"[^"]*"/m, 'accel-profile "' + ch.accelProfile + '"', "mouse");
         if (ch.accelSpeed !== undefined)
             t = setLine(t, /^(\s*)accel-speed\s+-?[\d.]+/m, "accel-speed " + Number(ch.accelSpeed).toFixed(2), "mouse");
+        // the touchpad: {flags: {tap: true, dwt: false…}, values: {"accel-speed": 0.2, "click-method": null…}}
+        // (null = the line goes); touchpadOff is the `off` flag (its key, services/Laptop)
+        if (ch.touchpadOff !== undefined)
+            ch.touchpad = {
+                "flags": {
+                    "off": !!ch.touchpadOff
+                }
+            };
+        if (ch.touchpad) {
+            t = ensureBlock(t, "touchpad", "input");
+            const tr = blockRange("touchpad", t);
+            if (tr) {
+                let inner = t.slice(tr[0], tr[1]);
+                const flags = ch.touchpad.flags || {};
+                for (const name in flags) {
+                    const re = new RegExp("^[ \\t]*" + name + "\\b(?!-)[^\\n]*\\n?", "m");
+                    const has = re.test(inner);
+                    if (flags[name] && !has)
+                        inner = inner.replace(/\s*$/, "\n        " + name + "\n    ");
+                    else if (!flags[name] && has)
+                        inner = inner.replace(re, "");
+                }
+                const values = ch.touchpad.values || {};
+                for (const name in values) {
+                    const re = new RegExp("^([ \\t]*)" + name + "\\s+[^\\n]*", "m");
+                    const v = values[name];
+                    const line = v === null || v === undefined ? "" : name + " " + (typeof v === "boolean" ? String(v) : typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(2)) : '"' + v + '"');
+                    if (re.test(inner))
+                        inner = line ? inner.replace(re, (m, i) => i + line) : inner.replace(new RegExp("^[ \\t]*" + name + "\\s+[^\\n]*\\n?", "m"), "");
+                    else if (line)
+                        inner = inner.replace(/\s*$/, "\n        " + line + "\n    ");
+                }
+                t = t.slice(0, tr[0]) + inner + t.slice(tr[1]);
+            }
+        }
+        // the touchpad's scrolling direction, only inside `touchpad { }`
+        if (ch.naturalScroll !== undefined) {
+            t = ensureBlock(t, "touchpad", "input");
+            const tr = blockRange("touchpad", t);
+            if (tr) {
+                let inner = t.slice(tr[0], tr[1]);
+                const has = /^\s*natural-scroll\b/m.test(inner);
+                if (ch.naturalScroll && !has)
+                    inner = inner.replace(/\s*$/, "\n        natural-scroll\n    ");
+                else if (!ch.naturalScroll && has)
+                    inner = inner.replace(/^[ \t]*natural-scroll\b.*\n?/m, "");
+                t = t.slice(0, tr[0]) + inner + t.slice(tr[1]);
+            }
+        }
         if (ch.focusFollowsMouse !== undefined) {
             const has = /^\s*focus-follows-mouse\b/m.test(t);
             if (ch.focusFollowsMouse && !has)
@@ -170,6 +250,37 @@ Singleton {
                 root.log = text.trim()
         }
         onExited: view.reload()
+    }
+
+    // NumLock on login, for real: niri's `numlock` only acts when niri starts and
+    // is not honoured everywhere (issue #12), so once per login (and right after
+    // switching it on) scripts/numlock.py taps NumLock if its LED is off
+    property string numlockState: ""
+    Timer {
+        id: numlockKick
+        interval: 1200
+        onTriggered: if (!Shell.dev)
+            numlocker.running = true
+    }
+    Timer {
+        running: root.loaded && root.numlock && !Shell.dev
+        interval: 3000
+        onTriggered: numlockOnce.running = true
+    }
+    Process {
+        id: numlockOnce
+        command: ["sh", "-c", 'm="${XDG_RUNTIME_DIR:-/tmp}/angelos-numlock"; [ -e "$m" ] && exit 1; : > "$m"']
+        onExited: code => {
+            if (code === 0)
+                numlocker.running = true;
+        }
+    }
+    Process {
+        id: numlocker
+        command: ["python3", Quickshell.shellDir + "/scripts/numlock.py", "ensure"]
+        stdout: StdioCollector {
+            onStreamFinished: root.numlockState = text.trim()
+        }
     }
 
     FileView {

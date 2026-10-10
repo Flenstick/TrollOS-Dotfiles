@@ -1,0 +1,36 @@
+# Small everyday tools the author uses (INSTALL_TOOLS=1, asked in the interactive setup).
+# The heavy apps — browsers, Steam, games, IDEs, messengers — are not here.
+# The shell: fish, with angelOS's snippet .config/fish/conf.d/angelos-tools.fish
+fish
+bash-completion
+pkgfile
+# terminal utilities
+btop
+glances
+duf
+ncdu
+lsd
+ripgrep
+tree
+micro
+less
+man-db
+man-pages
+plocate
+pv
+rsync
+wget
+unzip
+unrar
+yt-dlp
+# video thumbnails in Nautilus
+ffmpegthumbnailer
+# small desktop helpers: sound routing, a task manager, a diff viewer, a phone mirror
+pavucontrol
+helvum
+mission-center
+meld
+scrcpy
+# archives in the file manager; paccache and checkupdates
+ark
+pacman-contrib

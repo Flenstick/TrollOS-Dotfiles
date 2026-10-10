@@ -26,3 +26,16 @@ recent-windows {
         urgent-color "{{danger}}"
     }
 }
+
+// Windows round by 4 px — the same corner the GTK and Qt themes draw on their buttons and
+// fields (an outline stepped in by one 2 px art pixel: templates/gtk3.css, gtk4.css,
+// scripts/qt-theme.py), so GTK, Qt and everything else meet the same window corner.
+// angelOS's own windows stay pixel boxes; Photoshop's canvas isn't cut.
+window-rule {
+    exclude app-id="^org.quickshell$" title="^angelOS"
+    exclude app-id="^liquid-glass-test$"
+    exclude app-id=r#"(?i)photoshop"#
+    exclude title=r#"^Adobe Photoshop"#
+    geometry-corner-radius 4
+    clip-to-geometry true
+}

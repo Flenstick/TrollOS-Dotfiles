@@ -1,0 +1,84 @@
+{
+  "id": "close-gluttony-2",
+  "title": {
+    "ru": "Чревоугодие: близкая",
+    "en": "Gluttony: close"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"gluttony\" and closeness == 2",
+      "next": "ask",
+      "note": "the demon of gluttony and the player: closeness close (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Мне всегда мало. Вам со мной — тоже мало?",
+        "en": "It's never enough for me. Is it not enough for you with me, either?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Мне хватает",
+            "en": "It's enough"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Как это… сытно.",
+              "en": "How… filling."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Да, мало",
+            "en": "No, it's not"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Вот видите. Мы похожи.",
+              "en": "You see. We're alike."
+            }
+          },
+          "next": "end",
+          "set": {
+            "gluttony": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Я поем за двоих.",
+              "en": "I'll eat for two."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

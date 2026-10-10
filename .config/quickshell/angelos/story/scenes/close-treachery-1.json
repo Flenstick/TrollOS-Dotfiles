@@ -1,0 +1,84 @@
+{
+  "id": "close-treachery-1",
+  "title": {
+    "ru": "Предательство: знакомая",
+    "en": "Treachery: acquainted"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"treachery\" and closeness == 1",
+      "next": "ask",
+      "note": "the demon of treachery and the player: closeness acquainted (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "…Ты вернул{g:ся|ась|ся(ась)}. Почему?",
+        "en": "…You came back. Why?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "К тебе",
+            "en": "For you"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "…Тепло.",
+              "en": "…Warm."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Случайно",
+            "en": "By chance"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Лёд.",
+              "en": "Ice."
+            }
+          },
+          "next": "end",
+          "set": {
+            "treachery": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "…Да.",
+              "en": "…Yes."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

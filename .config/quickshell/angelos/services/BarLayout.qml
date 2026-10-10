@@ -9,10 +9,24 @@ Singleton {
     id: root
 
     readonly property var sections: ["left", "center", "right"]
+    // the bar's looks (Settings → Bar → Style) and the ones along the bottom edge (their
+    // popups and menus open upwards)
+    readonly property var styles: ["taskbar", "top", "island", "dock", "capsules", "windose", "windows"]   // windows: TrollOS (modules/bar/win)
+    readonly property string style: styles.includes(Config.bar.style) ? Config.bar.style : "taskbar"
+    // the taskbar sits on any edge, like Windows 10 (Config.bar.edge); on the left or the right
+    // it stands upright (BarContent.vertical) and its menus open sideways (`side`)
+    readonly property var edges: ["bottom", "top", "left", "right"]
+    readonly property string edge: style === "taskbar" && edges.includes(Config.bar.edge) ? Config.bar.edge : style === "top" || style === "island" || style === "capsules" ? "top" : "bottom"
+    readonly property bool vertical: edge === "left" || edge === "right"
+    readonly property string side: vertical ? edge : ""
+    readonly property bool bottom: edge === "bottom"
+    // while the demon rules the looks have hell versions of their own (Y2K → Bar in hell):
+    // the content re-inked (shaders/hell_ink.frag), the frame each style's own — not the dock
+    readonly property bool hell: Config.ready && Angel.demon && Config.y2k.hellBar
     readonly property var defaults: ({
             "left": ["start", "workspaces", "tasks"],
             "center": ["lyrics"],
-            "right": ["media", "tray", "layout", "volume", "bell", "clock"]
+            "right": ["media", "tray", "layout", "wired", "wifi", "bluetooth", "battery", "volume", "bell", "clock"]
         })
     readonly property var meta: ({
             "start": {
@@ -50,6 +64,28 @@ Singleton {
             "bell": {
                 "label": I18n.t("Уведомления", "Notifications"),
                 "icon": "bell"
+            },
+            // issue #19: network status with a panel each; hidden where there is no such hardware
+            "wired": {
+                "label": I18n.t("Проводная сеть", "Wired network"),
+                "icon": "ethernet",
+                "before": "volume"
+            },
+            "wifi": {
+                "label": "Wi-Fi",
+                "icon": "wifi",
+                "before": "volume"
+            },
+            "bluetooth": {
+                "label": "Bluetooth",
+                "icon": "bluetooth",
+                "before": "volume"
+            },
+            // laptops: hidden where there is no battery
+            "battery": {
+                "label": I18n.t("Батарея", "Battery"),
+                "icon": "battery",
+                "before": "volume"
             },
             "clock": {
                 "label": I18n.t("Часы", "Clock"),
@@ -93,7 +129,15 @@ Singleton {
         const custom = !!(cfg.left || cfg.center || cfg.right);
         const fresh = pluginIds.filter(id => !placed[id] && !hid.includes(id));
         const missing = custom ? Object.keys(meta).filter(id => !placed[id] && !hid.includes(id)) : [];
-        out.right = fresh.concat(out.right, missing);
+        out.right = fresh.concat(out.right);
+        // a new built-in with a place of its own ("before") goes there, the rest to the end
+        for (const id of missing) {
+            const at = meta[id].before ? out.right.indexOf(meta[id].before) : -1;
+            if (at >= 0)
+                out.right.splice(at, 0, id);
+            else
+                out.right.push(id);
+        }
         return out;
     }
     readonly property var all: effective.left.concat(effective.center, effective.right)

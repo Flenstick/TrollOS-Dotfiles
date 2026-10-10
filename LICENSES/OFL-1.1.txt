@@ -1,6 +1,11 @@
 The fonts below are licensed under the SIL Open Font License, Version 1.1 (the text follows).
 
 Pixeloid Sans, Pixeloid Mono — © 2020-2022 GGBotNet (.local/share/fonts/pixel/)
+Caveat — Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)
+Jacquard 12, Jacquard 24 — Copyright 2023 The Soft Type Project Authors (https://github.com/scfried/soft-type-jacquard)
+Jacquard 12 Hell — a modified Jacquard 12 (Cyrillic added): Copyright 2023 The Soft Type Project Authors;
+  Cyrillic: Copyright 2026 the angelOS contributors
+Departure Mono — Copyright 2022–2024 Helena Zhang
 Pixelify Sans — Copyright 2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans)
 
 -----------------------------------------------------------

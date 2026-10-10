@@ -1,0 +1,21 @@
+-- clangd 22+ requires an explicit boolean for --function-arg-placeholders
+return {
+  {
+    "neovim/nvim-lspconfig",
+    opts = {
+      servers = {
+        clangd = {
+          cmd = {
+            "clangd",
+            "--background-index",
+            "--clang-tidy",
+            "--header-insertion=iwyu",
+            "--completion-style=detailed",
+            "--function-arg-placeholders=true",
+            "--fallback-style=llvm",
+          },
+        },
+      },
+    },
+  },
+}

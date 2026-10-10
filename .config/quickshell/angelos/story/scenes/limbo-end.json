@@ -1,0 +1,31 @@
+{
+  "id": "limbo-end",
+  "title": {
+    "ru": "Лимб",
+    "en": "Limbo"
+  },
+  "draft": true,
+  "with": "any",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "limbo",
+      "next": "say",
+      "note": "too many trials answered with silence this fall (game.json limboAfter)"
+    },
+    "say": {
+      "type": "say",
+      "who": "narrator",
+      "text": {
+        "ru": "Ты не выбрал{g:|а|(а)}. Здесь никто не выбирает. Здесь просто ждут.",
+        "en": "You did not choose. Nobody here chooses. Here they simply wait."
+      },
+      "next": "end"
+    },
+    "end": {
+      "type": "exit",
+      "outcome": "limbo"
+    }
+  }
+}

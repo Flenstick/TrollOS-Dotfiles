@@ -1,0 +1,84 @@
+{
+  "id": "close-limbo-3",
+  "title": {
+    "ru": "Лимб: своя",
+    "en": "Limbo: your own"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"limbo\" and closeness == 3",
+      "next": "ask",
+      "note": "the demon of limbo and the player: closeness own (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Я больше не веду ваше дело. Я его закрыла. Вы останетесь — просто так?",
+        "en": "I don't keep your file any more. I closed it. Will you stay — just like that?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Останусь",
+            "en": "I'll stay"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Тогда туман — наш.",
+              "en": "Then the fog is ours."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Мне нужно дальше",
+            "en": "I have to go on"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Идите. Я подожду. Я умею.",
+              "en": "Go. I'll wait. I'm good at it."
+            }
+          },
+          "next": "end",
+          "set": {
+            "limbo": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Я поняла.",
+              "en": "I understand."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

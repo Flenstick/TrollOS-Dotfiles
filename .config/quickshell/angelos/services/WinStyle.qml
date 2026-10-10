@@ -131,6 +131,6 @@ Singleton {
     }
 
     readonly property string userName: Quickshell.env("USER") || "user"
-    // Settings → profile picture first (TrollOS), else the AccountsService icon
-    readonly property string avatar: Config.profile.avatar ? "file://" + Config.expand(Config.profile.avatar) : "file:///var/lib/AccountsService/icons/" + userName
+    // the Start avatar (Settings → Bar → Start) first, else the AccountsService icon
+    readonly property string avatar: Config.bar.avatar ? "file://" + Config.expand(Config.bar.avatar) : "file:///var/lib/AccountsService/icons/" + userName
 }

@@ -5,13 +5,18 @@ import qs.config
 import qs.services
 import qs.widgets
 
+// The volume mixer on the bar. One fixed size: devices on top, programs in a scrolling
+// list below — the window no longer grows and shrinks (and jumps around its anchor)
+// whenever a program starts or stops playing, or angelOS clicks (Audio.appStreams).
 BarPopup {
     id: root
 
-    title: I18n.t("звук.exe", "audio.exe")
+    title: I18n.exe(I18n.t("звук", "audio"))
     icon: "speaker"
     contentWidth: Theme.u * 170
-    contentHeight: col.implicitHeight
+    contentHeight: Theme.u * 214
+
+    readonly property int rowH: Theme.u * 12
 
     Column {
         id: col
@@ -33,9 +38,11 @@ BarPopup {
         }
         Row {
             width: parent.width
+            height: root.rowH
             spacing: Theme.u * 3
             PxButton {
                 compact: true
+                anchors.verticalCenter: parent.verticalCenter
                 icon: Audio.muted ? "speakerMute" : "speaker"
                 onClicked: Audio.toggleMute()
             }
@@ -54,9 +61,10 @@ BarPopup {
             kind: "title"
             text: I18n.t("Микрофон", "Microphone")
         }
+        // always there (greyed out with one microphone): a combo that comes and goes moved everything under it
         PxCombo {
-            visible: Audio.sources.length > 1
             width: parent.width
+            enabled: Audio.sources.length > 1
             model: Audio.sources.map(n => ({
                         "label": Audio.nodeName(n),
                         "value": n.id
@@ -66,9 +74,11 @@ BarPopup {
         }
         Row {
             width: parent.width
+            height: root.rowH
             spacing: Theme.u * 3
             PxButton {
                 compact: true
+                anchors.verticalCenter: parent.verticalCenter
                 icon: Audio.micMuted ? "micMute" : "mic"
                 onClicked: Audio.toggleMic()
             }
@@ -89,6 +99,7 @@ BarPopup {
         // live input level: talk and watch it move (only measured while this is open)
         Row {
             width: parent.width
+            height: root.rowH
             spacing: Theme.u * 3
             PxIcon {
                 name: micLevel.clipping ? "warn" : "mic"
@@ -114,31 +125,75 @@ BarPopup {
             }
         }
         PxText {
-            visible: Audio.streams.length > 0
             kind: "title"
-            text: I18n.t("Приложения", "Applications")
+            text: I18n.t("Приложения", "Applications") + (Audio.appStreams.length ? "  " + Audio.appStreams.length : "")
         }
-        Repeater {
-            model: Audio.streams
+    }
+
+    // the programs: the rest of the window, scrolling when there are many
+    PxBox {
+        y: col.height + Theme.u * 3
+        width: parent.width
+        height: root.contentHeight - y
+        sunken: true
+        color: Theme.mix(Theme.sunken, Theme.face, 0.5)
+
+        PxText {
+            visible: Audio.appStreams.length === 0
+            anchors.centerIn: parent
+            text: I18n.t("сейчас ничего не звучит", "No audio is playing")
+            dim: true
+        }
+        PxScroll {
+            id: apps
+            anchors.fill: parent
+            anchors.margins: Theme.u * 3
+            contentHeight: list.implicitHeight
             Column {
-                id: s
-                required property var modelData
-                width: col.width
-                spacing: Theme.u
-                PxText {
-                    width: parent.width
-                    elide: Text.ElideRight
-                    text: s.modelData.properties["application.name"] || Audio.nodeName(s.modelData)
-                    dim: true
-                }
-                PxSlider {
-                    width: parent.width
-                    from: 0
-                    to: 1.5
-                    value: s.modelData.audio ? s.modelData.audio.volume : 0
-                    valueScale: 100
-                    suffix: "%"
-                    onMoved: v => s.modelData.audio.volume = v
+                id: list
+                width: apps.flick.width
+                spacing: Theme.u * 3
+                Repeater {
+                    model: Audio.appStreams
+                    Column {
+                        id: s
+                        required property var modelData
+                        width: list.width
+                        spacing: Theme.u
+                        PxText {
+                            width: parent.width
+                            elide: Text.ElideRight
+                            text: Audio.streamName(s.modelData)
+                            dim: true
+                        }
+                        Row {
+                            width: parent.width
+                            height: root.rowH
+                            spacing: Theme.u * 3
+                            PxButton {
+                                compact: true
+                                anchors.verticalCenter: parent.verticalCenter
+                                icon: s.modelData.audio && s.modelData.audio.muted ? "speakerMute" : "speaker"
+                                onClicked: if (s.modelData.audio)
+                                    s.modelData.audio.muted = !s.modelData.audio.muted
+                            }
+                            PxSlider {
+                                width: parent.width - Theme.u * 20
+                                anchors.verticalCenter: parent.verticalCenter
+                                from: 0
+                                to: 1.5
+                                // a stream not bound yet reads 0: keep the slider still until it is
+                                enabled: !!s.modelData.audio
+                                value: s.modelData.audio ? s.modelData.audio.volume : 1
+                                valueScale: 100
+                                suffix: "%"
+                                onMoved: v => {
+                                    if (s.modelData.audio)
+                                        s.modelData.audio.volume = v;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

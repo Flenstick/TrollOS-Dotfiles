@@ -11,12 +11,17 @@ Item {
     required property string screenName
     property bool above: true
     property bool showDate: true
+    // the hell bar (BarItem): the circle's text colours; the calendar open is its state
+    property bool barInk: false
+    readonly property bool barOpen: panel.visible
 
     implicitWidth: col.implicitWidth + Theme.u * 8
     implicitHeight: col.implicitHeight
 
+    // stands still under a fullscreen game or the lock screen
     SystemClock {
         id: clock
+        enabled: !Shell.hiddenScreen(root.screenName)
         precision: Config.bar.showSeconds ? SystemClock.Seconds : SystemClock.Minutes
     }
 
@@ -25,15 +30,17 @@ Item {
         anchors.centerIn: parent
         PxText {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: Qt.formatTime(clock.date, Config.bar.showSeconds ? "HH:mm:ss" : "HH:mm")
+            text: I18n.time(clock.date, Config.bar.showSeconds)
             kind: root.showDate ? "body" : "title"
+            color: root.barInk ? (root.barOpen ? Theme.hellAccent : Theme.hellText) : Theme.text
         }
         PxText {
             visible: root.showDate
             anchors.horizontalCenter: parent.horizontalCenter
-            text: Qt.locale("ru_RU").toString(clock.date, "ddd d MMM")
+            text: I18n.locale.toString(clock.date, I18n.english ? "ddd, MMM d" : "ddd d MMM")
             kind: "tiny"
             dim: true
+            color: root.barInk ? Theme.hellTextDim : Theme.textDim
         }
     }
 

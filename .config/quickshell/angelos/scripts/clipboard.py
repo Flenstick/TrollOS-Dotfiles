@@ -2,7 +2,11 @@
 """angelOS clipboard history helper (text and images).
 
   clipboard.py capture          run by `wl-paste --watch`: prints one JSON entry
-                                for the new clipboard content (or nothing)
+                                for the new clipboard content (or nothing). The
+                                content wl-paste pipes in is always there; asking
+                                the clipboard again (for the image next to a text,
+                                or the type list) may fail when the owner is gone
+                                or busy, so that data is the fallback (issue #20)
   clipboard.py copy             reads one JSON entry on stdin, puts it back with wl-copy
   clipboard.py prune ID...      deletes stored images whose ids are not listed
 
@@ -85,16 +89,57 @@ def private_store():
     STORE.chmod(0o700)
 
 
+def sniff_image(data):
+    """the MIME type of image bytes, by their header"""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data[:2] == b"BM" and len(data) > 26:
+        return "image/bmp"
+    return None
+
+
+def piped():
+    """what `wl-paste --watch` handed over on stdin (b"" when run by hand)"""
+    if sys.stdin is None or sys.stdin.isatty():
+        return b""
+    try:
+        return sys.stdin.buffer.read(MAX_IMAGE + 1)
+    except OSError:
+        return b""
+
+
 def capture():
+    # wl-clipboard ≥ 2.2 says what happened: data | nil | clear | sensitive
+    state = os.environ.get("CLIPBOARD_STATE", "data")
+    if state in ("nil", "clear", "sensitive"):
+        return 0
+    given = piped()
     types = [t.strip() for t in wl_paste("--list-types").decode("utf-8", "replace").splitlines() if t.strip()]
-    if not types or any(t in types for t in SECRET_TYPES):
+    if not types and not given:
+        # a busy owner: one more try before giving up
+        import time
+        time.sleep(0.15)
+        types = [t.strip() for t in wl_paste("--list-types").decode("utf-8", "replace").splitlines() if t.strip()]
+    if any(t in types for t in SECRET_TYPES):
         return 0
     image = next((m for m in IMAGE_TYPES if m in types), None)
     text_type = next((t for t in types if t == "text/plain" or t.startswith("text/plain;") or t == "UTF8_STRING"), None)
     if image and text_type and any(t.startswith(RICH_TEXT_HINTS) for t in types):
         image = None
+    given_image = sniff_image(given) if given else None
+    if not types and given:
+        # the owner no longer answers: go by what was piped in
+        image, text_type = given_image, None if given_image else "text/plain"
     if image:
-        data = wl_paste("--type", image, limit=MAX_IMAGE)
+        data = given if given_image == image else wl_paste("--type", image, limit=MAX_IMAGE)
+        if not data and given_image:
+            image, data = given_image, given
         if not data or len(data) > MAX_IMAGE:
             return 0
         digest = hashlib.sha256(data).hexdigest()[:32]
@@ -110,7 +155,8 @@ def capture():
         entry = {"kind": "image", "id": digest, "mime": image, "path": str(path),
                  "width": w, "height": h, "bytes": len(data)}
     elif text_type:
-        raw = wl_paste("--type", text_type, limit=MAX_TEXT)
+        # wl-paste pipes the text type in when there is one; ask again only if not
+        raw = given if given and not given_image else wl_paste("--type", text_type, limit=MAX_TEXT)
         if len(raw) > MAX_TEXT:
             return 0
         text = raw.decode("utf-8", "replace")

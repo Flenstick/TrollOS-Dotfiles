@@ -29,9 +29,11 @@ PopupWindow {
     function openFor(item, w) {
         win = w;
         const p = item.mapToItem(anchorItem, 0, 0);
-        anchor.rect.x = p.x;
-        anchor.rect.y = above ? p.y : p.y + item.height;
-        anchor.rect.width = item.width;
+        // a taskbar on the left or the right: beside the button, from its top down
+        anchor.rect.x = side === "left" ? p.x + item.width + Theme.u * 2 : side === "right" ? p.x - Theme.u * 2 : p.x;
+        anchor.rect.y = side ? p.y : above ? p.y : p.y + item.height;
+        anchor.rect.width = side ? 1 : item.width;
+        anchor.rect.height = side ? item.height : 1;
         if (!visible && !reopening) {
             visible = true;
             return;
@@ -56,10 +58,10 @@ PopupWindow {
             fn(w);
     }
 
+    property string side: BarLayout.side
     anchor.item: anchorItem
-    anchor.rect.height: 1
-    anchor.edges: above ? Edges.Top | Edges.Left : Edges.Bottom | Edges.Left
-    anchor.gravity: above ? Edges.Top | Edges.Right : Edges.Bottom | Edges.Right
+    anchor.edges: side === "left" ? Edges.Top | Edges.Right : side === "right" ? Edges.Top | Edges.Left : above ? Edges.Top | Edges.Left : Edges.Bottom | Edges.Left
+    anchor.gravity: side === "left" ? Edges.Bottom | Edges.Right : side === "right" ? Edges.Bottom | Edges.Left : above ? Edges.Top | Edges.Right : Edges.Bottom | Edges.Right
     anchor.adjustment: PopupAdjustment.Flip | PopupAdjustment.Slide
     grabFocus: !Shell.demo
     visible: false
@@ -106,7 +108,7 @@ PopupWindow {
                 PxText {
                     anchors.verticalCenter: parent.verticalCenter
                     width: column.width - Theme.u * 24
-                    text: root.win ? root.win.title || root.win.app_id || "?" : ""
+                    text: root.win ? Niri.titleOf(root.win) || root.win.app_id || "?" : ""
                     elide: Text.ElideRight
                     font.bold: true
                 }
@@ -119,14 +121,49 @@ PopupWindow {
                 icon: "maximize"
                 onTriggered: root.run(w => Niri.fullscreenWindow(w.id))
             }
+            // the column width of this window, now (#53: Settings → Windows → Window widths
+            // only sets it for windows opened later)
+            Item {
+                visible: !!root.win && !root.win.is_floating
+                width: parent.width
+                height: visible ? widths.implicitHeight + Theme.u * 3 : 0
+                implicitWidth: Theme.u * 150
+                Flow {
+                    id: widths
+                    x: Theme.u * 5
+                    y: Theme.u
+                    width: parent.width - Theme.u * 10
+                    spacing: Theme.u
+                    PxText {
+                        height: Theme.sizeBody + Theme.u * 6
+                        verticalAlignment: Text.AlignVCenter
+                        rightPadding: Theme.u * 2
+                        text: I18n.t("Ширина", "Width")
+                        dim: true
+                    }
+                    Repeater {
+                        model: WindowConfig.choices
+                        PxButton {
+                            required property var modelData
+                            compact: true
+                            text: modelData.label
+                            onClicked: root.run(w => Quickshell.execDetached(["niri", "msg", "action", "set-window-width", "--id", String(w.id), WindowConfig.niriArg(modelData.value)]))
+                        }
+                    }
+                }
+            }
             PxMenuItem {
                 text: I18n.t("Развернуть до краёв", "Maximize to edges")
                 icon: "width"
+                visible: Config.windows && Config.windows.floatButtons === true
+                height: visible ? implicitHeight : 0
                 onTriggered: root.run(w => Niri.maximizeWindow(w.id))
             }
             PxMenuItem {
                 text: root.win && root.win.is_floating ? I18n.t("Вернуть в сетку", "Back to tiling") : I18n.t("Сделать плавающим", "Make floating")
                 icon: "layers"
+                visible: Config.windows && Config.windows.floatButtons === true
+                height: visible ? implicitHeight : 0
                 onTriggered: root.run(w => Niri.toggleFloating(w.id))
             }
             // move to workspace N of the same output
@@ -168,6 +205,15 @@ PopupWindow {
                     icon: "monitor"
                     onTriggered: root.run(w => Niri.moveWindowToMonitor(w.id, modelData))
                 }
+            }
+            // the cobweb (services/Cobweb): the shake's quick-time event without shaking — or,
+            // when it is only on the button, just swept away
+            PxMenuItem {
+                text: I18n.t("Стряхнуть паутину", "Shake the web off")
+                icon: "spider"
+                visible: !!root.win && (Cobweb.rev, Cobweb.alive(root.win.id) > 0)
+                height: visible ? implicitHeight : 0
+                onTriggered: root.run(w => Cobweb.inside && Cobweb.rectOf(w.id) ? Cobweb.startQte(w.id) : Cobweb.sweep(w.id))
             }
             PxMenuItem {
                 separator: true

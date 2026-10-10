@@ -22,7 +22,7 @@ Variants {
         Connections {
             target: Niri
             function onWorkspaceActivated(ws, focused) {
-                if (ws.output !== scope.screenName || Niri.overviewOpen || ws.name === "privacy")
+                if (ws.output !== scope.screenName || Niri.overviewOpen)
                     return;
                 scope.ws = ws;
                 scope.serial++;

@@ -53,8 +53,8 @@ Singleton {
         }
     }
 
-    IdleMonitor {
-        enabled: Config.idle.minutes > 0 && !root.active && !Shell.locked
+    IdleWatch {
+        enabled: Config.idle.minutes > 0 && !root.active && !Shell.locked && !Shell.setupLocked
         timeout: Math.max(1, Config.idle.minutes) * 60
         respectInhibitors: true
         onIsIdleChanged: if (isIdle)

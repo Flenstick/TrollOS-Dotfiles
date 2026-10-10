@@ -1,0 +1,100 @@
+{
+  "id": "trial-violence",
+  "title": {
+    "ru": "Испытание: Насилие",
+    "en": "Trial: Violence"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "trial",
+      "cond": "circle == \"violence\"",
+      "next": "pactCheck",
+      "note": "a try to get out of this circle (Ask → Seek the way out, the wheel's plea)"
+    },
+    "pactCheck": {
+      "type": "if",
+      "cond": "attempts >= pactAfter and not pact",
+      "then": "toPact",
+      "else": "ask"
+    },
+    "toPact": {
+      "type": "scene",
+      "to": "pact"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Сломай что-нибудь. Меня, например. Тебе ведь не впервой — ты бросил{g:|а|(а)} её вниз.",
+        "en": "Break something. Me, for instance. It's not your first time — you threw her down."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Опустить руку",
+            "en": "Lower my hand"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Рука опустилась. Песок под ногами остыл. Иди.",
+              "en": "The hand is down. The sand under your feet cooled. Go."
+            }
+          },
+          "next": "down"
+        },
+        {
+          "text": {
+            "ru": "Ударить",
+            "en": "Strike"
+          },
+          "tone": "negative",
+          "set": {
+            "violence": "+1"
+          },
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Река поднялась на ладонь.",
+              "en": "The river rose by a hand."
+            }
+          },
+          "next": "stay"
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Ветви шепчут за тебя. Ничего хорошего.",
+              "en": "The branches whisper for you. Nothing good."
+            }
+          },
+          "next": "stay"
+        }
+      ],
+      "shuffle": true
+    },
+    "stay": {
+      "type": "circle",
+      "to": "stay"
+    },
+    "down": {
+      "type": "circle",
+      "to": "deeper"
+    }
+  }
+}

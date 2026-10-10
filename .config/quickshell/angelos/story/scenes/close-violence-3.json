@@ -1,0 +1,84 @@
+{
+  "id": "close-violence-3",
+  "title": {
+    "ru": "Насилие: своя",
+    "en": "Violence: your own"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"violence\" and closeness == 3",
+      "next": "ask",
+      "note": "the demon of violence and the player: closeness own (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Я больше не хочу ранить. Научишь, как это — по-другому?",
+        "en": "I don't want to wound any more. Will you teach me how to be otherwise?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Научу",
+            "en": "I will"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Тогда начнём с руки. Вот моя.",
+              "en": "Then let's start with a hand. Here's mine."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Ты не умеешь иначе",
+            "en": "You can't be otherwise"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Может быть. Попробую.",
+              "en": "Maybe. I'll try."
+            }
+          },
+          "next": "end",
+          "set": {
+            "violence": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Ты уже учишь. Молча.",
+              "en": "You're already teaching me. In silence."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

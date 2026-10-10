@@ -15,6 +15,8 @@ Item {
     property double lastAt: 0
 
     function spawn(x, y) {
+        if (Motion.still)
+            return;
         const now = Date.now();
         if (now - lastAt < 35 || Math.abs(x - last.x) + Math.abs(y - last.y) < Theme.u * 4)
             return;
@@ -51,7 +53,7 @@ Item {
                     id: fall
                     target: spark
                     property: "y"
-                    duration: 700
+                    duration: Motion.ms(700)
                     easing.type: Easing.InQuad
                 }
                 NumberAnimation {
@@ -59,7 +61,7 @@ Item {
                     property: "opacity"
                     from: 1
                     to: 0
-                    duration: 700
+                    duration: Motion.ms(700)
                     easing.type: Easing.InQuad
                 }
             }

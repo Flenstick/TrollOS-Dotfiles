@@ -5,13 +5,14 @@ import Quickshell
 import qs.config
 import qs.services
 import qs.widgets
+import qs.modules.desktop
 import qs.modules.desktop.widgets
 
 // Sidebar contents: quick toggles, media + sound, system stats, AI limits.
 PxWindow {
     id: root
 
-    title: "sidebar.exe"
+    title: I18n.exe("sidebar")
     icon: "layers"
     compact: true
     width: Theme.u * 150
@@ -26,6 +27,22 @@ PxWindow {
             "label": I18n.t("Тишина", "Silence"),
             "on": Config.notifications.dnd,
             "act": () => Config.notifications.dnd = !Config.notifications.dnd
+        },
+        {
+            // stream mode (services/StreamMode): on by hand; OBS switches it by itself
+            "id": "stream",
+            "icon": "monitor",
+            "label": StreamMode.active ? I18n.t("В эфире", "Live") : I18n.t("Стрим", "Stream"),
+            "on": StreamMode.active,
+            "act": () => StreamMode.set("toggle")
+        },
+        {
+            // services/Awake: no idle screen, lock or sleep; also on by itself while streaming or full-screen
+            "id": "awake",
+            "icon": "coffee",
+            "label": Awake.active && !Awake.manual ? I18n.t("Не сплю (авто)", "Awake (auto)") : I18n.t("Не спать", "Stay awake"),
+            "on": Awake.active,
+            "act": () => Awake.set("toggle")
         },
         {
             "id": "theme",
@@ -160,7 +177,7 @@ PxWindow {
                 visible: Sidebar.has("media") && !!Lyrics.player && Lyrics.title !== ""
                 width: parent.width
                 spacing: Theme.u * 2
-                NowPlayingWidget {
+                MusicPlayer {
                     width: parent.width
                     height: implicitHeight
                 }

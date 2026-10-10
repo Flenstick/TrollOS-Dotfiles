@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Read or set niri's workspace-switch animation (cfg/animation.kdl) and whether
-the workspace keys go through angelOS (cfg/keybinds.kdl).
+the workspace keys go through angelOS (both themes' key profiles, cfg/keybinds-*.kdl).
 
-  workspace-anim.py                          -> {"preset": "soft|dash|instant|custom", "routed": bool}
-  workspace-anim.py <preset> [--route|--native]
+  workspace-anim.py                          -> {"preset": "soft|dash|instant|custom", "routed": bool,
+                                                 "slowdown": float, "speed": float, "ms": int}
+  workspace-anim.py <preset> [--route|--native] [--speed X]
       write it: a staged copy is validated with `niri validate`, the old files are
       backed up under ~/.local/state/angelos/backups/anim-*, and restored if the
       final validation fails.
 
+--speed X divides the preset's duration by X (2 = twice as fast; 0.25–4).
 --route turns `focus-workspace N / -up / -down / -previous` binds into
 `spawn-sh "exec …/bin/angelos ws N"` (the shell captures the screen for its
 transition, then asks niri to switch; niri is called directly if the shell is
@@ -25,14 +27,27 @@ import tempfile
 
 PRESETS = {
     # ease-out-quint: starts right away, settles softly
-    "soft": 'duration-ms 380\ncurve "cubic-bezier" 0.22 1 0.36 1',
+    "soft": (380, 'curve "cubic-bezier" 0.22 1 0.36 1'),
     # slow start, a dash, a tidy stop
-    "dash": 'duration-ms 460\ncurve "cubic-bezier" 0.8 0 0.12 1',
-    "instant": "off",
+    "dash": (460, 'curve "cubic-bezier" 0.8 0 0.12 1'),
+    # very quick, a sharp stop
+    "snap": (170, 'curve "ease-out-expo"'),
+    "instant": None,
 }
+# niri's spring: a touch of overshoot. Speed X scales the stiffness by X² (the period by 1/X);
+# its length is only an estimate (for the desktop widgets' pictures, Settings)
+SPRING = (0.62, 620, 520)  # damping ratio, stiffness, ~ms
+SPRING_RE = re.compile(r"spring damping-ratio=([0-9.]+) stiffness=(\d+) epsilon=[0-9.]+")
 CONFIG = Path.home() / ".config/niri/config.kdl"
 ANIMATIONS = CONFIG.parent / "cfg/animation.kdl"
-KEYBINDS = CONFIG.parent / "cfg/keybinds.kdl"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import keyprofile  # noqa: E402
+# the workspace keys of the theme in front (its key profile, scripts/keyprofile.py)
+KEYBINDS = keyprofile.path()
+# routing is one setting for both themes: every theme's profile is written, or the keys of
+# the theme not in front stay as they were and its switch has no animation after a theme change
+ROUTE_FILES = [p for p in (keyprofile.CFG / keyprofile.FILES[n] for n in keyprofile.PROFILES) if p.exists()] \
+    if keyprofile.current() else [KEYBINDS]
 BACKUPS = Path.home() / ".local/state/angelos/backups"
 BLOCK = re.compile(r"(?m)^([ \t]*)workspace-switch\s*\{([^{}]*)\}")
 ANGELOS = "exec ~/.config/quickshell/angelos/bin/angelos ws "
@@ -45,16 +60,44 @@ def normalize(body):
     return re.sub(r"\s+", " ", body).strip()
 
 
+def clamp_speed(speed):
+    return max(0.25, min(4.0, float(speed)))
+
+
+def body_of(preset, speed=1.0):
+    if preset == "spring":
+        damping, stiffness, _ = SPRING
+        return f"spring damping-ratio={damping} stiffness={round(stiffness * clamp_speed(speed) ** 2)} epsilon=0.0001"
+    if PRESETS[preset] is None:
+        return "off"
+    ms, curve = PRESETS[preset]
+    return f"duration-ms {max(40, round(ms / clamp_speed(speed)))}\n{curve}"
+
+
 def current(text):
+    """(preset, speed, duration ms) of the workspace-switch block"""
     match = BLOCK.search(text)
     if not match:
-        return "soft"
+        return "soft", 1.0, PRESETS["soft"][0]
     body = normalize(match.group(2))
-    return next((name for name, value in PRESETS.items() if normalize(value) == body), "custom")
+    if body == "off":
+        return "instant", 1.0, 0
+    m = SPRING_RE.fullmatch(body)
+    if m and float(m.group(1)) == SPRING[0] and int(m.group(2)) > 0:
+        speed = round((int(m.group(2)) / SPRING[1]) ** 0.5, 3)
+        return "spring", speed, round(SPRING[2] / speed)
+    for name, value in PRESETS.items():
+        if value is None:
+            continue
+        m = re.fullmatch(r"duration-ms (\d+) " + re.escape(normalize(value[1])), body)
+        if m and int(m.group(1)) > 0:
+            return name, round(value[0] / int(m.group(1)), 3), int(m.group(1))
+    m = re.search(r"duration-ms (\d+)", body)
+    return "custom", 1.0, int(m.group(1)) if m else 0
 
 
-def update(text, preset):
-    body = PRESETS[preset]
+def update(text, preset, speed=1.0):
+    body = body_of(preset, speed)
     match = BLOCK.search(text)
     indent = match.group(1) if match else None
     if indent is None:
@@ -67,6 +110,12 @@ def update(text, preset):
     if match:
         return text[:match.start()] + block + text[match.end():]
     return text[:opening.end()] + "\n" + block + text[opening.end():]
+
+
+def slowdown(text):
+    """animations { slowdown N }: niri stretches every animation by it"""
+    match = re.search(r"(?m)^[ \t]*slowdown\s+([0-9]*\.?[0-9]+)", text)
+    return float(match.group(1)) if match else 1.0
 
 
 def routed(text):
@@ -114,16 +163,16 @@ def atomic_write(path, content):
             os.unlink(name)
 
 
-def save(preset, route_mode):
-    if preset not in PRESETS:
+def save(preset, route_mode, speed=1.0):
+    if preset not in PRESETS and preset != "spring":
         raise ValueError("unknown preset: " + preset)
     BACKUPS.mkdir(parents=True, exist_ok=True)
     with (BACKUPS / ".anim.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        old = {ANIMATIONS: ANIMATIONS.read_text(), KEYBINDS: KEYBINDS.read_text()}
-        new = {ANIMATIONS: update(old[ANIMATIONS], preset), KEYBINDS: old[KEYBINDS]}
-        if route_mode is not None:
-            new[KEYBINDS] = route(old[KEYBINDS], route_mode)
+        old = {ANIMATIONS: ANIMATIONS.read_text(), **{p: p.read_text() for p in ROUTE_FILES}}
+        new = {ANIMATIONS: update(old[ANIMATIONS], preset, speed)}
+        for p in ROUTE_FILES:
+            new[p] = old[p] if route_mode is None else route(old[p], route_mode)
         changed = [p for p in new if new[p] != old[p]]
         if not changed:
             return "Unchanged"
@@ -153,10 +202,15 @@ def save(preset, route_mode):
 def main():
     try:
         if len(sys.argv) == 1:
-            print(json.dumps({"preset": current(ANIMATIONS.read_text()), "routed": routed(KEYBINDS.read_text())}))
+            text = ANIMATIONS.read_text()
+            preset, speed, ms = current(text)
+            print(json.dumps({"preset": preset, "speed": speed, "ms": ms, "routed": routed(KEYBINDS.read_text()), "slowdown": slowdown(text)}))
         else:
             mode = True if "--route" in sys.argv else False if "--native" in sys.argv else None
-            print(json.dumps({"ok": save(sys.argv[1], mode)}))
+            speed = 1.0
+            if "--speed" in sys.argv:
+                speed = clamp_speed(sys.argv[sys.argv.index("--speed") + 1])
+            print(json.dumps({"ok": save(sys.argv[1], mode, speed)}))
     except (OSError, ValueError, RuntimeError) as error:
         print(json.dumps({"error": str(error)}))
         return 1

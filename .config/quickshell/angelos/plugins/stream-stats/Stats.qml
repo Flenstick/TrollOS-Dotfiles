@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.services
 
 // Shared numbers for the stream-stats plugin (0..1).
 Singleton {
@@ -15,7 +16,7 @@ Singleton {
 
     Timer {
         interval: 2000
-        running: true
+        running: !Shell.locked   // nothing to show behind the lock screen
         repeat: true
         triggeredOnStart: true
         onTriggered: {

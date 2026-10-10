@@ -1,0 +1,84 @@
+{
+  "id": "close-lust-1",
+  "title": {
+    "ru": "Похоть: знакомая",
+    "en": "Lust: acquainted"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"lust\" and closeness == 1",
+      "next": "ask",
+      "note": "the demon of lust and the player: closeness acquainted (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Ветер сегодня тянет нас друг к другу. Сопротивляться?",
+        "en": "The wind is pulling us together today. Should we resist?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Нет",
+            "en": "No"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Вот и не надо.",
+              "en": "Then don't."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Да",
+            "en": "Yes"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Как хочешь. Ветер упрямее.",
+              "en": "As you like. The wind is more stubborn."
+            }
+          },
+          "next": "end",
+          "set": {
+            "lust": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Ты краснеешь. Ветер видит.",
+              "en": "You're blushing. The wind can see."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

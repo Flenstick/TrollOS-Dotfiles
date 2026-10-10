@@ -1,6 +1,7 @@
 import QtQuick
 import qs.config
 import qs.services
+import "A11y.js" as A11y
 
 Item {
     id: root
@@ -11,90 +12,131 @@ Item {
     property bool password: false
     property string icon: ""
     property string kind: "body"
+    readonly property string settingsSkin: Theme.settingsSkinFor(root.parent)
+    // the Golden Gate skin's System Settings: a Mac field (a capsule with a magnifier for the
+    // search, rounded otherwise), the accent's ring while typing
+    readonly property bool mac: settingsSkin === "goldengate"
+    // Enter applies and leaves the field, Esc just leaves it (issue #9) — unless
+    // the field is the whole point of its window (launcher, search, passwords)
+    property bool keepFocus: false
     signal accepted
     signal edited
     signal keyPressed(var event)
-    readonly property bool fluent: WinExtras.fluentSettings && !!Window.window && Window.window === Shell.fluentWindow
 
     implicitWidth: Theme.u * 100
-    implicitHeight: fluent ? 32 : input.font.pixelSize + Theme.u * 10
+    implicitHeight: mac ? input.font.pixelSize + GoldenGate.px(14) : input.font.pixelSize + Theme.u * 10
 
     function focusField() {
         input.forceActiveFocus();
     }
 
-    // Fluent text box: rounded, accent underline while typing
     Rectangle {
-        visible: root.fluent
+        visible: root.mac
         anchors.fill: parent
-        radius: 4
-        color: input.activeFocus ? (WinStyle.dark ? Qt.rgba(0.12, 0.12, 0.12, 0.9) : "#ffffff") : WinStyle.control
+        anchors.margins: -GoldenGate.px(3)
+        radius: height / 2
+        color: "transparent"
+        border.width: GoldenGate.px(3)
+        border.color: Qt.alpha(GoldenGate.accent, 0.45)
+        opacity: input.activeFocus ? 1 : 0
+    }
+    Rectangle {
+        visible: root.mac
+        anchors.fill: parent
+        radius: root.icon === "search" ? height / 2 : GoldenGate.px(7)
+        color: GoldenGate.dark ? Qt.rgba(1, 1, 1, 0.1) : "#ffffff"
         border.width: 1
-        border.color: WinStyle.controlLine
-        Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: parent.width - 2
-            height: input.activeFocus ? 2 : 1
-            color: input.activeFocus ? WinStyle.accent : WinStyle.controlBottom
-        }
+        border.color: GoldenGate.separator
     }
     PxBox {
         anchors.fill: parent
-        visible: !root.fluent
-        sunken: true
+        visible: root.settingsSkin === "classic"
         color: Theme.sunken
         edgeColor: input.activeFocus ? Theme.accent : Theme.edge
     }
+    Rectangle {
+        visible: root.settingsSkin !== "classic" && !root.mac
+        anchors.fill: parent
+        radius: root.settingsSkin === "stream" ? Theme.u * 2 : 0
+        color: root.settingsSkin === "stream" ? Theme.streamPanel : Theme.windoseSticker
+        border.width: Math.max(1, Theme.u / 2)
+        border.color: input.activeFocus ? Theme.accent : root.settingsSkin === "stream" ? Theme.mix(Theme.streamLive, Theme.streamPanel, 0.4) : Theme.windoseLine
+    }
 
+    MacIcon {
+        visible: root.mac && root.icon !== ""
+        anchors.centerIn: ico
+        name: root.icon === "search" ? "search" : "circle-help"
+        size: GoldenGate.px(15)
+        stroke: 2
+        color: GoldenGate.secondaryLabel
+    }
     PxIcon {
         id: ico
-        visible: root.icon !== "" && !root.fluent
+        opacity: root.mac ? 0 : 1
+        visible: root.icon !== ""
         name: root.icon || "search"
         x: Theme.u * 5
         anchors.verticalCenter: parent.verticalCenter
+        ink: root.settingsSkin === "stream" ? Theme.streamLive : root.settingsSkin === "windose" ? Theme.windoseRose : Theme.dark ? Theme.text : Theme.edge
     }
 
     TextInput {
         id: input
+        Accessible.name: A11y.name(A11y.rowLabel(root), null, root.placeholder)
         anchors.left: ico.visible ? ico.right : parent.left
         anchors.right: parent.right
-        anchors.leftMargin: root.fluent ? 11 : Theme.u * 5
-        anchors.rightMargin: root.fluent ? (root.icon !== "" ? 36 : 11) : Theme.u * 5
+        anchors.leftMargin: Theme.u * 5
+        anchors.rightMargin: Theme.u * 5
         anchors.verticalCenter: parent.verticalCenter
         clip: true
-        color: root.fluent ? WinStyle.text : Theme.text
-        selectionColor: root.fluent ? WinStyle.accent : Theme.select
-        selectedTextColor: root.fluent ? WinStyle.onAccent : Theme.selectText
-        font.family: root.fluent ? WinStyle.font : root.kind === "title" ? Theme.fontTitle : Theme.fontBody
-        font.pixelSize: root.fluent ? 14 : root.kind === "title" ? Theme.sizeTitle : Theme.sizeBody
-        font.hintingPreference: Font.PreferFullHinting
-        renderType: Text.NativeRendering
+        color: Theme.text
+        selectionColor: Theme.select
+        selectedTextColor: Theme.selectText
+        // handwritten in the grimoire (Theme.scriptWindows), like PxText
+        readonly property bool script: Theme.scriptWindows.length > 0 && Theme.scriptWindows.includes(Window.window)
+        font.family: script ? Theme.fontScript : root.mac ? Theme.macFont : root.kind === "title" ? Theme.fontTitle : Theme.fontBody
+        font.pixelSize: script ? Theme.scriptPx(root.kind === "title" ? Theme.sizeTitle : Theme.sizeBody) : root.mac ? GoldenGate.px(root.kind === "title" ? 15 : 13) : root.kind === "title" ? Theme.sizeTitle : Theme.sizeBody
+        font.hintingPreference: root.mac ? Font.PreferVerticalHinting : Font.PreferFullHinting
+        renderType: script || root.mac ? Text.QtRendering : Text.NativeRendering
         echoMode: root.password ? TextInput.Password : TextInput.Normal
         passwordCharacter: "♥"
         selectByMouse: true
-        onAccepted: root.accepted()
-        Keys.onPressed: e => root.keyPressed(e)
+        onAccepted: {
+            root.accepted();
+            if (!root.keepFocus)
+                input.focus = false;
+        }
+        Keys.onPressed: e => {
+            root.keyPressed(e);
+            if (!e.accepted && !root.keepFocus && e.key === Qt.Key_Escape) {
+                input.focus = false;
+                e.accepted = true;
+            }
+        }
         onTextEdited: root.edited()
 
         cursorDelegate: Rectangle {
-            width: root.fluent ? 1 : Theme.u * 2
-            color: root.fluent ? WinStyle.text : Theme.accent
+            id: caret
+            width: root.mac ? 1 : Theme.u * 2
+            color: root.mac ? GoldenGate.label : Theme.accent
             visible: input.activeFocus
+            onVisibleChanged: opacity = 1
             SequentialAnimation on opacity {
                 loops: Animation.Infinite
-                running: input.activeFocus
+                running: input.activeFocus && !Motion.still
+                onStopped: caret.opacity = 1
                 PropertyAction {
                     value: 1
                 }
                 PauseAnimation {
-                    duration: 480
+                    duration: Motion.ms(480)
                 }
                 PropertyAction {
                     value: 0
                 }
                 PauseAnimation {
-                    duration: 480
+                    duration: Motion.ms(480)
                 }
             }
         }
@@ -107,15 +149,5 @@ Item {
         dim: true
         font: input.font
         elide: Text.ElideRight
-    }
-    Image {
-        visible: root.fluent && root.icon !== ""
-        anchors.right: parent.right
-        anchors.rightMargin: 12
-        anchors.verticalCenter: parent.verticalCenter
-        width: 14
-        height: 14
-        sourceSize: Qt.size(28, 28)
-        source: root.fluent && root.icon ? Qt.resolvedUrl("../modules/bar/win/icons/" + (WinStyle.dark ? "d/" : "l/") + (WinStyle.fluentIcon(root.icon) || "search-regular") + ".svg") : ""
     }
 }

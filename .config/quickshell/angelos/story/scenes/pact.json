@@ -1,0 +1,81 @@
+{
+  "id": "pact",
+  "title": {
+    "ru": "Договор",
+    "en": "The pact"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "pact",
+      "next": "offer",
+      "note": "the portal in hell, or a trial after `pactAfter` failed tries"
+    },
+    "offer": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Есть короче путь. Подпиши — выйдешь сейчас. Но кое-что моё останется у тебя наверху.",
+        "en": "There's a shorter way. Sign — you're out now. But something of mine stays with you up there."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Подписать",
+            "en": "Sign"
+          },
+          "tone": "negative",
+          "set": {
+            "fraud": "+1"
+          },
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Подписано. Не теряй.",
+              "en": "Signed. Don't lose it."
+            }
+          },
+          "next": "signed"
+        },
+        {
+          "text": {
+            "ru": "Нет",
+            "en": "No"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Как хочешь. Тогда пешком.",
+              "en": "As you wish. On foot, then."
+            }
+          },
+          "next": "stay"
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "next": "stay"
+        }
+      ],
+      "shuffle": true
+    },
+    "signed": {
+      "type": "exit",
+      "outcome": "pact"
+    },
+    "stay": {
+      "type": "circle",
+      "to": "stay"
+    }
+  }
+}

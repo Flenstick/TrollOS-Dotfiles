@@ -1,0 +1,84 @@
+{
+  "id": "close-lust-2",
+  "title": {
+    "ru": "Похоть: близкая",
+    "en": "Lust: close"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"lust\" and closeness == 2",
+      "next": "ask",
+      "note": "the demon of lust and the player: closeness close (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Скажи честно: ты приходишь ко мне — или от них?",
+        "en": "Tell me honestly: do you come to me — or away from them?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "К тебе",
+            "en": "To you"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "…Повтори. Нет, не надо. Я запомнила.",
+              "en": "…Say it again. No, don't. I've kept it."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "От них",
+            "en": "Away from them"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Хоть так.",
+              "en": "Even so."
+            }
+          },
+          "next": "end",
+          "set": {
+            "lust": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Значит, ко мне. Молчание выдаёт.",
+              "en": "So it's to me. Silence gives you away."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

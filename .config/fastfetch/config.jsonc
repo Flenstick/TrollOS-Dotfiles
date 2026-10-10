@@ -1,75 +1,104 @@
+// angelOS fastfetch style: stream
+// Written by angelOS (Settings → System → fastfetch). Pick "own" there and this file
+// is yours again (the one you had first is config.before-angelos.jsonc).
 {
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/master/doc/json_schema.json",
-
   "logo": {
     "type": "file-raw",
-    "source": "~/.config/fastfetch/logo.txt",
+    "source": "@HOME@/.config/fastfetch/angelos-logo.txt",
+    "width": 44,
+    "height": 15,
     "padding": {
-      "right": 2
+      "top": 0,
+      "left": 1,
+      "right": 3
     }
   },
-
+  "display": {
+    "separator": ": ",
+    "color": {
+      "keys": "38;2;89;125;179",
+      "title": "38;2;145;168;204",
+      "separator": "38;2;180;181;183"
+    }
+  },
   "modules": [
-    "title",
-    "separator",
-
     {
-      "type": "os",
-      "key": "OS"
+      "type": "title",
+      "format": "{#1;38;2;145;168;204}{user-name}{#} {#38;2;180;181;183}стримит с {host-name}{#}"
     },
     {
-      "type": "disk",
-      "key": "OS Age",
-      "folders": "/",
-      "format": "{days} days"
+      "type": "custom",
+      "format": "{#38;2;180;181;183}── чат ────────────────────────────{#}"
     },
-    {
-      "type": "host",
-      "key": "Host"
-    },
-    {
-      "type": "kernel",
-      "key": "Kernel"
-    },
-    {
-      "type": "uptime",
-      "key": "Uptime"
-    },
-
-    "break",
-
     {
       "type": "cpu",
-      "key": "CPU"
+      "key": "cpu_enjoyer",
+      "keyColor": "1;38;2;79;195;247",
+      "format": "{name}"
     },
     {
       "type": "gpu",
-      "key": "GPU",
+      "key": "rtx_tyan",
+      "keyColor": "1;38;2;186;104;200",
       "format": "{name}"
     },
     {
       "type": "memory",
-      "key": "RAM",
+      "key": "ram_eater",
+      "keyColor": "1;38;2;129;199;132",
       "format": "{used} / {total}"
     },
     {
-      "type": "disk",
-      "key": "Disk",
-      "format": "{size-used} / {size-total}"
-    },
-
-    "break",
-
-    {
-      "type": "terminal",
-      "key": "Terminal"
+      "type": "os",
+      "key": "linux_enjoyer",
+      "keyColor": "1;38;2;255;183;77",
+      "format": "{pretty-name}"
     },
     {
-      "type": "localip",
-      "key": "IP"
+      "type": "uptime",
+      "key": "no_sleep_andy",
+      "keyColor": "1;38;2;240;98;146"
     },
-
-    "break",
-    "colors"
+    {
+      "type": "packages",
+      "key": "pkg_hoarder",
+      "keyColor": "1;38;2;77;182;172"
+    },
+    {
+      "type": "wm",
+      "key": "tiling_fan",
+      "keyColor": "1;38;2;149;117;205",
+      "format": "{pretty-name}"
+    },
+    {
+      "type": "custom",
+      "format": "{#38;2;180;181;183}── суперчаты ──────────────────────{#}"
+    },
+    {
+      "type": "command",
+      "key": " ",
+      "text": "python3 @HOME@/.config/quickshell/angelos/scripts/gear.py --fmt '{tier} {price} {#} {name}' --lang ru --nth 0"
+    },
+    {
+      "type": "command",
+      "key": " ",
+      "text": "python3 @HOME@/.config/quickshell/angelos/scripts/gear.py --fmt '{tier} {price} {#} {name}' --lang ru --nth 1"
+    },
+    {
+      "type": "command",
+      "key": " ",
+      "text": "python3 @HOME@/.config/quickshell/angelos/scripts/gear.py --fmt '{tier} {price} {#} {name}' --lang ru --nth 2"
+    },
+    {
+      "type": "command",
+      "key": " ",
+      "text": "python3 @HOME@/.config/quickshell/angelos/scripts/gear.py --fmt '{tier} {price} {#} {name}' --lang ru --nth 3"
+    },
+    {
+      "type": "command",
+      "key": " ",
+      "text": "python3 @HOME@/.config/quickshell/angelos/scripts/gear.py --fmt '{#1;38;2;211;197;126}♡ донатов на сетап: {total}{#}' --lang ru --total --zero"
+    }
   ]
 }

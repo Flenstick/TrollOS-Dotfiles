@@ -1,0 +1,100 @@
+{
+  "id": "trial-lust",
+  "title": {
+    "ru": "Испытание: Похоть",
+    "en": "Trial: Lust"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "trial",
+      "cond": "circle == \"lust\"",
+      "next": "pactCheck",
+      "note": "a try to get out of this circle (Ask → Seek the way out, the wheel's plea)"
+    },
+    "pactCheck": {
+      "type": "if",
+      "cond": "attempts >= pactAfter and not pact",
+      "then": "toPact",
+      "else": "ask"
+    },
+    "toPact": {
+      "type": "scene",
+      "to": "pact"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Ветер стих. Останься со мной. Здесь тепло, а наверху тебя никто не ждёт.",
+        "en": "The wind has dropped. Stay with me. It's warm here, and nobody waits for you up there."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Мне нужно идти",
+            "en": "I have to go"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Иди. Ветер подхватит тебя у края.",
+              "en": "Go. The wind will catch you at the edge."
+            }
+          },
+          "next": "down"
+        },
+        {
+          "text": {
+            "ru": "Останусь",
+            "en": "I'll stay"
+          },
+          "tone": "negative",
+          "set": {
+            "lust": "+1"
+          },
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Конечно, останешься. Все остаются.",
+              "en": "Of course you will. Everyone stays."
+            }
+          },
+          "next": "stay"
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Молчишь — значит, остаёшься.",
+              "en": "Silence means you stay."
+            }
+          },
+          "next": "stay"
+        }
+      ],
+      "shuffle": true
+    },
+    "stay": {
+      "type": "circle",
+      "to": "stay"
+    },
+    "down": {
+      "type": "circle",
+      "to": "deeper"
+    }
+  }
+}

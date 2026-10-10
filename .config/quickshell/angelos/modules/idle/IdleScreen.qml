@@ -10,13 +10,13 @@ import qs.widgets
 // Screensaver: the ASCII art plays one random effect after another
 // (reveal → hold → dissolve). Any key, click or mouse movement ends it.
 Variants {
-    model: Idle.active ? (Config.idle.allScreens ? Shell.screens : [Shell.focusedScreen]) : []
+    model: Idle.active ? (Config.idle.allScreens ? Shell.screens : [Shell.primaryScreen]) : []
 
     PanelWindow {
         id: win
 
         required property var modelData
-        readonly property bool primary: modelData === Shell.focusedScreen || Shell.screens.length === 1
+        readonly property bool primary: modelData === Shell.primaryScreen || Shell.screens.length === 1
         readonly property color bg: Theme.mix(Qt.color("#000000"), Theme.accent, 0.035)
 
         screen: modelData
@@ -30,6 +30,7 @@ Variants {
         color: bg
         WlrLayershell.namespace: "angelos-idle"
         WlrLayershell.layer: WlrLayer.Overlay
+        // takes input: the screensaver: any key or click ends it
         WlrLayershell.keyboardFocus: primary ? (Shell.dev ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive) : WlrKeyboardFocus.None
 
         // mouse jitter while the surfaces map would end it immediately

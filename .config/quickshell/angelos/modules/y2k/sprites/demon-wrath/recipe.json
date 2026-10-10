@@ -1,0 +1,127 @@
+{
+ "sheet": "~/Pictures/angelos-sprites/wrath/wrath.png",
+ "block": 3.2205,
+ "mask": true,
+ "boxes": {
+  "body": [
+   12,
+   28,
+   592,
+   788
+  ],
+  "wing_left": [
+   576,
+   136,
+   1016,
+   648
+  ],
+  "wing_right": [
+   1048,
+   140,
+   1520,
+   656
+  ],
+  "tail": [
+   32,
+   760,
+   636,
+   1012
+  ],
+  "eyes": [
+   668,
+   796,
+   1048,
+   928
+  ],
+  "mouth": [
+   1084,
+   792,
+   1492,
+   928
+  ]
+ },
+ "overlays": {
+  "mouth": {
+   "scale": 0.475,
+   "x": 56,
+   "y": 78,
+   "thr": 0,
+   "oval": [
+    86,
+    90,
+    15,
+    8.5
+   ],
+   "file": "~/Pictures/angelos-sprites/wrath/talk.png"
+  },
+  "eyes": {
+   "scale": 0.7,
+   "x": 40,
+   "y": 62,
+   "clip": [
+    56,
+    70,
+    104,
+    82
+   ]
+  }
+ },
+ "parts": {
+  "wing_left": {
+   "pivot": [
+    126.7,
+    126.9
+   ],
+   "at": [
+    68,
+    112
+   ],
+   "angles": [
+    10,
+    5,
+    0,
+    -5,
+    -10
+   ],
+   "every": 1
+  },
+  "wing_right": {
+   "pivot": [
+    8.9,
+    126.1
+   ],
+   "at": [
+    108,
+    112
+   ],
+   "angles": [
+    -10,
+    -5,
+    0,
+    5,
+    10
+   ],
+   "every": 1
+  },
+  "tail": {
+   "pivot": [
+    12.9,
+    11.3
+   ],
+   "at": [
+    92,
+    160
+   ],
+   "angles": [
+    19,
+    22,
+    25,
+    28,
+    31
+   ],
+   "every": 2
+  }
+ },
+ "cell": 4,
+ "colors": 96
+}

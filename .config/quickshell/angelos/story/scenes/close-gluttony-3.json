@@ -1,0 +1,84 @@
+{
+  "id": "close-gluttony-3",
+  "title": {
+    "ru": "Чревоугодие: своя",
+    "en": "Gluttony: your own"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"gluttony\" and closeness == 3",
+      "next": "ask",
+      "note": "the demon of gluttony and the player: closeness own (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Хотите, я больше не буду голодной? Только если вы останетесь.",
+        "en": "Shall I never be hungry again? Only if you stay."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Останусь",
+            "en": "I'll stay"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Я сыта.",
+              "en": "I'm full."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Не могу",
+            "en": "I can't"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Тогда я подожду с обедом.",
+              "en": "Then I'll hold lunch."
+            }
+          },
+          "next": "end",
+          "set": {
+            "gluttony": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Накрою на двоих. На всякий случай.",
+              "en": "I'll lay the table for two. Just in case."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

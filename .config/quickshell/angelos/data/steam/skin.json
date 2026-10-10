@@ -1,0 +1,23 @@
+{
+  "name": "angelOS",
+  "description": "Steam in angelOS's colours: heaven, hell and every circle, every palette — it follows the desktop on the fly. Written by angelOS (scripts/steam-theme.py); edits here are overwritten.",
+  "author": "angelOS",
+  "version": "1.0.0",
+  "tags": [
+    "angelOS",
+    "pixel",
+    "dark",
+    "light"
+  ],
+  "Steam-WebKit": "webkit.css",
+  "Patches": [
+    {
+      "MatchRegexString": ".*",
+      "TargetCss": [
+        "colors.css",
+        "angelos.css"
+      ],
+      "TargetJs": "angelos.js"
+    }
+  ]
+}

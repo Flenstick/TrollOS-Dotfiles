@@ -1,0 +1,37 @@
+{
+  "_comment": "“What did I sign?” (D2): the paper the one in the corner shows — the angel in heaven, the demon in hell (services/Story.contract, the question: services/Intents.js → signed). DRAFT texts for the author, rewrite freely. In the texts: {name}, {g:m|f|unknown} as in the scenes; %circle — the circle it was signed in (its number and name), %date — when. signed: the pact is in force (hell.pact); washed: it was signed once and the way down to the stars washed it off; none: never signed. say: her line as she hands the paper over. The “Way out” block under it is filled in by the code (circle, minutes, tries, how far the pact and limbo are) — no answers are given away.",
+  "draft": true,
+  "signed": {
+    "title": {"ru": "Договор", "en": "The pact"},
+    "text": {
+      "ru": "Я, {name}, выхожу из ада раньше срока — коротким путём, минуя оставшиеся круги.\n\nВзамен наверху остаётся её знак: рожки на эмблеме ангела. Знак не снимается ни просьбой, ни временем, ни переустановкой.\n\nДоговор не расторгается. Его можно только смыть: спуститься до самого дна и выйти к звёздам самостоятельно.\n\nПодписано: %circle, %date.\nПодпись: {name}. Принято: канцелярия.",
+      "en": "I, {name}, leave hell before my time — the short way, past the circles still ahead.\n\nIn return her mark stays up there with me: horns on the angel's emblem. The mark does not come off by asking, by waiting, or by reinstalling.\n\nThe pact cannot be cancelled. It can only be washed off: go down to the very bottom and come out to the stars on my own.\n\nSigned: %circle, %date.\nSignature: {name}. Received: the registry."
+    }
+  },
+  "washed": {
+    "title": {"ru": "Договор (смыт)", "en": "The pact (washed off)"},
+    "text": {
+      "ru": "Был договор: %circle, %date. Больше его нет — ты дош{g:ёл|ла|ёл(ла)} до дна и выш{g:ел|ла|ел(ла)} к звёздам сам{g:|а|(а)}.\n\nЧернила расплылись. Знака нет.",
+      "en": "There was a pact: %circle, %date. It's gone now — you went to the bottom and out to the stars on your own.\n\nThe ink has run. There's no mark."
+    }
+  },
+  "none": {
+    "title": {"ru": "Договоров нет", "en": "No pacts"},
+    "text": {
+      "ru": "Ты ничего не подписыва{g:л|ла|л(а)}.\n\nПока.",
+      "en": "You haven't signed anything.\n\nYet."
+    }
+  },
+  "say": {
+    "angel": {
+      "signed": [["Вот он. Я его не прятала — читай.", "Here it is. I didn't hide it — read."]],
+      "washed": [["Его больше нет. Ты сам{g:|а|(а)} его смы{g:л|ла|л(а)}.", "It's gone. You washed it off yourself."]],
+      "none": [["Ничего. Честно-честно ♡", "Nothing. Honest ♡"]]
+    },
+    "demon": {
+      "signed": [["Копия для заявителя. Мелкий шрифт тоже читай.", "The applicant's copy. Read the small print too."]],
+      "washed": [["Аннулировано. Не радуйся — дело у меня осталось.", "Annulled. Don't be glad — I kept the file."]],
+      "none": [["Ничего. Но условия выхода — пожалуйста, в приложении.", "Nothing. But the terms of exit are attached, here."]]
+    }
+  }
+}

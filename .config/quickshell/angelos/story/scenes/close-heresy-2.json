@@ -1,0 +1,84 @@
+{
+  "id": "close-heresy-2",
+  "title": {
+    "ru": "Ересь: близкая",
+    "en": "Heresy: close"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"heresy\" and closeness == 2",
+      "next": "ask",
+      "note": "the demon of heresy and the player: closeness close (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Я переписываю книгу, которую сожгли. Подержишь страницу?",
+        "en": "I'm rewriting the book they burnt. Will you hold a page?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Подержу",
+            "en": "I will"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Горячо? Терпи. Это слова.",
+              "en": "Hot? Bear it. Those are words."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Обожгусь",
+            "en": "I'll get burnt"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Все обжигаются. Ты — меньше.",
+              "en": "Everyone gets burnt. You less."
+            }
+          },
+          "next": "end",
+          "set": {
+            "heresy": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Держи молча. Так даже правильнее.",
+              "en": "Hold it in silence. That's even more fitting."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

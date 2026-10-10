@@ -8,8 +8,8 @@ import qs.widgets
 PxPage {
     id: page
 
-    heading: I18n.t("Клавиатура и мышь", "Keyboard and mouse")
-    subtitle: I18n.t("Пишется в ~/.config/niri/cfg/input.kdl точечно (комментарии остаются), с бэкапом и проверкой.", "Updates input.kdl, preserving comments, with a backup and validation.")
+    heading: I18n.t("Клавиатура", "Keyboard")
+    subtitle: I18n.t("Раскладки и повтор клавиш. Пишется в ~/.config/niri/cfg/input.kdl точечно (комментарии остаются), с бэкапом и проверкой.", "Layouts and key repeat. Updates input.kdl, preserving comments, with a backup and validation.")
 
     readonly property var layoutList: InputConfig.layouts.split(",").filter(l => l)
     readonly property var optionList: InputConfig.options.split(",").filter(o => o)
@@ -22,6 +22,7 @@ PxPage {
     }
 
     PxGroup {
+        name: "keyboard-layouts"
         title: I18n.t("Раскладки", "Keyboard layouts")
         icon: "keyboard"
         width: parent.width
@@ -83,6 +84,7 @@ PxPage {
     }
 
     PxGroup {
+        name: "key-repeat"
         title: I18n.t("Повтор клавиш", "Key repeat")
 
         advanced: true
@@ -118,6 +120,7 @@ PxPage {
         }
         SettingRow {
             label: I18n.t("NumLock при входе", "NumLock on login")
+            hint: InputConfig.numlockState === "noperm" ? I18n.t("niri включает его при своём запуске; включить сразу не вышло — нет доступа к /dev/uinput", "niri turns it on when it starts; turning it on right away failed: no access to /dev/uinput") : I18n.t("niri включает его при запуске, angelOS проверяет лампочку после входа и дожимает", "niri turns it on when it starts; angelOS checks the LED after login and makes sure")
             PxToggle {
                 checked: InputConfig.numlock
                 onToggled: c => InputConfig.save({
@@ -128,54 +131,6 @@ PxPage {
         PxField {
             width: parent.width
             placeholder: I18n.t("поле для проверки — печатай тут ♡", "Type here to test ♡")
-        }
-    }
-
-    PxGroup {
-        title: I18n.t("Мышь", "Mouse")
-        icon: "mouse"
-        width: parent.width
-        SettingRow {
-            label: I18n.t("Ускорение", "Acceleration")
-            PxSegmented {
-                model: [
-                    {
-                        "label": I18n.t("Плоское", "Flat"),
-                        "value": "flat"
-                    },
-                    {
-                        "label": I18n.t("Адаптивное", "Adaptive"),
-                        "value": "adaptive"
-                    }
-                ]
-                currentValue: InputConfig.accelProfile
-                onActivated: v => InputConfig.save({
-                        "accelProfile": v
-                    })
-            }
-        }
-        SettingRow {
-            label: I18n.t("Чувствительность", "Sensitivity")
-            PxSlider {
-                width: parent.width
-                from: -1
-                to: 1
-                stepSize: 0.05
-                decimals: 2
-                value: InputConfig.accelSpeed
-                onReleased: v => InputConfig.save({
-                        "accelSpeed": v
-                    })
-            }
-        }
-        SettingRow {
-            label: I18n.t("Фокус следует за мышью", "Focus follows mouse")
-            PxToggle {
-                checked: InputConfig.focusFollowsMouse
-                onToggled: c => InputConfig.save({
-                        "focusFollowsMouse": c
-                    })
-            }
         }
     }
 

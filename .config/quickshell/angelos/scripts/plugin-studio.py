@@ -5,6 +5,7 @@ No generated code is executed by this worker. API credentials never travel in
 argv or the generation context. Python standard library only.
 """
 import ast
+import difflib
 import fcntl
 import hashlib
 import json
@@ -16,6 +17,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -25,6 +27,12 @@ MAX_BYTES = 512 * 1024
 MAX_FILES = 24
 ID_RE = re.compile(r"[a-z][a-z0-9-]{1,47}\Z")
 EXTENSIONS = {".qml", ".js", ".json", ".py", ".sh", ".md", ".txt", ".svg"}
+# editing an installed plugin: files Studio cannot edit (pictures, sounds…) ride along untouched
+KEEP_MAX_BYTES = 32 * 1024 * 1024
+KEEP_MAX_FILES = 200
+BACKUPS_KEEP = 10
+DIFF_MAX = 60000
+STAMP_RE = re.compile(r"\d{8}-\d{6}(?:-\d+)?\Z")
 ENTRYPOINTS = ("main", "settings", "desktopWidget", "barWidget", "menuComponent", "launcher", "sidebarWidget")
 API_PROVIDERS = ("openai", "anthropic")
 # "Sign in with the browser": the local Claude Code / Codex CLIs, logged in with a
@@ -472,6 +480,23 @@ def digest(files):
     return hashlib.sha256(json.dumps(files, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+def changes(base, files):
+    """What an edit changed: [{path, status: added|removed|changed, added, removed, diff}]."""
+    out = []
+    for name in sorted(set(base) | set(files)):
+        old, new = base.get(name), files.get(name)
+        if old == new:
+            continue
+        lines = list(difflib.unified_diff((old or "").splitlines(), (new or "").splitlines(), n=2, lineterm=""))[2:]
+        diff = "\n".join(lines)
+        if len(diff) > DIFF_MAX:
+            diff = diff[:DIFF_MAX] + "\n…"
+        out.append({"path": name, "status": "added" if old is None else "removed" if new is None else "changed",
+                    "added": sum(1 for l in lines if l.startswith("+")),
+                    "removed": sum(1 for l in lines if l.startswith("-")), "diff": diff})
+    return out
+
+
 def qml_formatter():
     # On Arch, unqualified qmlformat can be Qt 5. Bound components require Qt 6.
     candidates = ["/usr/lib/qt6/bin/qmlformat", "/usr/lib64/qt6/bin/qmlformat",
@@ -489,7 +514,9 @@ def qml_formatter():
     return None
 
 
-def validate_files(files, directory, spec, taken):
+def validate_files(files, directory, spec, taken, edit=False):
+    """Static checks of a bundle. `edit`: an installed plugin being changed — it keeps its
+    id and may predate the Studio rules (no README, enabled by default, any kind)."""
     errors = []
     try:
         manifest = json.loads(files.get("manifest.json", ""))
@@ -499,17 +526,21 @@ def validate_files(files, directory, spec, taken):
         return {}, ["manifest.json: invalid JSON object"]
     pid = manifest.get("id", "")
     if not isinstance(pid, str) or not ID_RE.fullmatch(pid) or pid != spec["id"]:
-        errors.append("manifest.id must match the approved plan (2–48 lowercase letters/digits/hyphens)")
+        errors.append("manifest.id must stay " + spec["id"] if edit else
+                      "manifest.id must match the approved plan (2–48 lowercase letters/digits/hyphens)")
     if isinstance(pid, str) and pid in taken:
         errors.append("Plugin ID already exists; choose another ID")
-    for field in ("name", "description", "version"):
+    for field in ("name",) if edit else ("name", "description", "version"):
         if not isinstance(manifest.get(field), str) or not manifest[field].strip():
             errors.append("manifest." + field + " must be a nonempty string")
-    if manifest.get("enabledByDefault") is not False:
+    if edit:
+        if not isinstance(manifest.get("enabledByDefault", False), bool):
+            errors.append("manifest.enabledByDefault must be true or false")
+    elif manifest.get("enabledByDefault") is not False:
         errors.append("manifest.enabledByDefault must be false")
-    if not manifest.get("settings"):
+    if not edit and not manifest.get("settings"):
         errors.append("A settings component is required")
-    if "README.md" not in files:
+    if not edit and "README.md" not in files:
         errors.append("README.md is required")
     if any(k in manifest for k in ("dir", "bundled")):
         errors.append("manifest must not set dir or bundled")
@@ -517,10 +548,15 @@ def validate_files(files, directory, spec, taken):
         name = manifest.get(field)
         if name is not None and (not isinstance(name, str) or name not in files or not name.endswith(".qml")):
             errors.append("Missing or invalid QML entry point: " + field)
-    expected = {"desktop": "desktopWidget", "bar": "barWidget", "service": "main",
-                "menu": "menu", "launcher": "launcher"}[spec["kind"]]
-    if not manifest.get(expected) and not (expected == "menu" and manifest.get("menuComponent")):
-        errors.append("Missing integration point: " + expected)
+    if edit:
+        if not manifest.get("menu") and not any(manifest.get(f) for f in ENTRYPOINTS if f != "settings"):
+            errors.append("The plugin must keep an integration point (main, desktopWidget, barWidget, "
+                          "launcher, menu, menuComponent or sidebarWidget)")
+    else:
+        expected = {"desktop": "desktopWidget", "bar": "barWidget", "service": "main",
+                    "menu": "menu", "launcher": "launcher"}[spec["kind"]]
+        if not manifest.get(expected) and not (expected == "menu" and manifest.get("menuComponent")):
+            errors.append("Missing integration point: " + expected)
     if "menu" in manifest and (not isinstance(manifest["menu"], list)
                               or any(not isinstance(m, dict) for m in manifest["menu"])):
         errors.append("manifest.menu must be an array of objects")
@@ -553,6 +589,43 @@ def validate_files(files, directory, spec, taken):
                 errors.append(desktop + ": missing " + prop)
         if re.search(r"\b(?:PanelWindow|PopupWindow|Window)\s*\{", source):
             errors.append(desktop + ": return content Item, not a window")
+    # heaven and hell (contract "Two realms"): a new desktop widget draws both;
+    # an edited one keeps what it declares
+    realms = manifest.get("realms")
+    if realms is not None and (not isinstance(realms, list) or any(r not in ("heaven", "hell") for r in realms)):
+        errors.append('manifest.realms must be a list of "heaven" and "hell"')
+    elif isinstance(desktop, str) and desktop in files:
+        if not edit and set(realms or []) != {"heaven", "hell"}:
+            errors.append('A desktop widget must draw both realms: add "realms": ["heaven", "hell"] to manifest.json '
+                          "and a hell look bound to Theme.hell (contract: Two realms)")
+        if "hell" in (realms or []) and not any(re.search(r"\bTheme\.(?:hell|realm)\b", t)
+                                                for n, t in files.items() if n.endswith((".qml", ".js"))):
+            errors.append('manifest.realms has "hell", but no QML reads Theme.hell or Theme.realm')
+    # pixel and macOS (contract "Two looks"): a new plugin draws both and takes its look from the
+    # Theme API; an edited one keeps what it declares
+    themes = manifest.get("themes")
+    if themes is not None and (not isinstance(themes, list) or not themes
+                               or any(t not in ("pixel", "mac") for t in themes)):
+        errors.append('manifest.themes must be a list of "pixel" and "mac"')
+    elif not edit and set(themes or []) != {"pixel", "mac"}:
+        errors.append('A new plugin must draw both themes: add "themes": ["pixel", "mac"] to manifest.json '
+                      "and take colours, fonts and sizes from the Theme API (contract: Two looks)")
+    visual = [manifest.get(k) for k in ("desktopWidget", "barWidget", "sidebarWidget", "menuComponent", "settings")]
+    visual = [v for v in visual if isinstance(v, str) and v in files]
+    if not edit and visual and not any(re.search(r"\bSkin\.", t) for n, t in files.items() if n.endswith(".qml")):
+        errors.append("No QML reads the Theme API (Skin.…): colours, fonts and sizes must come from it (contract: Two looks)")
+    for name, text in files.items():
+        if not name.endswith(".qml") or edit:
+            continue
+        code = re.sub(r"//[^\n]*", "", text)
+        if re.search(r"(?<![\w#])[\"']#[0-9a-fA-F]{3,8}[\"']", code):
+            errors.append(name + ": hard-coded colour; use the Theme API (Skin.text, Skin.accent …) or Theme.hell… in hell")
+        if re.search(r"font\.family\s*:\s*[\"']", code):
+            errors.append(name + ": hard-coded font family; use PxText kind or Skin.font / Skin.mono")
+        if "I18n.exe(" in code:
+            errors.append(name + ": I18n.exe() puts .exe into the macOS look; use Skin.title(name)")
+        if re.search(r"\bImage\s*\{", code) and "sourceSize" not in code:
+            errors.append(name + ": every Image needs sourceSize (memory: decode at the shown size)")
     return manifest, errors[:30]
 
 
@@ -568,6 +641,8 @@ ShellRoot {
         id: host
         width: 900
         height: 700
+        // what plugin hosts give their content: the shared controls take the look under test
+        readonly property string settingsSkin: Skin.settingsSkin
     }
     readonly property var check: JSON.parse(Quickshell.env("ANGELOS_CHECK") || "{}")
     Component.onCompleted: {
@@ -581,25 +656,36 @@ ShellRoot {
                 console.log("CHECK-FAIL " + e.kind + " :: " + c.errorString().replace(/\\n/g, " | "));
                 continue;
             }
-            const props = {"plugin": plugin};
-            if (e.kind === "desktopWidget") { props.screenName = "CHECK-1"; props.widget = {"uid": "check", "x": 0, "y": 0, "settings": {}}; }
-            if (e.kind === "barWidget") { props.screenName = "CHECK-1"; props.barWindow = null; }
-            if (e.kind === "launcher") props.pluginId = check.id;
-            if (e.kind === "menuComponent") props.menu = {"close": () => {}};
-            if (e.kind === "sidebarWidget") props.width = 300;
-            const o = c.createObject(host, props);
-            if (!o) { console.log("CHECK-FAIL " + e.kind + " :: could not be created"); continue; }
-            if (e.kind === "launcher" && typeof o.query === "function") {
-                try { o.query("test", false); } catch (err) { console.log("CHECK-FAIL launcher :: query() threw " + err); }
+            // every entry point in both looks (Skin.force: pixel, then macOS — the bindings of the
+            // pixel one re-run under it), a desktop widget also made in hell
+            // (a service or a launcher provider has no look: made once)
+            const runs = e.kind === "desktopWidget" ? [["pixel", "heaven"], ["mac", "heaven"], ["pixel", "hell"]] : e.kind === "main" || e.kind === "launcher" ? [["pixel", ""]] : [["pixel", ""], ["mac", ""]];
+            for (const [look, realm] of runs) {
+                Skin.force = look;
+                Theme.realm = realm || "heaven";
+                const tag = look + (realm === "hell" ? " hell" : "");
+                const props = {"plugin": plugin};
+                if (e.kind === "desktopWidget") { props.screenName = "CHECK-1"; props.widget = {"uid": "check", "x": 0, "y": 0, "settings": {}}; }
+                if (e.kind === "barWidget") { props.screenName = "CHECK-1"; props.barWindow = null; }
+                if (e.kind === "launcher") props.pluginId = check.id;
+                if (e.kind === "menuComponent") props.menu = {"close": () => {}};
+                if (e.kind === "sidebarWidget") props.width = 300;
+                const o = c.createObject(host, props);
+                if (!o) { console.log("CHECK-FAIL " + e.kind + " (" + tag + ") :: could not be created"); continue; }
+                if (e.kind === "launcher" && typeof o.query === "function") {
+                    try { o.query("test", false); } catch (err) { console.log("CHECK-FAIL launcher :: query() threw " + err); }
+                }
+                console.log("CHECK-OK " + e.kind + " " + Math.round(o.implicitWidth) + "x" + Math.round(o.implicitHeight) + " " + tag);
             }
-            console.log("CHECK-OK " + e.kind + " " + Math.round(o.implicitWidth) + "x" + Math.round(o.implicitHeight));
+            Theme.realm = "heaven";
+            Skin.force = "";
         }
         done.start();
     }
-    // let timers and first process runs fire once
+    // let timers and first process runs fire once (ANGELOS_CHECK_SETTLE_MS: the tests' fixtures have none)
     Timer {
         id: done
-        interval: 2500
+        interval: Number(Quickshell.env("ANGELOS_CHECK_SETTLE_MS")) || 2500
         onTriggered: { console.log("CHECK-DONE"); Qt.quit(); }
     }
 }
@@ -666,8 +752,10 @@ class Studio:
         return {p.name for base in (self.plugins, ROOT / "plugins")
                 if base.is_dir() for p in base.iterdir() if not p.name.startswith(".")}
 
-    def context(self, language, generate=False):
-        names = ["docs/STUDIO_CONTRACT.md", "docs/PLUGINS.md"]
+    def context(self, language, generate=False, session=None):
+        edit = bool(session) and session.get("mode") == "edit"
+        # the Theme API (both looks) is part of every request: planning describes both looks too
+        names = ["docs/STUDIO_CONTRACT.md", "docs/PLUGINS.md", "services/Skin.qml", "widgets/SkinCard.qml"]
         if generate:
             # a small, real plugin that works, plus the scaffold for every entry point
             names += ["plugins/_template/manifest.json", "plugins/_template/DesktopWidget.qml",
@@ -677,11 +765,21 @@ class Studio:
         text = "\n\n".join("FILE " + name + "\n" + (ROOT / name).read_text() for name in names if (ROOT / name).exists())
         if generate:
             text += "\n\n" + api_reference()
+        if edit:
+            text += ("\n\nEDIT MODE: the user is changing the installed plugin '" + session["target"]
+                     + "'. Follow the contract section 'Editing an installed plugin'.")
+            if not generate:
+                # planning sees the files; generation gets them with the instruction
+                files = self.load_draft_files(session["draft"]["token"], set(session.get("kept") or []))
+                text += " Its current files:\n" + json.dumps(files, ensure_ascii=False)
+            if session.get("kept"):
+                text += "\nFiles kept as they are (not shown, not editable): " + ", ".join(session["kept"])
+        taken = sorted(self.taken_ids() - ({session["target"]} if edit else set()))
         return (text + "\n\nRespond in " + ("English" if language == "en" else "Russian")
-                + ". Existing IDs (do not reuse): " + ", ".join(sorted(self.taken_ids()))
+                + ". Existing IDs (do not reuse): " + ", ".join(taken)
                 + "\nReturn exactly the requested JSON schema.")
 
-    def ask(self, request, messages, schema, generate=False):
+    def ask(self, request, messages, schema, generate=False, session=None):
         provider = request.get("provider")
         effort = request.get("effort", "")
         if effort not in ("",) + EFFORTS:
@@ -690,7 +788,7 @@ class Studio:
             model = request.get("model", "")
             if not isinstance(model, str) or not re.fullmatch(r"[A-Za-z0-9_.:\[\]-]{0,100}", model):
                 raise StudioError("Enter a valid model name or leave it empty.", "Введите корректное имя модели или оставьте пустым.")
-            system = self.context(request.get("language"), generate)
+            system = self.context(request.get("language"), generate, session)
             self.emit({"event": "progress", "stage": "request"})
             private_dir(self.state)
             workdir = Path(tempfile.mkdtemp(prefix="cli-", dir=self.state))
@@ -711,7 +809,7 @@ class Studio:
         tokens = request.get("maxOutputTokens", 32000)
         if type(tokens) is not int or not 2048 <= tokens <= 64000:
             raise StudioError("Output limit must be 2048–64000 tokens.", "Лимит ответа: 2048–64000 токенов.")
-        system = self.context(request.get("language"), generate)
+        system = self.context(request.get("language"), generate, session)
         wire = provider_request(provider, model, key, system, messages, schema,
                                 tokens if generate else min(tokens, 12000), effort)
         self.emit({"event": "progress", "stage": "request"})
@@ -734,6 +832,12 @@ class Studio:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(text)
             target.chmod(0o600)
+        # an installed plugin's pictures, sounds… come along from the version being edited
+        base = (session.get("base") or {}).get("token")
+        for name in session.get("kept") or []:
+            if base and name not in files and (self.state / "drafts" / base / name).is_file():
+                (directory / name).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(self.state / "drafts" / base / name, directory / name)
         old = session.get("draft") or {}
         if old.get("token") and old["token"] != token:
             shutil.rmtree(self.state / "drafts" / old["token"], ignore_errors=True)
@@ -748,14 +852,15 @@ class Studio:
             raise StudioError("Draft is missing.", "Черновик не найден.")
         return path
 
-    def load_draft_files(self, token):
+    def load_draft_files(self, token, skip=()):
+        """The editable files of a draft; `skip`: kept files (not part of the bundle)."""
         path = self.draft_dir(token)
         files = []
         size = 0
         for entry in sorted(path.rglob("*")):
             if entry.is_symlink():
                 raise StudioError("Symlinks are not allowed in drafts.", "Символические ссылки в черновиках запрещены.")
-            if entry.is_dir():
+            if entry.is_dir() or entry.relative_to(path).as_posix() in skip:
                 continue
             if not stat.S_ISREG(entry.stat().st_mode):
                 raise StudioError("Only regular files are allowed.", "Разрешены только обычные файлы.")
@@ -791,7 +896,8 @@ class Studio:
             (home / ".config/angelos").mkdir(parents=True)
             run.mkdir(mode=0o700)
             imports, binds = [], []
-            for sub in ("config", "services", "widgets", "modules", "plugins", "scripts", "shaders", "templates", "bin"):
+            # every folder the shell's QML reaches into (novel/: NovelCore.js, data/: fonts)
+            for sub in ("config", "services", "widgets", "modules", "plugins", "scripts", "shaders", "templates", "bin", "novel", "data"):
                 if not (ROOT / sub).is_dir():
                     continue
                 (root / sub).mkdir(parents=True)
@@ -805,6 +911,8 @@ class Studio:
             env = {"HOME": str(home), "XDG_RUNTIME_DIR": str(run), "QT_QPA_PLATFORM": "offscreen",
                    "ANGELOS_DEV": "1", "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "ANGELOS_CHECK": json.dumps(check)}
             env.update(extra_env)
+            if os.environ.get("ANGELOS_CHECK_SETTLE_MS", "").isdigit():
+                env["ANGELOS_CHECK_SETTLE_MS"] = os.environ["ANGELOS_CHECK_SETTLE_MS"]
             # the home is hidden; the scratch dir first, then the read-only shell parts inside it
             argv = [bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
                     "--tmpfs", "/tmp", "--tmpfs", "/run", "--tmpfs", str(Path.home()), "--bind", str(tmp), str(tmp)]
@@ -831,9 +939,10 @@ class Studio:
             elif where in text and re.search(r"\b(WARN|ERROR|CRIT)", text):
                 errors.append("runtime: " + re.sub(r"^.*?(WARN|ERROR|CRIT)\S*\s*", "", text).replace("file://" + where, "").replace(where, ""))
             else:
-                m = re.search(r"CHECK-OK (\w+) (\d+)x(\d+)", text)
+                m = re.search(r"CHECK-OK (\w+) (\d+)x(\d+) ?(.*)", text)
                 if m and m.group(1) in ("desktopWidget", "barWidget", "sidebarWidget") and (m.group(2) == "0" or m.group(3) == "0"):
-                    errors.append(f"runtime: {m.group(1)} has zero implicit size ({m.group(2)}x{m.group(3)}); set implicitWidth/implicitHeight")
+                    look = f" in the {m.group(4).strip()} look" if m.group(4).strip() else ""
+                    errors.append(f"runtime: {m.group(1)} has zero implicit size ({m.group(2)}x{m.group(3)}){look}; set implicitWidth/implicitHeight")
         if "CHECK-DONE" not in output:
             errors.append("runtime: the QML check did not finish (crash, hang or a blocking call at load time)")
         # the same warning can repeat per binding evaluation
@@ -843,13 +952,18 @@ class Studio:
         draft = session.get("draft")
         if not draft:
             raise StudioError("Generate a plugin first.", "Сначала создайте плагин.")
-        files = self.load_draft_files(draft["token"])
+        kept = set(session.get("kept") or [])
+        files = self.load_draft_files(draft["token"], kept)
         if any(secret and any(secret in text for text in files.values())
                for secret in self.credentials().values()):
             raise StudioError("Remove the saved API key from the draft before continuing.",
                               "Уберите сохранённый API-ключ из черновика перед продолжением.")
-        manifest, errors = validate_files(files, self.draft_dir(draft["token"]),
-                                          session["plan"]["spec"], self.taken_ids())
+        edit = session.get("mode") == "edit"
+        if edit:
+            spec, taken = {"id": session["target"], "kind": ""}, self.taken_ids() - {session["target"]}
+        else:
+            spec, taken = session["plan"]["spec"], self.taken_ids()
+        manifest, errors = validate_files(files, self.draft_dir(draft["token"]), spec, taken, edit)
         note = ""
         if not errors and self.runtime:
             self.emit({"event": "progress", "stage": "runtime"})
@@ -859,6 +973,10 @@ class Studio:
         draft.update({"manifest": manifest, "errors": errors, "digest": digest(files),
                       "files": [{"path": name, "content": text} for name, text in files.items()],
                       "directory": str(self.draft_dir(draft["token"]))})
+        if edit:
+            base = self.load_draft_files(session["base"]["token"], kept)
+            draft["changes"] = changes(base, files)
+            draft["changed"] = digest(files) != session["base"]["digest"]
         return draft
 
     def install(self, session, expected):
@@ -897,9 +1015,254 @@ class Studio:
         return {"id": pid, "desktop": bool(draft["manifest"].get("desktopWidget")),
                 "directory": str(destination)}
 
+    # ---------- editing an installed plugin ----------
+    def clear_drafts(self):
+        shutil.rmtree(self.state / "drafts", ignore_errors=True)
+
+    def user_plugin_dir(self, pid):
+        if not isinstance(pid, str) or not ID_RE.fullmatch(pid):
+            raise StudioError("Only plugins with a simple ID (latin letters, digits, hyphens) can be edited here.",
+                              "Здесь дорабатываются только плагины с простым ID (латиница, цифры, дефисы).")
+        path = self.plugins / pid
+        if path.is_symlink() or not path.is_dir() or not (path / "manifest.json").is_file():
+            raise StudioError("This plugin is not installed in ~/.config/angelos/plugins.",
+                              "Этот плагин не установлен в ~/.config/angelos/plugins.")
+        return path
+
+    def read_plugin(self, path):
+        """(editable text files, kept paths) of an installed plugin. Pictures, sounds and anything
+        else Studio cannot edit are kept as they are; Python caches are skipped."""
+        files, kept, size, kept_size = {}, [], 0, 0
+        for entry in sorted(path.rglob("*")):
+            rel = entry.relative_to(path)
+            if "__pycache__" in rel.parts or entry.suffix == ".pyc":
+                continue
+            if entry.is_symlink():
+                raise StudioError("The plugin contains symlinks; Studio cannot edit it.",
+                                  "В плагине есть символические ссылки — мастер не может его доработать.")
+            if entry.is_dir():
+                continue
+            if not stat.S_ISREG(entry.stat().st_mode):
+                raise StudioError("Only regular files are allowed.", "Разрешены только обычные файлы.")
+            name, length, text = rel.as_posix(), entry.stat().st_size, None
+            if valid_path(name) and length <= MAX_BYTES:
+                try:
+                    text = entry.read_text()
+                except UnicodeError:
+                    text = None
+            if (text is not None and "\x00" not in text and len(files) < MAX_FILES
+                    and size + len(text.encode()) <= MAX_BYTES):
+                files[name] = text
+                size += len(text.encode())
+            else:
+                kept.append(name)
+                kept_size += length
+        if "manifest.json" not in files:
+            raise StudioError("manifest.json is missing or unreadable.", "manifest.json отсутствует или не читается.")
+        if len(kept) > KEEP_MAX_FILES or kept_size > KEEP_MAX_BYTES:
+            raise StudioError("The plugin is too large for Studio.", "Плагин слишком большой для мастера.")
+        return files, kept
+
+    def new_draft_dir(self, files, source=None, kept=()):
+        token = uuid.uuid4().hex
+        directory = self.state / "drafts" / token
+        private_dir(directory)
+        for name, text in files.items():
+            target = directory / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text)
+        for name in kept:
+            target = directory / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source / name, target)
+        return token
+
+    def backups_dir(self, pid):
+        return self.home / ".local/state/angelos/plugin-backups" / pid
+
+    def backup_list(self, pid):
+        folder = self.backups_dir(pid)
+        if folder.is_symlink() or not folder.is_dir():
+            return []
+        return sorted((p for p in folder.iterdir() if p.is_dir() and not p.is_symlink() and STAMP_RE.fullmatch(p.name)),
+                      key=lambda p: p.name)
+
+    def backup_counts(self):
+        if not self.plugins.is_dir():
+            return {}
+        return {p.name: len(self.backup_list(p.name)) for p in self.plugins.iterdir()
+                if p.is_dir() and not p.name.startswith(".") and ID_RE.fullmatch(p.name)}
+
+    def backup(self, pid, source, reason):
+        """Copy of the installed plugin in ~/.local/state/angelos/plugin-backups/<id>/<stamp>/;
+        the newest BACKUPS_KEEP stay."""
+        folder = self.backups_dir(pid)
+        private_dir(folder)
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        target, n = folder / stamp, 1
+        while target.exists():
+            target, n = folder / f"{stamp}-{n}", n + 1
+        shutil.copytree(source, target, symlinks=True, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        try:
+            version = json.loads((source / "manifest.json").read_text()).get("version", "")
+        except (OSError, ValueError, AttributeError):
+            version = ""
+        write_json(folder / (target.name + ".json"), {"reason": reason, "version": str(version)})
+        for old in self.backup_list(pid)[:-BACKUPS_KEEP]:
+            shutil.rmtree(old, ignore_errors=True)
+            (folder / (old.name + ".json")).unlink(missing_ok=True)
+        return target
+
+    def swap_in(self, destination, temp):
+        """Put the finished folder `temp` in place of the plugin; readers never see half of it."""
+        old = Path(tempfile.mkdtemp(prefix=".studio-old-", dir=self.plugins))
+        old.rmdir()
+        os.rename(destination, old)
+        try:
+            os.rename(temp, destination)
+        except BaseException:
+            os.rename(old, destination)
+            raise
+        shutil.rmtree(old, ignore_errors=True)
+
+    def link_load_dir(self, pid, destination):
+        """QML caches components by URL, so the shell loads a changed plugin through a fresh path:
+        ~/.cache/angelos/plugin-load/<id>.<n> → the plugin folder (children reload too)."""
+        root = self.home / ".cache/angelos/plugin-load"
+        root.mkdir(parents=True, exist_ok=True)
+        for old in root.glob(pid + ".*"):
+            if old.is_symlink():
+                old.unlink()
+        link = root / f"{pid}.{time.time_ns()}"
+        os.symlink(destination, link)
+        return str(link)
+
+    def edit_start(self, pid, messages=None):
+        path = self.user_plugin_dir(pid)
+        files, kept = self.read_plugin(path)
+        bundle_files({"summary": "", "notes": [], "files": [{"path": k, "content": v} for k, v in files.items()]})
+        self.clear_drafts()
+        base = self.new_draft_dir(files, path, kept)
+        work = self.new_draft_dir(files, path, kept)
+        session = {"mode": "edit", "target": pid, "messages": messages or [], "plan": None,
+                   "draft": {"token": work, "summary": "", "notes": []},
+                   "base": {"token": base, "digest": digest(files)}, "kept": kept, "installed": "",
+                   "backups": len(self.backup_list(pid))}
+        self.review(session)
+        self.save(session)
+        return session
+
+    def draft_files_of(self, session):
+        draft = session.get("draft")
+        if not draft or (session.get("installed") and session.get("mode") != "edit"):
+            raise StudioError("There is no draft to edit.", "Нет черновика для правки.")
+        return self.load_draft_files(draft["token"], set(session.get("kept") or []))
+
+    def write_draft_file(self, session, name, content):
+        """The built-in editor: save one file of the draft (None deletes it), then check again."""
+        files = self.draft_files_of(session)
+        if not valid_path(name) or name in (session.get("kept") or []):
+            raise StudioError("Invalid file name.", "Недопустимое имя файла.")
+        if content is None:
+            if name == "manifest.json":
+                raise StudioError("manifest.json cannot be deleted.", "manifest.json удалить нельзя.")
+            files.pop(name, None)
+        elif not isinstance(content, str) or "\x00" in content:
+            raise StudioError("Invalid file content.", "Недопустимое содержимое файла.")
+        else:
+            files[name] = content
+        bundle_files({"summary": "", "notes": [], "files": [{"path": k, "content": v} for k, v in files.items()]})
+        target = self.draft_dir(session["draft"]["token"]) / name
+        if content is None:
+            target.unlink(missing_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(prefix=".edit-", dir=target.parent)
+            with os.fdopen(fd, "w") as stream:
+                stream.write(content)
+            os.replace(tmp, target)
+        self.review(session)
+        self.save(session)
+
+    def update(self, session, expected):
+        if session.get("mode") != "edit":
+            raise StudioError("No plugin is being edited.", "Сейчас нет доработки плагина.")
+        draft = self.review(session)
+        if not expected or draft["digest"] != expected:
+            raise StudioError("Files changed. Review them again before updating.",
+                              "Файлы изменились. Просмотрите результат перед обновлением.")
+        if draft["errors"]:
+            raise StudioError("Fix the validation errors first.", "Сначала исправьте ошибки проверки.")
+        if not draft.get("changed"):
+            raise StudioError("Nothing has changed yet.", "Пока ничего не изменилось.")
+        pid = session["target"]
+        destination = self.user_plugin_dir(pid)
+        kept = set(session.get("kept") or [])
+        base = self.load_draft_files(session["base"]["token"], kept)
+        current, _ = self.read_plugin(destination)
+        moved = [n for n in base if current.get(n) != base[n]]
+        if moved:
+            raise StudioError("The plugin changed on disk since this edit started (" + ", ".join(moved[:5])
+                              + "). Open it in Studio again.",
+                              "Плагин изменился на диске после начала доработки (" + ", ".join(moved[:5])
+                              + "). Открой его в мастере заново.")
+        files = {row["path"]: row["content"] for row in draft["files"]}
+        backup = self.backup(pid, destination, "update")
+        # start from the installed folder: pictures and files the plugin keeps for itself stay
+        temp = Path(tempfile.mkdtemp(prefix=".studio-", dir=self.plugins))
+        try:
+            shutil.copytree(destination, temp, symlinks=True, dirs_exist_ok=True,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            for name in base:
+                if name not in files:
+                    (temp / name).unlink(missing_ok=True)
+            for name, text in files.items():
+                (temp / name).parent.mkdir(parents=True, exist_ok=True)
+                (temp / name).write_text(text)
+            self.swap_in(destination, temp)
+        finally:
+            if temp.exists():
+                shutil.rmtree(temp)
+        load = self.link_load_dir(pid, destination)
+        # the new version is what further changes are compared with
+        old_base = session["base"]["token"]
+        session["base"] = {"token": self.new_draft_dir(files, destination, sorted(kept)), "digest": digest(files)}
+        shutil.rmtree(self.state / "drafts" / old_base, ignore_errors=True)
+        session.update({"plan": None, "updated": int(time.time()), "backups": len(self.backup_list(pid))})
+        self.review(session)
+        self.save(session)
+        return {"id": pid, "loadDir": load, "backup": str(backup),
+                "desktop": bool(draft["manifest"].get("desktopWidget"))}
+
+    def rollback(self, pid):
+        """Bring back the newest backup; the version it replaces is saved too (rollback again = redo)."""
+        destination = self.user_plugin_dir(pid)
+        backups = self.backup_list(pid)
+        if not backups:
+            raise StudioError("No earlier version is saved.", "Прошлых версий не сохранено.")
+        chosen = backups[-1]
+        self.backup(pid, destination, "rollback")
+        temp = Path(tempfile.mkdtemp(prefix=".studio-", dir=self.plugins))
+        try:
+            shutil.copytree(chosen, temp, symlinks=True, dirs_exist_ok=True)
+            self.swap_in(destination, temp)
+        finally:
+            if temp.exists():
+                shutil.rmtree(temp)
+        shutil.rmtree(chosen, ignore_errors=True)
+        (self.backups_dir(pid) / (chosen.name + ".json")).unlink(missing_ok=True)
+        return {"id": pid, "loadDir": self.link_load_dir(pid, destination)}
+
+    def check_prompt(self, prompt):
+        if not prompt or len(prompt) > 16000:
+            raise StudioError("Enter a request (up to 16000 characters).", "Введите запрос (до 16000 символов).")
+        if any(key and key in prompt for key in self.credentials().values()):
+            raise StudioError("Enter API keys only in the key field.", "Вводите API-ключи только в поле ключа.")
+
     def dispatch(self, request):
         action = request.get("action")
-        if action not in ("status",):
+        # a plain reload of an installed plugin is not a developer feature
+        if action not in ("status", "reload"):
             settings = read_json(self.config / "settings.json", {})
             if not settings.get("developer", {}).get("enabled", False):
                 raise StudioError("Enable developer mode in Settings → System.",
@@ -907,7 +1270,8 @@ class Studio:
         if action == "status":
             keys = self.credentials()
             return {"keys": {p: bool(keys.get(p)) for p in API_PROVIDERS},
-                    "cli": cli_status(), "session": self.session(), "models": models_catalog()}
+                    "cli": cli_status(), "session": self.session(), "models": models_catalog(),
+                    "backups": self.backup_counts()}
         if action in ("save_key", "delete_key"):
             provider = request.get("provider")
             if provider not in API_PROVIDERS:
@@ -923,25 +1287,36 @@ class Studio:
             write_json(self.keys, keys)
             return {"keys": {p: bool(keys.get(p)) for p in ("openai", "anthropic")}}
         if action == "reset":
+            self.clear_drafts()
             session = {"messages": [], "plan": None, "draft": None, "installed": ""}
             self.save(session)
             return {"session": session}
+        if action == "reload":
+            pid = request.get("id")
+            return {"reloaded": {"id": pid, "loadDir": self.link_load_dir(pid, self.user_plugin_dir(pid))}}
+        if action == "edit_start":
+            return {"session": self.edit_start(request.get("id")), "backups": self.backup_counts()}
+        if action == "rollback":
+            pid = request.get("id")
+            reloaded = self.rollback(pid)
+            session = self.session()
+            if session.get("mode") == "edit" and session.get("target") == pid:
+                session = self.edit_start(pid, session.get("messages"))
+            return {"session": session, "reloaded": reloaded, "backups": self.backup_counts()}
         session = self.session()
+        edit = session.get("mode") == "edit"
         if action == "plan":
             prompt = request.get("prompt", "").strip()
-            if not prompt or len(prompt) > 16000:
-                raise StudioError("Enter a request (up to 16000 characters).", "Введите запрос (до 16000 символов).")
-            if any(key and key in prompt for key in self.credentials().values()):
-                raise StudioError("Enter API keys only in the key field.", "Вводите API-ключи только в поле ключа.")
+            self.check_prompt(prompt)
             if session.get("installed"):
                 raise StudioError("Start a new project first.", "Сначала создайте новый проект.")
             messages = session["messages"] + [{"role": "user", "content": prompt}]
             if len(json.dumps(messages)) > 150000:
                 raise StudioError("Conversation is full. Start a new project.", "Диалог заполнен. Создайте новый проект.")
-            value, usage = self.ask(request, messages, PLAN)
+            value, usage = self.ask(request, messages, PLAN, session=session)
             if len(value["questions"]) > 3:
                 raise StudioError("Too many questions in response. Try again.", "Слишком много вопросов в ответе. Повторите запрос.")
-            if not ID_RE.fullmatch(value["spec"]["id"]):
+            if not ID_RE.fullmatch(value["spec"]["id"]) or (edit and value["spec"]["id"] != session["target"]):
                 raise StudioError("Invalid proposed plugin ID. Try again.", "Некорректный ID плагина. Повторите запрос.")
             if value["spec"]["kind"] in ("desktop", "bar") and not (
                     1 <= value["spec"]["widthUnits"] <= 1000
@@ -949,25 +1324,47 @@ class Studio:
                 raise StudioError("Invalid proposed widget size. Try again.",
                                   "Некорректный размер виджета в плане. Повторите запрос.")
             session.update({"messages": messages + [{"role": "assistant", "content": json.dumps(value, ensure_ascii=False)}],
-                            "plan": value, "draft": None, "usage": usage})
+                            "plan": value, "usage": usage})
+            if not edit:
+                session["draft"] = None
             self.save(session)
         elif action == "generate":
             plan = session.get("plan")
-            if not plan or plan["questions"]:
-                raise StudioError("Answer the questions first.", "Сначала ответьте на вопросы.")
+            prompt = str(request.get("prompt") or "").strip()
             if session.get("installed"):
                 raise StudioError("Start a new project first.", "Сначала создайте новый проект.")
-            messages = session["messages"] + [{"role": "user", "content": "Implement this approved plan:\n" + json.dumps(plan, ensure_ascii=False)}]
-            if session.get("draft"):
-                previous = self.review(session)
-                messages[-1]["content"] += "\nRepair/replace this complete previous bundle:\n" + json.dumps(
-                    {key: previous[key] for key in ("files", "errors", "summary", "notes")}, ensure_ascii=False)
+            if edit:
+                # change the installed plugin: from an approved plan, or straight from a request
+                current = self.review(session)
+                if prompt:
+                    self.check_prompt(prompt)
+                    head = "Apply this change request to the current plugin files:\n" + prompt
+                elif plan and not plan["questions"]:
+                    head = "Implement this approved change plan:\n" + json.dumps(plan, ensure_ascii=False)
+                elif plan:
+                    raise StudioError("Answer the questions first.", "Сначала ответьте на вопросы.")
+                elif current["errors"]:
+                    head = "Fix every automatic check error listed below and keep everything else as it is."
+                else:
+                    raise StudioError("Describe what to change first.", "Сначала опиши, что изменить.")
+                messages = session["messages"] + [{"role": "user", "content": head
+                    + "\nCURRENT FILES (complete; return the complete updated bundle — every file, changed or not):\n"
+                    + json.dumps({key: current[key] for key in ("files", "errors")}, ensure_ascii=False)}]
+            else:
+                if not plan or plan["questions"]:
+                    raise StudioError("Answer the questions first.", "Сначала ответьте на вопросы.")
+                head = "Implement this approved plan:\n" + json.dumps(plan, ensure_ascii=False)
+                messages = session["messages"] + [{"role": "user", "content": head}]
+                if session.get("draft"):
+                    previous = self.review(session)
+                    messages[-1]["content"] += "\nRepair/replace this complete previous bundle:\n" + json.dumps(
+                        {key: previous[key] for key in ("files", "errors", "summary", "notes")}, ensure_ascii=False)
             rounds = request.get("autoRepair", 1)
             rounds = rounds if type(rounds) is int and 0 <= rounds <= MAX_REPAIRS else 1
             total = {"input_tokens": 0, "output_tokens": 0}
             attempt = 0
             while True:
-                value, usage = self.ask(request, messages, BUNDLE, True)
+                value, usage = self.ask(request, messages, BUNDLE, True, session=session)
                 for k in total:
                     total[k] += int((usage or {}).get(k) or 0)
                 self.store_draft(session, value, total)
@@ -978,21 +1375,32 @@ class Studio:
                 attempt += 1
                 # feed the failures back once or twice before bothering the user
                 self.emit({"event": "progress", "stage": "repair", "round": attempt, "of": rounds})
-                messages = session["messages"] + [{"role": "user", "content":
-                    "Implement this approved plan:\n" + json.dumps(plan, ensure_ascii=False)
+                messages = session["messages"] + [{"role": "user", "content": head
                     + "\nYour previous bundle failed the automatic checks below (static checks, then loading every "
                     "entry point in Quickshell). Fix every item, keep what works, and return the complete corrected "
                     "bundle:\n" + json.dumps({key: draft[key] for key in ("files", "errors")}, ensure_ascii=False)}]
+            if edit:
+                # the conversation remembers each change for the next request
+                session["messages"] = session["messages"] + [
+                    {"role": "user", "content": prompt or ("Apply the approved change plan." if plan else "Fix the check errors.")},
+                    {"role": "assistant", "content": json.dumps({"summary": value["summary"]}, ensure_ascii=False)}]
+                session["plan"] = None
+                self.save(session)
         elif action == "review":
             self.review(session)
             self.save(session)
+        elif action in ("save_file", "delete_file"):
+            self.write_draft_file(session, request.get("path"),
+                                  request.get("content") if action == "save_file" else None)
         elif action == "install":
             installed = self.install(session, request.get("digest"))
             return {"session": session, "installed": installed}
+        elif action == "update":
+            reloaded = self.update(session, request.get("digest"))
+            return {"session": session, "reloaded": reloaded, "backups": self.backup_counts()}
         else:
             raise StudioError("Unknown Studio action.")
         return {"session": session}
-
 
 def main():
     os.umask(0o077)

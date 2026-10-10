@@ -1,0 +1,99 @@
+{
+ "sheet": "~/Pictures/angelos-sprites/angel/Many-Eyed Golden Ophanim Sprite Atlas.png",
+ "block": 6.169,
+ "mask": true,
+ "boxes": {
+  "body": [
+   8,
+   16,
+   584,
+   744
+  ],
+  "wing_left": [
+   592,
+   96,
+   1048,
+   672
+  ],
+  "wing_right": [
+   1072,
+   96,
+   1528,
+   672
+  ],
+  "eyes": [
+   724,
+   760,
+   1000,
+   920
+  ],
+  "mouth": [
+   1150,
+   760,
+   1426,
+   935
+  ]
+ },
+ "overlays": {
+  "eyes": {
+   "scale": 0.95,
+   "x": 27,
+   "y": 46,
+   "clip": [
+    29,
+    48,
+    68,
+    70
+   ]
+  },
+  "mouth": {
+   "scale": 0.975,
+   "x": 26,
+   "y": 46,
+   "clip": [
+    32,
+    48,
+    64,
+    71
+   ]
+  }
+ },
+ "parts": {
+  "wing_left": {
+   "pivot": [
+    62.4,
+    44.7
+   ],
+   "at": [
+    20,
+    54
+   ],
+   "angles": [
+    10,
+    5,
+    0,
+    -5,
+    -10
+   ],
+   "every": 1
+  },
+  "wing_right": {
+   "pivot": [
+    10.2,
+    44.7
+   ],
+   "at": [
+    73,
+    54
+   ],
+   "angles": [
+    -10,
+    -5,
+    0,
+    5,
+    10
+   ],
+   "every": 1
+  }
+ }
+}

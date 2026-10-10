@@ -1,0 +1,31 @@
+{
+  "id": "limbo-found",
+  "title": {
+    "ru": "Лимб: ангел",
+    "en": "Limbo: the angel"
+  },
+  "draft": true,
+  "with": "angel",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "outcome:limbo-return",
+      "next": "say",
+      "note": "the angel finds the player in limbo (after limboReturn minutes away)"
+    },
+    "say": {
+      "type": "say",
+      "who": "angel",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Я тебя нашла. Ты так долго сидел{g:|а|(а)} в сером… Пойдём домой.",
+        "en": "I found you. You sat in the grey so long… Let's go home."
+      },
+      "next": "end"
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

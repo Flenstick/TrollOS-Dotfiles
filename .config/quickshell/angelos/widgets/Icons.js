@@ -21,6 +21,16 @@ const icons = {
         ".....r...r...",
         "....rr......."
     ],
+    camera: [
+        "...###...",
+        "#########",
+        "#fffffoo#",
+        "#ff###ff#",
+        "#f#www#f#",
+        "#f#www#f#",
+        "#ff###ff#",
+        "#########"
+    ],
     document: [
         "#######..",
         "#wwwww##.",
@@ -42,6 +52,49 @@ const icons = {
         "...#o#...",
         "....#...."
     ],
+    fire: [
+        "....#....",
+        "...#r#...",
+        "..#rr#.#.",
+        ".#rryr##.",
+        ".#ryyyr#.",
+        "#rryyyrr#",
+        "#ryywyyr#",
+        ".#ryyyr#.",
+        "..#####.."
+    ],
+    chat: [
+        ".#######.",
+        "#wwwwwww#",
+        "#wowowow#",
+        "#wwwwwww#",
+        ".##w####.",
+        "..#w#....",
+        "..##....."
+    ],
+    // Y2K workspace sprites (Settings → Workspaces → Desk sprite), the heart's size
+    cd: [
+        "..#####..",
+        ".#wwxxo#.",
+        "#wxxyyoo#",
+        "#xxy#yoo#",
+        "#xy#.#oo#",
+        "#xxy#yox#",
+        "#oxxyyxx#",
+        ".#ooxxx#.",
+        "..#####.."
+    ],
+    sparkleStar: [
+        "....#....",
+        "...#w#...",
+        "...#o#...",
+        ".##ooo##.",
+        "#ooowooo#",
+        ".##ooo##.",
+        "...#o#...",
+        "...#o#...",
+        "....#...."
+    ],
     heartBroken: [
         ".##...##.",
         "#wo#.#oo#",
@@ -50,6 +103,19 @@ const icons = {
         ".#oo#oo#.",
         "..#o#o#..",
         "...#.#...",
+        "....#...."
+    ],
+    // a heart with the demon's horns (hell's salute at the end of a song)
+    heartHorns: [
+        "r.......r",
+        "rr.....rr",
+        ".r##.##r.",
+        "#wo#.#oo#",
+        "#ooo#ooo#",
+        "#ooooooo#",
+        ".#ooooo#.",
+        "..#ooo#..",
+        "...#o#...",
         "....#...."
     ],
     heartSmall: [
@@ -85,6 +151,20 @@ const icons = {
         "..ooo..",
         "...o...",
         "...o..."
+    ],
+    // the Start / launcher calculator
+    calc: [
+        "#########",
+        "#fffffff#",
+        "#f#####f#",
+        "#f#wwo#f#",
+        "#f#####f#",
+        "#fffffff#",
+        "#fwfwfof#",
+        "#fffffff#",
+        "#fwfwfxf#",
+        "#fffffff#",
+        "#########"
     ],
     gear: [
         "....###....",
@@ -263,6 +343,16 @@ const icons = {
         "#yyyy###.",
         ".#yyyyyy#",
         "..######."
+    ],
+    coffee: [
+        "...w.w...",
+        "..w.w....",
+        "#######..",
+        "#ooooo###",
+        "#fffff#.#",
+        "#fffff###",
+        ".#fff#...",
+        "..###...."
     ],
     sun: [
         ".....y.....",
@@ -595,6 +685,32 @@ const icons = {
         ".#######.",
         "..#...#.."
     ],
+    // the same face while the demon rules: horns where the halo was
+    botHorns: [
+        "r.......r",
+        "rr.....rr",
+        ".#######.",
+        "#fffffff#",
+        "#f#fff#f#",
+        "#fffffff#",
+        "#offfffo#",
+        ".#######.",
+        "..#...#.."
+    ],
+    // in hell itself: a mask, not a face — hollow eyes with an ember in each, a shut slit
+    // for a mouth, the horns grown longer (claude.exe on hell's desktop)
+    botHell: [
+        "r.......r",
+        "rr.....rr",
+        ".r#####r.",
+        "#fffffff#",
+        "#f##f##f#",
+        "#fw#f#wf#",
+        "#fffffff#",
+        "#ff###ff#",
+        ".#######.",
+        "..#...#.."
+    ],
     gauge: [
         "...#####...",
         ".##ooyxx##.",
@@ -603,6 +719,41 @@ const icons = {
         "#....#....#",
         "#...###...#",
         "###########"
+    ],
+    skull: [
+        "..#####..",
+        ".#wwwww#.",
+        "#wwwwwww#",
+        "#w##w##w#",
+        "#w#rw#rw#",
+        "#wwwwwww#",
+        ".#ww#ww#.",
+        "..#w#w#..",
+        "..#####.."
+    ],
+    // the angel watching (the diary's bookmark, modules/diary/DiaryTab)
+    eye: [
+        "...#####...",
+        "..#ooooo#..",
+        ".#oo###oo#.",
+        "#oo#www#oo#",
+        "#oo#w##ooo#",
+        ".#oo###oo#.",
+        "..#ooooo#..",
+        "...#####..."
+    ],
+    pentagram: [
+        "...#####...",
+        "..##.o.##..",
+        ".#..ooo..#.",
+        "##..o.o..##",
+        "#ooooooooo#",
+        "#.ooo.ooo.#",
+        "#..oo.oo..#",
+        "##.ooooo.##",
+        ".#ooo.ooo#.",
+        "..##...##..",
+        "...#####..."
     ],
     ghost: [
         "..#####..",
@@ -615,6 +766,18 @@ const icons = {
         "#fffffff#",
         "#f#f#f#f#",
         ".#.#.#.#."
+    ],
+    // the cobwebs' spider on its thread (Settings → Windows → Cobwebs)
+    spider: [
+        "....#....",
+        "....#....",
+        "#..###..#",
+        ".#.#o#.#.",
+        "..#####..",
+        "####o####",
+        "..#####..",
+        ".#.###.#.",
+        "#...#...#"
     ],
     wifi: [
         "..#####..",
@@ -635,6 +798,48 @@ const icons = {
         "...##r...",
         "...#o#r..",
         "....#..r."
+    ],
+    // bar network indicators: Wi-Fi by signal (wifi = full), wired, Bluetooth off
+    wifi1: [
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        "...###...",
+        "...#o#...",
+        "....#...."
+    ],
+    wifi2: [
+        ".........",
+        ".........",
+        ".........",
+        "..#####..",
+        ".#o...o#.",
+        "...###...",
+        "...#o#...",
+        "....#...."
+    ],
+    ethernet: [
+        ".#######.",
+        "#fffffff#",
+        "#f#o#o#f#",
+        "#fffffff#",
+        "#fff#fff#",
+        ".##f#f##.",
+        "...#o#...",
+        "...###..."
+    ],
+    bluetoothOff: [
+        "r..#...",
+        ".r.##..",
+        ".#r#x#.",
+        "..#r#..",
+        "...#r..",
+        "..###r.",
+        ".#.#x#r",
+        "...##..",
+        "...#..."
     ],
     bluetooth: [
         "...#...",
@@ -693,6 +898,207 @@ const icons = {
         "###.###.###",
         "#y#.#o#.#x#",
         "###.###.###"
+    ],
+    // laptops (services/Power, Backlight, Gestures): the battery, a charger's bolt, eco's leaf,
+    // the touchpad, a fingerprint, rotation, airplane mode, the laptop, hell's coal heart
+    battery: [
+        "#########.",
+        "#wooo...#.",
+        "#oooo...##",
+        "#oooo...##",
+        "#oooo...##",
+        "#oooo...#.",
+        "#########."
+    ],
+    bolt: [
+        "....yyy",
+        "...yyy.",
+        "..yyy..",
+        ".yyyyyy",
+        "yyyyyy.",
+        "..yyy..",
+        ".yyy...",
+        "yyy...."
+    ],
+    // Wellbeing (Settings → Wellbeing, 2026-10-08)
+    clock: [
+        "..#####..",
+        ".#wwwww#.",
+        "#www#www#",
+        "#www#www#",
+        "#www##ww#",
+        "#wwwwwww#",
+        "#wwwwwww#",
+        ".#wwwww#.",
+        "..#####.."
+    ],
+    drop: [
+        "....#....",
+        "...#x#...",
+        "..#xxx#..",
+        ".#xxxxx#.",
+        "#xxwxxxx#",
+        "#xwxxxxx#",
+        "#xxxxxxx#",
+        ".#xxxxx#.",
+        "..#####.."
+    ],
+    leaf: [
+        ".....####",
+        "...##xxx#",
+        "..#xxxxx#",
+        ".#xx#xx#.",
+        ".#x#xxx#.",
+        "..#xxx#..",
+        ".#.###...",
+        "#........"
+    ],
+    touchpad: [
+        "###########",
+        "#fffffffff#",
+        "#fffffffff#",
+        "#fffffffff#",
+        "#fffffffff#",
+        "###########",
+        "#ffff#ffff#",
+        "###########"
+    ],
+    fingerprint: [
+        "..#####..",
+        ".#.....#.",
+        "#..###..#",
+        "#.#...#.#",
+        "#.#.#.#.#",
+        "#.#.#.#.#",
+        "#.#.#.#.#",
+        "..#.#.#.#",
+        "....#.#..",
+        "......#.."
+    ],
+    rotate: [
+        "..####..#",
+        ".#....#.#",
+        "#......##",
+        "#....####",
+        "#........",
+        "#.......#",
+        ".#.....#.",
+        "..#####.."
+    ],
+    plane: [
+        ".....#.....",
+        "....#o#....",
+        "....#o#....",
+        ".###ooo###.",
+        "#ooooooooo#",
+        ".###ooo###.",
+        "....#o#....",
+        "...#ooo#...",
+        "...#####..."
+    ],
+    laptop: [
+        ".#########.",
+        ".#xxxxxxx#.",
+        ".#xwxxxxx#.",
+        ".#xxxxxxx#.",
+        ".#xxxxxxx#.",
+        ".#########.",
+        "###########",
+        ".#########."
+    ],
+    coal: [
+        ".##...##.",
+        "#oy#.#oo#",
+        "#ooo#oyo#",
+        "#oyooooo#",
+        ".#oooyo#.",
+        "..#oyo#..",
+        "...#o#...",
+        "....#...."
+    ],
+    // the weather in the desktop clock's corner (services/Weather)
+    cloud: [
+        "....###....",
+        "..##www#...",
+        ".#wwwwww##.",
+        ".#wwwwwwww#",
+        "#wwwwwwwww#",
+        "#wwwwwwwff#",
+        ".#########."
+    ],
+    cloudSun: [
+        "y..y.......",
+        ".yyy.......",
+        "yyyy###....",
+        ".y##www#...",
+        ".#wwwwww##.",
+        ".#wwwwwwww#",
+        "#wwwwwwwww#",
+        "#wwwwwwwff#",
+        ".#########."
+    ],
+    rain: [
+        "....###....",
+        "..##www#...",
+        ".#wwwwww##.",
+        "#wwwwwwwww#",
+        "#wwwwwwwff#",
+        ".#########.",
+        "..x..x..x..",
+        ".x..x..x..."
+    ],
+    snow: [
+        "....###....",
+        "..##www#...",
+        ".#wwwwww##.",
+        "#wwwwwwwww#",
+        "#wwwwwwwff#",
+        ".#########.",
+        ".x...x...x.",
+        "xxx.xxx.xxx",
+        ".x...x...x."
+    ],
+    storm: [
+        "....###....",
+        "..##www#...",
+        ".#wwwwww##.",
+        "#wwwwwwwww#",
+        "#wwwwwwwff#",
+        ".####yy###.",
+        "....yy.....",
+        "...yyyy....",
+        ".....y.....",
+        "....y......"
+    ],
+    fog: [
+        ".#########.",
+        "...........",
+        "#########..",
+        "...........",
+        "..#########",
+        "...........",
+        ".#########."
+    ],
+    // the disks widget
+    hdd: [
+        "###########",
+        "#wwwwwwwww#",
+        "#fffffffff#",
+        "#fffffffff#",
+        "###########",
+        "#ffffffxfo#",
+        "###########"
+    ],
+    // the note widget: a sticker with its corner folded
+    note: [
+        "#########",
+        "#yyyyyyy#",
+        "#y#####y#",
+        "#yyyyyyy#",
+        "#y###yyy#",
+        "#yyyyy###",
+        "#yyyy#y#.",
+        "######..."
     ]
 };
 
@@ -712,7 +1118,10 @@ const _cache = new Map();
 const CACHE_LIMIT = 4000;
 
 function svg(name, colors, hollow) {
-    const key = (Array.isArray(name) ? name.join("/") : name) + "|" + (hollow ? 1 : 0) + "|" + colors["#"] + colors.o + colors.x + colors.y + colors.w + colors.f + colors.r;
+    let tint = "";
+    for (const k of Object.keys(colors).sort())
+        tint += k + colors[k];
+    const key = (Array.isArray(name) ? name.join("/") : name) + "|" + (hollow ? 1 : 0) + "|" + tint;
     const hit = _cache.get(key);
     if (hit)
         return hit;

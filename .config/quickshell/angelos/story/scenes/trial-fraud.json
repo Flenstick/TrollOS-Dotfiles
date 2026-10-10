@@ -1,0 +1,100 @@
+{
+  "id": "trial-fraud",
+  "title": {
+    "ru": "Испытание: Обман",
+    "en": "Trial: Fraud"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "trial",
+      "cond": "circle == \"fraud\"",
+      "next": "pactCheck",
+      "note": "a try to get out of this circle (Ask → Seek the way out, the wheel's plea)"
+    },
+    "pactCheck": {
+      "type": "if",
+      "cond": "attempts >= pactAfter and not pact",
+      "then": "toPact",
+      "else": "ask"
+    },
+    "toPact": {
+      "type": "scene",
+      "to": "pact"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Подпиши — и выйдешь сейчас же. Мелкий шрифт читать не обязательно.",
+        "en": "Sign — and you're out right now. You needn't read the small print."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Прочитать до конца",
+            "en": "Read it all"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Дочитал{g:|а|(а)}. Там было написано: «вниз». Иди.",
+              "en": "You read to the end. It said: “down”. Go."
+            }
+          },
+          "next": "down"
+        },
+        {
+          "text": {
+            "ru": "Сказать, что подписал{g:|а|(а)}",
+            "en": "Say I signed"
+          },
+          "tone": "negative",
+          "set": {
+            "fraud": "+1"
+          },
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Подписи нет. Я вижу в темноте лучше тебя.",
+              "en": "There's no signature. I see in the dark better than you."
+            }
+          },
+          "next": "stay"
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Темнота тоже ничего не подписывает.",
+              "en": "The dark doesn't sign anything either."
+            }
+          },
+          "next": "stay"
+        }
+      ],
+      "shuffle": true
+    },
+    "stay": {
+      "type": "circle",
+      "to": "stay"
+    },
+    "down": {
+      "type": "circle",
+      "to": "deeper"
+    }
+  }
+}

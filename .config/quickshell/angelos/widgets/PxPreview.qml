@@ -17,8 +17,13 @@ PxWindow {
     property int frame: 0
     property int loops: 0                   // passes played (scenes may vary per pass)
     readonly property int frames: Math.max(1, Math.round(duration / 1000 * fps))
-    readonly property real t: Math.min(1, frame / frames)
+    // Motion "off" (D4): no animation here either — one still frame, the end of the pass:
+    // what the setting leads to
+    readonly property bool still: Motion.still
+    readonly property real t: still ? 1 : Math.min(1, frame / frames)
     property int sceneHeight: Theme.u * 78
+    readonly property int stageStatus: stage.status     // the UI self-test checks every scene loads
+    readonly property var sceneNames: Object.keys(scenes)
 
     function restart() {
         frame = 0;
@@ -26,7 +31,7 @@ PxWindow {
     }
     onVariantChanged: restart()
 
-    title: "preview.exe" + (caption ? " · " + caption : "")
+    title: I18n.exe("preview") + (caption ? " · " + caption : "") + (still ? I18n.t(" · кадр", " · still") : "")
     icon: "play"
     compact: true
     translucent: false
@@ -35,7 +40,7 @@ PxWindow {
 
     Timer {
         interval: Math.round(1000 / root.fps)
-        running: root.visible && root.scene !== ""
+        running: root.visible && root.scene !== "" && !root.still
         repeat: true
         onTriggered: {
             if (root.frame >= root.frames + Math.round(root.hold / 1000 * root.fps)) {
@@ -51,10 +56,36 @@ PxWindow {
     readonly property var scenes: ({
             "TaskClose": taskClose,
             "CloseFx": closeFx,
+            "OpenFx": openFx,
             "WallpaperFx": wallpaperFx,
             "StartMenu": startMenu,
-            "BarStyle": barStyle
+            "BarStyle": barStyle,
+            "DeskSwitch": deskSwitch,
+            "LockScreen": lockScreen,
+            "CaptureSkin": captureSkin,
+            "CircleFx": circleFx,
+            "Breakage": breakage
         })
+    Component {
+        id: breakage
+        Breakage {}
+    }
+    Component {
+        id: circleFx
+        CircleFx {}
+    }
+    Component {
+        id: deskSwitch
+        DeskSwitch {}
+    }
+    Component {
+        id: lockScreen
+        LockScreen {}
+    }
+    Component {
+        id: captureSkin
+        CaptureSkin {}
+    }
     Component {
         id: taskClose
         TaskClose {}
@@ -62,6 +93,10 @@ PxWindow {
     Component {
         id: closeFx
         CloseFx {}
+    }
+    Component {
+        id: openFx
+        OpenFx {}
     }
     Component {
         id: wallpaperFx

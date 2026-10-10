@@ -24,15 +24,19 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             pixel: Theme.u * 3
         }
+        // hell (manifest "realms"): her words in blackletter, fire colours
         PxText {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: CodexState.words[CodexState.state] || ""
+            text: (Theme.hell ? CodexState.hellWords : CodexState.words)[CodexState.state] || ""
             kind: "title"
-            color: CodexState.stateColor(CodexState.state, Theme)
+            font.family: Theme.hell && Theme.latin(text) ? Theme.fontHell : Theme.fontTitle
+            font.pixelSize: Theme.hell && Theme.latin(text) ? Theme.hellPx(Theme.fs) : Theme.sizeTitle
+            color: Theme.hell ? CodexState.hellStateColor(CodexState.state, Theme) : CodexState.stateColor(CodexState.state, Theme)
         }
         Limits {
             width: parent.width
             compact: true
+            hell: Theme.hell
         }
     }
 }

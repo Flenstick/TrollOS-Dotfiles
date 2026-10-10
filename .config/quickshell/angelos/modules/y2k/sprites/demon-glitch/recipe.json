@@ -1,0 +1,123 @@
+{
+ "sheet": "~/Pictures/angelos-sprites/demon/Creepy-cute sleepless neon demon sprite sheet.png",
+ "block": 6.4,
+ "mask": true,
+ "boxes": {
+  "body": [
+   8,
+   48,
+   512,
+   800
+  ],
+  "wing_left": [
+   552,
+   176,
+   1000,
+   592
+  ],
+  "wing_right": [
+   1072,
+   176,
+   1512,
+   592
+  ],
+  "tail": [
+   48,
+   760,
+   632,
+   992
+  ],
+  "eyes": [
+   672,
+   800,
+   1048,
+   928
+  ],
+  "mouth": [
+   1104,
+   800,
+   1480,
+   936
+  ]
+ },
+ "overlays": {
+  "eyes": {
+   "scale": 0.775,
+   "x": 17,
+   "y": 29,
+   "clip": [
+    28,
+    34,
+    51,
+    40
+   ]
+  },
+  "mouth": {
+   "scale": 0.525,
+   "x": 24,
+   "y": 37,
+   "clip": [
+    33,
+    40,
+    45,
+    46
+   ]
+  }
+ },
+ "parts": {
+  "wing_left": {
+   "pivot": [
+    65,
+    52
+   ],
+   "at": [
+    30,
+    56
+   ],
+   "angles": [
+    10,
+    5,
+    0,
+    -5,
+    -10
+   ],
+   "every": 1
+  },
+  "wing_right": {
+   "pivot": [
+    4,
+    51
+   ],
+   "at": [
+    47,
+    56
+   ],
+   "angles": [
+    -10,
+    -5,
+    0,
+    5,
+    10
+   ],
+   "every": 1
+  },
+  "tail": {
+   "pivot": [
+    6,
+    5
+   ],
+   "at": [
+    40,
+    80
+   ],
+   "angles": [
+    19,
+    22,
+    25,
+    28,
+    31
+   ],
+   "every": 2
+  }
+ }
+}

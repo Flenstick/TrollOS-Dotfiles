@@ -1,0 +1,100 @@
+/* angelOS window decorations ({{realm}}) — GTK 3, generated (templates/gtk3-decor.css).
+   Title bars and their buttons like angelOS's own windows (the Settings title bar):
+   a header in the menu colour, bevelled pixel boxes for maximize and close, close
+   turning red under the pointer. In hell: obsidian and blood. The selectors are long on
+   purpose: adw-gtk3 styles title buttons with :not(.appmenu) and resets the background
+   in :backdrop, so ours must weigh more in every state. */
+headerbar,
+.titlebar,
+headerbar.titlebar,
+headerbar.default-decoration {
+    background-color: {{decorHeader}};
+    background-image: none;
+    color: {{decorText}};
+    border-radius: 0;
+    box-shadow: inset 0 -1px {{decorEdge}};
+}
+headerbar:backdrop,
+.titlebar:backdrop {
+    background-color: {{decorFaceAlt}};
+    color: {{decorTextDim}};
+}
+headerbar .title,
+.titlebar .title {
+    color: {{decorTitle}};
+    font-weight: bold;
+}
+
+headerbar button.titlebutton:not(.appmenu),
+.titlebar button.titlebutton:not(.appmenu),
+headerbar button.titlebutton:backdrop:not(.appmenu),
+.titlebar button.titlebutton:backdrop:not(.appmenu) {
+    min-width: 18px;
+    min-height: 18px;
+    padding: 0;
+    margin: 0 1px;
+    border-radius: 0;
+    border: 1px solid {{decorEdge}};
+    background-color: {{decorFace}};
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 14px 14px;
+    box-shadow: inset 1px 1px {{decorHi}}, inset -1px -1px {{decorLo}};
+    color: {{decorText}};
+    -gtk-icon-shadow: none;
+    outline: none;
+}
+
+headerbar button.titlebutton:not(.appmenu) image,
+headerbar button.titlebutton:backdrop:not(.appmenu) image,
+.titlebar button.titlebutton:not(.appmenu) image,
+.titlebar button.titlebutton:backdrop:not(.appmenu) image {
+    opacity: 0;
+}
+
+headerbar button.titlebutton.close:not(.appmenu),
+.titlebar button.titlebutton.close:not(.appmenu),
+headerbar button.titlebutton.close:backdrop:not(.appmenu),
+.titlebar button.titlebutton.close:backdrop:not(.appmenu) {
+    background-image: url("assets/close.svg");
+}
+
+headerbar button.titlebutton.maximize:not(.appmenu),
+.titlebar button.titlebutton.maximize:not(.appmenu),
+headerbar button.titlebutton.maximize:backdrop:not(.appmenu),
+.titlebar button.titlebutton.maximize:backdrop:not(.appmenu) {
+    background-image: url("assets/maximize.svg");
+}
+
+headerbar button.titlebutton.minimize:not(.appmenu),
+.titlebar button.titlebutton.minimize:not(.appmenu),
+headerbar button.titlebutton.minimize:backdrop:not(.appmenu),
+.titlebar button.titlebutton.minimize:backdrop:not(.appmenu) {
+    background-image: url("assets/minimize.svg");
+}
+
+headerbar button.titlebutton:hover:not(.appmenu),
+.titlebar button.titlebutton:hover:not(.appmenu),
+headerbar button.titlebutton:backdrop:hover:not(.appmenu),
+.titlebar button.titlebutton:backdrop:hover:not(.appmenu) {
+    background-color: {{decorHover}};
+}
+
+headerbar button.titlebutton.close:hover:not(.appmenu),
+.titlebar button.titlebutton.close:hover:not(.appmenu),
+headerbar button.titlebutton.close:backdrop:hover:not(.appmenu),
+.titlebar button.titlebutton.close:backdrop:hover:not(.appmenu) {
+    background-color: {{decorDanger}};
+    background-image: url("assets/close-hover.svg");
+}
+
+headerbar button.titlebutton:active:not(.appmenu),
+.titlebar button.titlebutton:active:not(.appmenu) {
+    box-shadow: inset 1px 1px {{decorLo}}, inset -1px -1px {{decorHi}};
+    background-position: 1px 1px;
+}
+
+headerbar button.titlebutton:backdrop:not(.appmenu),
+.titlebar button.titlebutton:backdrop:not(.appmenu) {
+    opacity: 0.85;
+}

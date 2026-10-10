@@ -1,0 +1,482 @@
+pragma Singleton
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import Quickshell
+import qs.config
+import qs.services
+
+// Which menu of the Golden Gate menu bar is open, on which screen, and where (MacMenuHost draws
+// it, MacMenuBar's titles open it). ←/→ walk the bar's menus like on a Mac; moving the pointer
+// over another title while one is open opens that one. The menus are live: the app changes its
+// own, Wi-Fi turns on — the open menu follows. Here are also the emblem's menu (the Apple menu
+// of macOS, angelOS's here: About This Computer, System Settings, Updates, Force Quit, Sleep,
+// Restart, Shut Down, Lock Screen, Log Out) and the menus of the bar's status items (Wi-Fi,
+// Bluetooth, sound, the input source, a tray icon).
+Singleton {
+    id: root
+
+    property string screen: ""               // the screen with an open menu, "" = none
+    property int index: -1                   // the bar's menu that is open (-1: a status menu)
+    property string statusKind: ""           // wifi | bluetooth | sound | input | tray
+    property var trayItem: null              // the tray icon whose menu is open
+    property real x: 0                       // its left edge (or right edge, alignRight) in screen px
+    property bool alignRight: false
+    property var titleX: ({})                // screen -> [left x of each title], from the bar
+    property bool fromKeyboard: false        // opened from the keyboard: the first item is selected
+    property real bottom: -1                 // a Dock menu: its bottom edge (it opens upwards, centred on x)
+    property string side: ""                 // a Dock on the left or right: the menu opens beside it,
+    property real sideY: 0                   // x its near edge, centred on sideY (Config.mac.dockPosition)
+    property var dockItem: null              // the Dock item whose menu is open
+    property real top: -1                    // the desktop's menu: its top edge (x is its left, where the click was)
+    readonly property var barMenus: [angelMenu].concat(AppMenu.menus)
+    readonly property var menu: screen === "" ? null : index >= 0 ? barMenus[index] || null : statusKind ? statusMenu(statusKind) : null
+    readonly property bool isOpen: menu !== null
+
+    function open(screenName, i, xPos, keyboard) {
+        if (!barMenus[i])
+            return;
+        if (!isOpen)
+            Shell.closeTransient();
+        fromKeyboard = !!keyboard;
+        top = -1;
+        statusKind = "";
+        bottom = -1;
+        side = "";
+        dockItem = null;
+        x = xPos;
+        alignRight = false;
+        index = i;
+        screen = screenName;
+    }
+    // a status item's menu: right-aligned under it
+    function openStatus(screenName, kind, rightX, tray) {
+        if (!isOpen)
+            Shell.closeTransient();
+        fromKeyboard = false;
+        top = -1;
+        index = -1;
+        bottom = -1;
+        side = "";
+        dockItem = null;
+        trayItem = tray || null;
+        statusKind = kind;
+        x = rightX;
+        alignRight = true;
+        screen = screenName;
+    }
+    // a Dock item's menu: above it, centred on it
+    // centerX, bottomY: above the icon of a Dock at the bottom; with `edge` "left"/"right" (a Dock
+    // there) centerX is the menu's near edge and bottomY the icon's middle
+    function openDock(screenName, item, centerX, bottomY, edge) {
+        if (isOpen && screen === screenName && dockItem && item && dockItem.id === item.id) {
+            close();
+            return;
+        }
+        if (!isOpen)
+            Shell.closeTransient();
+        fromKeyboard = false;
+        top = -1;
+        index = -1;
+        dockItem = item;
+        statusKind = item.kind === "trash" ? "dock-trash" : item.kind === "downloads" ? "dock-downloads" : "dock";
+        x = centerX;
+        bottom = bottomY;
+        side = "";
+        if (edge === "left" || edge === "right") {
+            side = edge;
+            sideY = bottomY;
+            bottom = -1;
+        }
+        alignRight = false;
+        screen = screenName;
+    }
+    // a stack in the Dock (Downloads, a left click): its newest files in a grid above the icon,
+    // MacMenuHost draws it (MacStack) — the same overlay as a menu: a click outside or Esc closes it
+    function openStack(screenName, item, centerX, bottomY, edge) {
+        if (isOpen && screen === screenName && statusKind === "dock-stack") {
+            close();
+            return;
+        }
+        openDock(screenName, item, centerX, bottomY, edge);
+        statusKind = "dock-stack";
+    }
+    // the desktop's menu (a right click on the wallpaper), as Finder's: under the pointer
+    function openDesktop(screenName, xPos, yPos) {
+        if (!isOpen)
+            Shell.closeTransient();
+        fromKeyboard = false;
+        index = -1;
+        bottom = -1;
+        side = "";
+        dockItem = null;
+        trayItem = null;
+        statusKind = "desk";
+        deskScreen = screenName;
+        x = xPos;
+        top = yPos;
+        alignRight = false;
+        screen = screenName;
+    }
+    property string deskScreen: ""
+    // ⇧⌘5: macOS's Screenshot toolbar as a menu, in the middle above the Dock, the first item
+    // selected (↑/↓, Enter, Esc)
+    function openShot(screenName, centerX, bottomY) {
+        if (isOpen && screen === screenName && statusKind === "shot") {
+            close();
+            return;
+        }
+        if (!isOpen)
+            Shell.closeTransient();
+        fromKeyboard = true;
+        top = -1;
+        index = -1;
+        dockItem = null;
+        trayItem = null;
+        statusKind = "shot";
+        x = centerX;
+        bottom = bottomY;
+        side = "";
+        alignRight = false;
+        screen = screenName;
+    }
+    function close() {
+        top = -1;
+        screen = "";
+        index = -1;
+        statusKind = "";
+        trayItem = null;
+        dockItem = null;
+        bottom = -1;
+        side = "";
+    }
+    function toggle(screenName, i, xPos) {
+        if (isOpen && screen === screenName && index === i)
+            close();
+        else
+            open(screenName, i, xPos);
+    }
+    function toggleStatus(screenName, kind, rightX, tray) {
+        if (isOpen && screen === screenName && statusKind === kind && trayItem === (tray || null))
+            close();
+        else
+            openStatus(screenName, kind, rightX, tray);
+    }
+    // ←/→ from the keyboard: the bar's menus in a ring
+    function step(d) {
+        if (index < 0)
+            return;
+        const n = barMenus.length;
+        const i = (index + d + n) % n;
+        const xs = titleX[screen] || [];
+        open(screen, i, xs[i] !== undefined ? xs[i] : x, true);
+    }
+    function activate(item) {
+        close();
+        Qt.callLater(() => AppMenu.trigger(item));
+    }
+    Connections {
+        target: Shell
+        function onDismissMenus() {
+            root.close();
+        }
+    }
+    // another app came to the front: its menus are others (the menu bar taking the keyboard is
+    // not that: AppMenu.window stays the frontmost window then)
+    readonly property int frontId: AppMenu.window ? AppMenu.window.id : -1
+    onFrontIdChanged: if (index > 0)
+        close()
+
+    function fn(id, label, f, extra) {
+        return AppMenu.item(id, label, {
+            "kind": "fn",
+            "fn": f
+        }, extra);
+    }
+    function header(id, label) {
+        return {
+            "id": id,
+            "label": label,
+            "type": "header"
+        };
+    }
+    function settingsItem(id, label, page) {
+        return fn(id, label, () => Shell.openSettings(page));
+    }
+
+    // the apps that run, one row per app (Force Quit)
+    readonly property var runningApps: {
+        const seen = {};
+        const out = [];
+        for (const w of Niri.windows) {
+            if (!w.pid || seen[w.pid])
+                continue;
+            seen[w.pid] = true;
+            const e = DesktopEntries.byId(w.app_id) || DesktopEntries.heuristicLookup(w.app_id);
+            out.push({
+                "pid": w.pid,
+                "name": e && e.name ? e.name : AppMenu.prettyName(w.app_id)
+            });
+        }
+        return out.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    readonly property var angelMenu: ({
+            "id": "m:angel",
+            "title": "angelOS",
+            "emblem": true,
+            "items": AppMenu.tidy([fn("a:about", I18n.t("Об этом компьютере", "About This Computer"), () => Shell.openSettings("about")), AppMenu.sep("a1"), fn("a:settings", I18n.t("Системные настройки…", "System Settings…"), () => Shell.openSettings()), fn("a:updates", Updates.available ? I18n.t("Обновления — есть новое", "Updates — something new") : I18n.t("Обновления…", "Updates…"), () => Shell.openSettings("updates")), AppMenu.sep("a2"), AppMenu.submenu("a:force", I18n.t("Завершить принудительно", "Force Quit"), runningApps.map(a => fn("a:kill" + a.pid, a.name, () => Quickshell.execDetached(["kill", "-KILL", String(a.pid)])))), AppMenu.sep("a3"), fn("a:sleep", I18n.t("Сон", "Sleep"), () => Quickshell.execDetached(["systemctl", "suspend"])), fn("a:restart", I18n.t("Перезагрузить…", "Restart…"), () => Shell.sessionOpen = true), fn("a:off", I18n.t("Выключить…", "Shut Down…"), () => Shell.sessionOpen = true), AppMenu.sep("a4"), fn("a:lock", I18n.t("Заблокировать экран", "Lock Screen"), () => Shell.lock(), {
+                    "keys": Config.mac.keys ? ["ctrl", "logo", "q"] : []
+                }), fn("a:logout", I18n.t("Завершить сеанс ", "Log Out ") + StartApps.userName + "…", () => Shell.sessionOpen = true)])
+        })
+
+    // ---- the status items' menus ----
+    function statusMenu(kind) {
+        switch (kind) {
+        case "wifi":
+            return {
+                "id": "s:wifi",
+                "items": wifiItems()
+            };
+        case "bluetooth":
+            return {
+                "id": "s:bt",
+                "items": btItems()
+            };
+        case "sound":
+            return {
+                "id": "s:sound",
+                "items": soundItems()
+            };
+        case "battery":
+            return {
+                "id": "s:battery",
+                "items": batteryItems()
+            };
+        case "input":
+            return {
+                "id": "s:input",
+                "items": inputItems()
+            };
+        case "tray":
+            return trayItem && trayItem.menu ? {
+                "id": "s:tray",
+                "tray": trayItem.menu
+            } : null;
+        case "dock":
+            {
+                // the live item (its windows change while the menu is open)
+                const it = dockItem ? MacDockModel.apps.find(a => a.id === dockItem.id) || dockItem : null;
+                return it ? {
+                    "id": "s:dock:" + it.id,
+                    "items": MacDockModel.menuFor(it)
+                } : null;
+            }
+        case "dock-trash":
+            return {
+                "id": "s:dock:trash",
+                "items": MacDockModel.trashMenu()
+            };
+        case "desk":
+            return {
+                "id": "s:desk",
+                "items": deskItems()
+            };
+        case "dock-downloads":
+            {
+                // where the menu is now: activating it closes the menu first
+                const at = [screen, dockItem, x, bottom];
+                return {
+                    "id": "s:dock:downloads",
+                    "items": [fn("dl:stack", I18n.t("Показать стопкой", "Show as Stack"), () => root.openStack(at[0], at[1], at[2], at[3])), fn("dl:open", I18n.t("Открыть в «%1»", "Open in %1").arg(MacDockModel.fileManagerName), () => MacDockModel.openDownloads())]
+                };
+            }
+        case "dock-stack":
+            return {
+                "id": "s:dock:stack",
+                "stack": true,
+                "items": []
+            };
+        case "shot":
+            return {
+                "id": "s:shot",
+                "items": shotItems()
+            };
+        }
+        return null;
+    }
+    // Finder's desktop menu, of what angelOS's desktop has: no files on it, so no New Folder or
+    // Sort By; the wallpaper, the desktop widgets (angelOS's own, toggled per screen) and
+    // the Desktop folder in the file manager
+    function deskItems() {
+        const scr = deskScreen;
+        const widgets = DesktopWidgets.types.map(t => AppMenu.item("desk:w:" + t.type, t.label, {
+                    "kind": "fn",
+                    "fn": () => DesktopWidgets.toggle(t.type, scr)
+                }, {
+                    "toggle": "check",
+                    "checked": DesktopWidgets.has(t.type, scr)
+                }));
+        const out = [fn("desk:wall", I18n.t("Изменить обои…", "Change Wallpaper…"), () => Shell.openSettings("wallpaper")), AppMenu.sep("desk1"), AppMenu.submenu("desk:widgets", I18n.t("Виджеты", "Widgets"), widgets)];
+        // editing only while there is something to move
+        if (DesktopWidgets.editMode || DesktopWidgets.uidsFor(scr).length > 0)
+            out.push(fn("desk:edit", DesktopWidgets.editMode ? I18n.t("Закончить редактирование", "Done Editing Widgets") : I18n.t("Редактировать виджеты", "Edit Widgets"), () => DesktopWidgets.toggleEdit(scr)));
+        out.push(AppMenu.sep("desk2"), fn("desk:folder", I18n.t("Открыть папку «Рабочий стол»", "Open the Desktop Folder"), () => Quickshell.execDetached(["sh", "-c", 'exec xdg-open "$(xdg-user-dir DESKTOP)"'])));
+        // the plugins' entries (manifest "menu": quick-actions…), as plain Mac menu items: words,
+        // no pixel icons; their separators stay, none at either end
+        const plug = [];
+        Plugins.menuEntries.forEach((e, i) => {
+            if (e.separator) {
+                if (plug.length && plug[plug.length - 1].type !== "separator")
+                    plug.push(AppMenu.sep("desk:p:" + i));
+            } else {
+                plug.push(fn("desk:p:" + i, I18n.label(e.label), () => Plugins.run(e)));
+            }
+        });
+        while (plug.length && plug[plug.length - 1].type === "separator")
+            plug.pop();
+        if (plug.length)
+            out.push(AppMenu.sep("desk3"), ...plug);
+        return out;
+    }
+    // the screenshot menu (⇧⌘5): what Capture.mac does after the menu has gone
+    function shotItems() {
+        const k = keys => Config.mac.keys ? {
+            "keys": keys
+        } : {};
+        const out = [header("sh:h", I18n.t("Снимок экрана", "Screenshot")), fn("sh:screen", I18n.t("Снять весь экран", "Capture Entire Screen"), () => Capture.mac("screen"), k(["shift", "logo", "3"])), fn("sh:window", I18n.t("Снять окно", "Capture Selected Window"), () => Capture.mac("window")), fn("sh:region", I18n.t("Снять выбранную область", "Capture Selected Portion"), () => Capture.mac("region"), k(["shift", "logo", "4"]))];
+        if (Capture.canRecord)
+            out.push(AppMenu.sep("sh1"), fn("sh:record", I18n.t("Записать выбранную область", "Record Selected Portion"), () => Capture.mac("record")));
+        out.push(AppMenu.sep("sh2"), fn("sh:folder", I18n.t("Открыть папку «Снимки экрана»", "Open the Screenshots Folder"), () => Quickshell.execDetached(["sh", "-c", 'mkdir -p "$HOME/Pictures/Screenshots" && exec xdg-open "$HOME/Pictures/Screenshots"'])), settingsItem("sh:set", I18n.t("Настройки снимков…", "Screenshot Settings…"), "capture"));
+        return out;
+    }
+    function wifiItems() {
+        const out = [
+            {
+                "id": "w:sw",
+                "label": "Wi-Fi",
+                "type": "switch",
+                "checked": Wifi.enabled,
+                "enabled": Wifi.hardwareEnabled,
+                "keepOpen": true,
+                "act": {
+                    "kind": "fn",
+                    "fn": () => Wifi.setEnabled(!Wifi.enabled)
+                }
+            }
+        ];
+        if (Wifi.enabled) {
+            const nets = Wifi.networks.slice(0, 12);
+            if (nets.length)
+                out.push(AppMenu.sep("w1"), header("w:h", I18n.t("Сети", "Networks")));
+            for (const n of nets)
+                out.push(fn("w:n" + n.name, n.name, () => n.connected ? null : Wifi.needsPassword(n) ? Shell.openSettings("network") : Wifi.connect(n), {
+                    "toggle": "check",
+                    "checked": n.connected
+                }));
+        }
+        out.push(AppMenu.sep("w2"), settingsItem("w:set", I18n.t("Настройки Wi-Fi…", "Wi-Fi Settings…"), "network"));
+        return out;
+    }
+    function batteryItems() {
+        const out = [header("p:h", I18n.t("Батарея", "Battery") + " · " + Power.percent + " %"), {
+                "id": "p:st",
+                "label": Power.statusText,
+                "enabled": false
+            }];
+        if (Power.profilesAvailable) {
+            out.push(AppMenu.sep("p1"), header("p:ph", I18n.t("Режим питания", "Energy Mode")));
+            for (const [v, label] of [["power-saver", I18n.t("Экономия", "Low Power")], ["balanced", I18n.t("Баланс", "Automatic")], ["performance", I18n.t("Мощность", "High Power")]])
+                out.push(fn("p:" + v, label, () => Power.setProfile(v), {
+                    "toggle": "check",
+                    "checked": Power.profile === v
+                }));
+        }
+        out.push(AppMenu.sep("p2"), {
+            "id": "p:eco",
+            "label": I18n.t("Режим экономии angelOS", "angelOS Eco Mode"),
+            "type": "switch",
+            "checked": Power.eco,
+            "keepOpen": true,
+            "act": {
+                "kind": "fn",
+                "fn": () => Power.toggleEco()
+            }
+        });
+        if (Laptop.limitSupported)
+            out.push({
+                "id": "p:limit",
+                "label": I18n.t("Заряжать до 80 %", "Charge to 80%"),
+                "type": "switch",
+                "checked": Config.power.chargeLimit < 100,
+                "keepOpen": true,
+                "act": {
+                    "kind": "fn",
+                    "fn": () => Config.power.chargeLimit = Config.power.chargeLimit < 100 ? 100 : 80
+                }
+            });
+        out.push(AppMenu.sep("p3"), settingsItem("p:set", I18n.t("Настройки батареи…", "Battery Settings…"), "battery"));
+        return out;
+    }
+    function btItems() {
+        const out = [
+            {
+                "id": "b:sw",
+                "label": "Bluetooth",
+                "type": "switch",
+                "checked": Bt.enabled,
+                "enabled": !Bt.blocked,
+                "keepOpen": true,
+                "act": {
+                    "kind": "fn",
+                    "fn": () => Bt.setEnabled(!Bt.enabled)
+                }
+            }
+        ];
+        if (Bt.enabled && Bt.paired.length) {
+            out.push(AppMenu.sep("b1"), header("b:h", I18n.t("Устройства", "Devices")));
+            for (const d of Bt.paired)
+                out.push(fn("b:d" + d.address, d.name || d.deviceName || d.address, () => Bt.toggleConnect(d), {
+                    "toggle": "check",
+                    "checked": d.connected
+                }));
+        }
+        out.push(AppMenu.sep("b2"), settingsItem("b:set", I18n.t("Настройки Bluetooth…", "Bluetooth Settings…"), "bluetooth"));
+        return out;
+    }
+    function soundItems() {
+        const out = [header("v:h", I18n.t("Звук", "Sound"))];
+        if (Audio.ready)
+            out.push({
+                "id": "v:vol",
+                "type": "slider",
+                "icon": Audio.muted || Audio.volume === 0 ? "volume-x" : Audio.volume < 0.5 ? "volume-1" : "volume-2",
+                "value": Audio.volume,
+                "set": v => Audio.setVolume(v)
+            });
+        if (Audio.sinks.length > 1) {
+            out.push(AppMenu.sep("v1"), header("v:o", I18n.t("Выход", "Output")));
+            for (const s of Audio.sinks)
+                out.push(fn("v:s" + s.id, Audio.nodeName(s), () => Audio.setDefaultSink(s), {
+                    "toggle": "radio",
+                    "checked": Audio.sink === s
+                }));
+        }
+        out.push(AppMenu.sep("v2"), settingsItem("v:set", I18n.t("Настройки звука…", "Sound Settings…"), "sound"));
+        return out;
+    }
+    function inputItems() {
+        const out = [];
+        const names = Niri.keyboardLayouts;
+        for (let i = 0; i < names.length; i++)
+            out.push(fn("i:" + i, names[i], () => Niri.action("SwitchLayout", {
+                        "layout": {
+                            "Index": i
+                        }
+                    }), {
+                "toggle": "radio",
+                "checked": Niri.currentLayout === i
+            }));
+        out.push(AppMenu.sep("i1"), settingsItem("i:set", I18n.t("Настройки клавиатуры…", "Keyboard Settings…"), "keyboard"));
+        return out;
+    }
+}

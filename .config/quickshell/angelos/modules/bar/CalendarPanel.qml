@@ -10,7 +10,8 @@ import qs.widgets
 BarPopup {
     id: root
 
-    title: I18n.t("календарь.exe", "calendar.exe")
+    title: I18n.exe(I18n.t("календарь", "calendar"))
+    panelId: "calendar"                  // `angelos panel calendar`, a gesture (services/Gestures)
     icon: "calendar"
     contentWidth: Theme.u * 170
     contentHeight: Theme.u * 250
@@ -48,7 +49,7 @@ BarPopup {
                 width: parent.width - Theme.u * 30
                 horizontalAlignment: Text.AlignHCenter
                 kind: "title"
-                text: Qt.locale("ru_RU").standaloneMonthName(root.month.getMonth()) + " " + root.month.getFullYear()
+                text: I18n.locale.standaloneMonthName(root.month.getMonth()) + " " + root.month.getFullYear()
             }
             PxButton {
                 compact: true

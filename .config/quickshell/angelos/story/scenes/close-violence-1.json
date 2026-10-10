@@ -1,0 +1,84 @@
+{
+  "id": "close-violence-1",
+  "title": {
+    "ru": "Насилие: знакомая",
+    "en": "Violence: acquainted"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"violence\" and closeness == 1",
+      "next": "ask",
+      "note": "the demon of violence and the player: closeness acquainted (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Тебя здесь не тронут. Хочешь знать почему?",
+        "en": "No one will touch you here. Want to know why?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Почему?",
+            "en": "Why?"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Потому что я так сказала.",
+              "en": "Because I said so."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Пусть трогают",
+            "en": "Let them"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Глупо. Смело. Глупо.",
+              "en": "Foolish. Brave. Foolish."
+            }
+          },
+          "next": "end",
+          "set": {
+            "violence": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Не спрашиваешь. Правильно.",
+              "en": "You don't ask. Good."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

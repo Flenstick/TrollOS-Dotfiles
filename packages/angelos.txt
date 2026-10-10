@@ -3,6 +3,12 @@ quickshell
 qt6-declarative
 qt6-5compat
 qt6-imageformats
+# the Golden Gate skin's menu bar: GTK 3 apps' menus go there (gtk-modules, only while the
+# skin is on; .config/quickshell/angelos/docs/GLOBAL-MENU.md)
+appmenu-gtk-module
+# the angel's voice and the harp menu's strings (QtMultimedia SoundEffect)
+qt6-multimedia
+qt6-multimedia-ffmpeg
 # optional NVIDIA/Qt EGL threaded-render-loop build
 cmake
 gcc
@@ -21,7 +27,28 @@ python-evdev
 socat
 bubblewrap
 python-pillow
+# Y2K sounds are synthesised with numpy (ffmpeg turns them into .ogg when present)
+python-numpy
 # desktop widgets and plugins
 cava
 wlsunset
 speedtest-cli
+# what angelOS's features call (they stay quiet without them): the file chooser, the icon
+# sets, System info, Qt apps in the theme, the cursor in X11 apps, a polkit agent when the
+# shell's own is not up (polkit-agent-guard), Flathub apps themed, the user folders
+zenity
+librsvg
+pciutils
+qt6ct
+xsettingsd
+hyprpolkitagent
+flatpak
+xdg-user-dirs
+# the GTK theme angelOS's palette and window buttons are built on (scripts/gtk-live.py,
+# templates gtk-scheme): without it GTK 3 apps stayed plain Adwaita and gtk-theme named a
+# theme that wasn't there
+adw-gtk-theme
+# the setup wizard's GitHub step and `angelos author`/recovery sign in through gh (the step
+# hid itself without it); qrencode draws the device code's QR on that step
+github-cli
+qrencode

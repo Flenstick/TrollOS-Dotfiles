@@ -21,6 +21,23 @@ Singleton {
     readonly property var sinks: nodes.filter(n => n.audio && n.isSink && !n.isStream)
     readonly property var sources: nodes.filter(n => n.audio && !n.isSink && !n.isStream)
     readonly property var streams: nodes.filter(n => n.audio && n.isStream && n.isSink)
+    // what the mixers list: programs playing sound. Not angelOS's own clicks and chimes
+    // (quickshell's SoundEffect, pw-play): they come and go every click and made the
+    // mixer jump. Not virtual-sink plumbing either (loopbacks: node.virtual / link-group).
+    readonly property var appStreams: streams.filter(n => isAppStream(n)).sort((a, b) => a.id - b.id)
+    function isAppStream(n) {
+        const p = n.properties || {};
+        if (String(p["node.virtual"]) === "true" || String(p["node.link-group"] || "").startsWith("loopback"))
+            return false;
+        const app = String(p["application.name"] || p["node.name"] || n.name || "");
+        if (app === "quickshell" || app === "pw-play" || app === "pw-cat" || app === "angelos-sfx")
+            return false;
+        return String(p["media.name"] || "").indexOf("/angelos/sounds/") < 0;
+    }
+    function streamName(n) {
+        const p = n.properties || {};
+        return p["application.name"] || p["media.name"] || nodeName(n);
+    }
 
     signal changed(string what)
 

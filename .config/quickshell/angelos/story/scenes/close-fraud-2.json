@@ -1,0 +1,84 @@
+{
+  "id": "close-fraud-2",
+  "title": {
+    "ru": "Обман: близкая",
+    "en": "Fraud: close"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"fraud\" and closeness == 2",
+      "next": "ask",
+      "note": "the demon of fraud and the player: closeness close (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Если я скажу, что люблю тебя, — ты поверишь?",
+        "en": "If I say I love you — will you believe it?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Поверю",
+            "en": "I will"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Зря. …Нет, не зря.",
+              "en": "You shouldn't. …No, you should."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Нет",
+            "en": "No"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Правильно. Так надёжнее.",
+              "en": "Right. It's safer that way."
+            }
+          },
+          "next": "end",
+          "set": {
+            "fraud": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Я тоже не знаю, верить ли себе.",
+              "en": "I don't know whether to believe myself either."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

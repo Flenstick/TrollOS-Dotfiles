@@ -12,8 +12,9 @@ PxPage {
     subtitle: I18n.t("Анимации при переключении: сердечки на панели, переход между столами, NGO-попап и полоска сердечек.", "Switching animations: the hearts on the bar, the transition between desks, the popup and the heart strip.")
 
     PxGroup {
+        name: "desk-sprite-animation"
         id: heartsGroup
-        title: I18n.t("Анимация сердечек", "Heart animation")
+        title: I18n.t("Значок стола", "Desk icon")
         icon: "heart"
         width: parent.width
         readonly property var heartStyles: [
@@ -79,6 +80,91 @@ PxPage {
             }
         ]
 
+        // the desk sprite: the heart or a Y2K one (bar, strip, popup)
+        SettingRow {
+            label: I18n.t("Значок стола", "Desk sprite")
+            hint: ({
+                    "star": I18n.t("звезда-блёстка ✦: у активного стола мерцает", "A sparkle star ✦: twinkles on the active desk"),
+                    "cd": I18n.t("радужный CD: у активного стола прокручивается", "A rainbow CD: spins on the active desk")
+                })[Config.workspaces.sprite] || I18n.t("пиксельное сердечко, как было", "The pixel heart, as before")
+            Row {
+                spacing: Theme.u * 3
+                Repeater {
+                    model: [
+                        {
+                            "id": "heart",
+                            "label": I18n.t("Сердечко", "Heart")
+                        },
+                        {
+                            "id": "star",
+                            "label": I18n.t("Звезда ✦", "Star ✦")
+                        },
+                        {
+                            "id": "cd",
+                            "label": I18n.t("CD-диск", "CD")
+                        }
+                    ]
+                    PxBox {
+                        id: spriteCard
+                        required property var modelData
+                        readonly property bool current: (Config.workspaces.sprite || "heart") === modelData.id
+                        width: Theme.u * 34
+                        height: Theme.u * 28
+                        sunken: current
+                        color: current ? Theme.mix(Theme.face, Theme.accent, 0.3) : spriteMouse.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.1) : Theme.face
+                        WsSprite {
+                            id: cardSprite
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            y: Theme.u * 4
+                            sprite: spriteCard.modelData.id
+                            lit: spriteCard.current || spriteMouse.containsMouse
+                            pixel: Theme.u * 1.5
+                        }
+                        PxText {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: Theme.u * 3
+                            text: spriteCard.modelData.label
+                            kind: "tiny"
+                            font.bold: spriteCard.current
+                        }
+                        MouseArea {
+                            id: spriteMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                Config.workspaces.sprite = spriteCard.modelData.id;
+                                cardSprite.celebrate();
+                                const from = previewRow.active, to = (from + 1) % 6;
+                                previewRow.active = to;
+                                Qt.callLater(() => previewAnim.play(from, to));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        SettingRow {
+            label: I18n.t("Скорость анимации значка", "Sprite animation speed")
+            hint: I18n.t("×2 — вдвое быстрее, ×0.5 — вдвое медленнее", "×2 is twice as fast, ×0.5 half as fast")
+            PxSlider {
+                width: parent.width
+                from: 25
+                to: 300
+                stepSize: 5
+                valueScale: 0.01
+                decimals: 2
+                suffix: "×"
+                value: Math.round((Config.workspaces.heartSpeed || 1) * 100)
+                onReleased: v => {
+                    Config.workspaces.heartSpeed = v / 100;
+                    const from = previewRow.active, to = (from + 1) % 6;
+                    previewRow.active = to;
+                    Qt.callLater(() => previewAnim.play(from, to));
+                }
+            }
+        }
         // live preview: six hearts on a strip
         PxBox {
             width: parent.width
@@ -99,11 +185,10 @@ PxPage {
                         readonly property bool lit: previewRow.active === index && previewAnim.hiddenIndex !== index
                         width: Theme.u * 13
                         height: Theme.u * 13
-                        PxIcon {
+                        WsSprite {
                             anchors.centerIn: parent
-                            name: "heart"
+                            lit: pc.lit
                             hollow: !pc.lit && pc.index > 3
-                            fill: pc.lit ? Theme.accent : Theme.accent4
                             scale: pc.lit ? 1 : 0.8
                         }
                     }
@@ -125,6 +210,7 @@ PxPage {
                 width: previewRow.width
                 height: previewRow.height
                 style: Config.workspaces.heartAnim
+                sprite: Config.workspaces.sprite
                 cellRect: i => {
                     const c = previewCells.itemAt(i);
                     return c ? c.mapToItem(previewAnim, 0, 0, c.width, c.height) : Qt.rect(0, 0, 0, 0);
@@ -203,6 +289,7 @@ PxPage {
     }
 
     PxGroup {
+        name: "switch-animation"
         title: I18n.t("Анимация переключения", "Switch animation")
         icon: "layers"
         width: parent.width
@@ -250,6 +337,32 @@ PxPage {
                 }
             }
         }
+        SettingRow {
+            label: I18n.t("Скорость переключения", "Switch speed")
+            hint: WorkspaceAnim.current.id === "instant" ? I18n.t("у «Мгновенно» скорости нет", "Instant has no speed") : WorkspaceAnim.captured ? I18n.t("длина эффекта angelOS: ", "the angelOS effect lasts ") + WorkspaceAnim.fxMs + I18n.t(" мс", " ms") : I18n.t("анимация niri: ", "niri's slide: ") + WorkspaceAnim.slideMs + I18n.t(" мс (× slowdown ", " ms (× slowdown ") + WorkspaceAnim.slowdown + ")"
+            enabled: WorkspaceAnim.current.id !== "instant" && !WorkspaceAnim.busy
+            opacity: enabled ? 1 : 0.5
+            PxSlider {
+                width: parent.width
+                from: 25
+                to: 300
+                stepSize: 5
+                valueScale: 0.01
+                decimals: 2
+                suffix: "×"
+                value: Math.round(WorkspaceAnim.speed * 100)
+                onReleased: v => Config.workspaces.switchSpeed = v / 100
+            }
+        }
+        // how the picked style looks, as a looping gif
+        PxPreview {
+            width: Math.min(parent.width, Theme.u * 200)
+            scene: "DeskSwitch"
+            variant: WorkspaceAnim.current.id
+            caption: WorkspaceAnim.current.label
+            closable: false
+            sceneHeight: Theme.u * 62
+        }
         Row {
             spacing: Theme.u * 4
             PxButton {
@@ -270,12 +383,13 @@ PxPage {
             width: parent.width
             wrapMode: Text.Wrap
             dim: true
-            text: I18n.t("«Мягкий» и «Рывок» — анимация самого niri по кривой Безье (cfg/animation.kdl, с бэкапом и проверкой), попробуй Mod+1…9. «Пиксели», «Сердечко» и «Телепорт» — angelOS снимает экран, niri переключает мгновенно, а старый стол уходит эффектом: для них клавиши Mod+1…9, Mod+колесо и Mod+O идут через angelOS (если оболочка не запущена — напрямую в niri). Переключения мышью в обзоре остаются мгновенными. В полноэкранных играх game-mode всё равно выключает анимации.", "Soft and Dash are niri's own animation on a bezier curve (cfg/animation.kdl, backed up and validated) — try Mod+1…9. Pixels, Heart and Teleport: angelOS grabs the screen, niri switches instantly and the old desk leaves with an effect; for them Mod+1…9, Mod+wheel and Mod+O go through angelOS (straight to niri if the shell is not running). Switching with the mouse in the overview stays instant. Game mode still turns animations off for fullscreen games.")
+            text: I18n.t("«Мягкий», «Рывок», «Пружина» и «Щелчок» — анимация самого niri (cfg/animation.kdl, с бэкапом и проверкой): оба стола живые, задержки нет. Остальные — angelOS снимает экран, niri переключает мгновенно, а старый стол уходит эффектом в сторону переключения (вверх или вниз); для них клавиши Mod+1…9, Mod+колесо и Mod+O идут через angelOS (если оболочка не запущена — напрямую в niri). Переключения мышью в обзоре остаются мгновенными. В полноэкранных играх game-mode всё равно выключает анимации.", "Soft, Dash, Spring and Snap are niri's own animation (cfg/animation.kdl, backed up and validated): both desks stay live, no delay. For the rest angelOS grabs the screen, niri switches instantly and the old desk leaves with an effect that follows the switch (up or down); for them Mod+1…9, Mod+wheel and Mod+O go through angelOS (straight to niri if the shell is not running). Switching with the mouse in the overview stays instant. Game mode still turns animations off for fullscreen games.")
         }
     }
 
     PxGroup {
-        title: I18n.t("Смена воркспейса", "Workspace switching")
+        name: "workspace-switching"
+        title: I18n.t("Подсказка при смене стола", "Hint when switching desks")
         icon: "sparkle"
         width: parent.width
         SettingRow {
@@ -344,7 +458,8 @@ PxPage {
     }
 
     PxGroup {
-        title: I18n.t("Имена", "Names")
+        name: "names"
+        title: I18n.t("Имена столов", "Desk names")
         icon: "heart"
         width: parent.width
         PxText {
@@ -354,7 +469,7 @@ PxPage {
             wrapMode: Text.Wrap
         }
         Repeater {
-            model: Niri.workspaces.filter(w => w.name !== "privacy")
+            model: Niri.workspaces
             SettingRow {
                 id: r
                 required property var modelData

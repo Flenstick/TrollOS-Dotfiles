@@ -17,5 +17,8 @@ include "./cfg/alt-tab.kdl"
 
 include "./cfg/game-mode.kdl"
 
-// TrollOS: раскладка Windows 11 — Alt+Tab идёт в переключатель angelOS (файл пишет сам шелл)
+// TrollOS: the Windows 11 layout — Alt+Tab goes to the angelOS switcher (the shell writes the file)
 include "./cfg/win-alttab.kdl"
+
+// yours, read last (its binds and rules win over the ones above); updates never touch it
+include optional=true "./cfg/user.kdl"

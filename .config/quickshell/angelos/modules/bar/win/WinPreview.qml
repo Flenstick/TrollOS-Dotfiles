@@ -232,4 +232,6 @@ PopupWindow {
             }
         }
     }
+    // a right click into the window's corner can crash Qt (widgets/RightClickGuard)
+    RightClickGuard {}
 }

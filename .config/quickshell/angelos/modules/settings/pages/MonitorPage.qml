@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
 import qs.config
 import qs.services
 import qs.widgets
@@ -8,7 +9,7 @@ import qs.widgets
 PxPage {
     id: page
 
-    heading: I18n.t("Монитор", "Monitor")
+    heading: I18n.t("Экран", "Display")
     subtitle: I18n.t("«Применить» меняет сразу, «Сохранить» пишет ~/.config/niri/monitor.kdl (с бэкапом и проверкой niri validate).", "Apply changes the live layout. Save to config writes monitor.kdl with a backup and niri validation.")
 
     property string selected: Object.keys(Outputs.draft)[0] || ""
@@ -26,7 +27,161 @@ PxPage {
         return [w / dd.scale, h / dd.scale];
     }
 
+    // the main screen: where the desk lives (Shell.primaryScreen)
+    readonly property int widgetsElsewhere: DesktopWidgets.widgets.filter(w => w.screen !== Shell.primaryName).length
+    readonly property string angelOwn: Config.y2k.helperScreen && Config.y2k.helperScreen !== "focus" && Config.y2k.helperScreen !== Shell.primaryName ? Config.y2k.helperScreen : ""
     PxGroup {
+        name: "main-screen"
+        title: I18n.t("Главный экран", "Main screen")
+        icon: "star"
+        width: parent.width
+        SettingRow {
+            label: I18n.t("Главный экран", "Main screen")
+            hint: Angel.hellShown ? I18n.t("здесь живут виджеты, ангел (и трещины демоницы, лучи, тряска), заставка и сайдбар; niri фокусирует его при входе. «Авто» — самый широкий экран", "Home of the widgets, the angel (and the demon's cracks, the rays, the quake), the idle screen and the sidebar; niri focuses it at login. “Auto” is the widest screen") : I18n.t("здесь живут виджеты, ангел (и её лучи, тряска), заставка и сайдбар; niri фокусирует его при входе. «Авто» — самый широкий экран", "Home of the widgets, the angel (and her rays, the quake), the idle screen and the sidebar; niri focuses it at login. “Auto” is the widest screen")
+            Flow {
+                width: parent.width
+                spacing: Theme.u * 2
+                Repeater {
+                    model: [
+                        {
+                            "label": I18n.t("Авто (", "Auto (") + (Shell.widestScreen ? Shell.widestScreen.name : "—") + ")",
+                            "value": ""
+                        }
+                    ].concat(Quickshell.screens.map(sc => ({
+                                "label": sc.name,
+                                "value": sc.name
+                            })))
+                    PxButton {
+                        required property var modelData
+                        compact: true
+                        icon: modelData.value && modelData.value === Shell.primaryName ? "star" : ""
+                        text: modelData.label
+                        checked: (Config.system.primaryScreen || "") === modelData.value
+                        enabled: !Outputs.busy
+                        onClicked: Outputs.setPrimary(modelData.value)
+                    }
+                }
+            }
+        }
+        SettingRow {
+            label: I18n.t("Экраны (как Win+P)", "Screens (like Win+P)")
+            hint: I18n.t("только этот, повторить, расширить, только второй — Mod+P", "This one only, duplicate, extend, the second only: Mod+P")
+            PxButton {
+                compact: true
+                icon: "monitor"
+                text: I18n.t("Открыть", "Open")
+                onClicked: Shell.projectOpen = true
+            }
+        }
+        SettingRow {
+            visible: page.widgetsElsewhere > 0
+            label: I18n.t("Виджеты на других экранах: ", "Widgets on other screens: ") + page.widgetsElsewhere
+            hint: I18n.t("перенести их все на главный (позиции сохранятся, лишнее прижмётся к краю)", "Move them all to the main screen (positions kept, anything off the edge snaps back)")
+            PxButton {
+                compact: true
+                icon: "layers"
+                text: I18n.t("Перенести сюда", "Move here")
+                onClicked: DesktopWidgets.moveAllTo(Shell.primaryName)
+            }
+        }
+        // her screen and the sidebar's are set on their own pages: links there
+        SettingLink {
+            visible: page.angelOwn !== ""
+            label: I18n.t("У ангела свой экран: ", "The angel has her own screen: ") + page.angelOwn
+            hint: I18n.t("«На каком экране»; пусто — главный, и её трещины и лучи тоже уйдут туда", "“Screen”; empty is the main one, and her cracks and rays move there too")
+            page: "helper"
+            group: "demon-corner"
+        }
+        SettingLink {
+            visible: !!Config.sidebar.screen && Config.sidebar.screen !== Shell.primaryName
+            label: I18n.t("У сайдбара свой экран: ", "The sidebar has its own screen: ") + Config.sidebar.screen
+            page: "taskbar"
+            group: "sidebar-experimental"
+        }
+        PxText {
+            width: parent.width
+            wrapMode: Text.Wrap
+            kind: "tiny"
+            dim: !Outputs.primaryLog.startsWith("niri: ")
+            color: Outputs.primaryLog.startsWith("niri: ") ? Theme.danger : Theme.textDim
+            text: Outputs.primaryLog || (Outputs.niriFocused.length ? I18n.t("niri при входе фокусирует: ", "niri focuses at login: ") + Outputs.niriFocused.join(", ") : I18n.t("niri при входе фокусирует первый экран (focus-at-startup не задан)", "niri focuses the first screen at login (no focus-at-startup)"))
+        }
+        PxText {
+            width: parent.width
+            wrapMode: Text.Wrap
+            kind: "tiny"
+            dim: true
+            visible: StreamMode.active && Config.stream.hideAngel && StreamMode.onStream(Shell.primaryName)
+            text: I18n.t("Сейчас идёт эфир: ангел и её эффекты ушли с этого экрана (Система → Стрим-режим)", "You're live: the angel and her effects have left this screen (System → Stream mode)")
+        }
+    }
+
+    PxGroup {
+        name: "brightness-colour"
+        title: I18n.t("Яркость и цвет", "Brightness and colour")
+        icon: "sun"
+        width: parent.width
+
+        PxText {
+            width: parent.width
+            wrapMode: Text.Wrap
+            kind: "tiny"
+            dim: true
+            text: I18n.t("Программно, через гамму видеокарты: подсветку монитора не трогает, на стрим и скриншоты не попадает. Ночной свет работает вместе с яркостью.", "In software, through the GPU's gamma: the monitor's backlight stays as it is, nothing shows on stream or in screenshots. The night light works together with it.") + (ScreenTune.nvidia ? "" : I18n.t(" Насыщенность — только на видеокартах NVIDIA.", " Saturation needs an NVIDIA GPU."))
+        }
+        Repeater {
+            model: Quickshell.screens.map(sc => sc.name)
+            delegate: Column {
+                id: tuneRow
+                required property string modelData
+                readonly property var info: Outputs.outputs[modelData] || null
+                width: parent.width
+                spacing: Theme.u * 2
+
+                PxText {
+                    text: (Shell.primaryName === tuneRow.modelData ? "★ " : "") + tuneRow.modelData + (tuneRow.info ? "  ·  " + ((tuneRow.info.make || "") + " " + (tuneRow.info.model || "")).trim() : "")
+                    font.bold: true
+                }
+                SettingRow {
+                    label: I18n.t("Яркость", "Brightness")
+                    hint: ScreenTune.stateOf(tuneRow.modelData) === "failed" ? I18n.t("гамму этого монитора держит другая программа (wlsunset, gammastep?) — закрой её", "Another program holds this monitor's gamma (wlsunset, gammastep?): close it") : ""
+                    PxSlider {
+                        width: parent.width
+                        from: 30
+                        to: 100
+                        stepSize: 1
+                        suffix: " %"
+                        value: Math.round(ScreenTune.brightnessOf(tuneRow.modelData) * 100)
+                        onMoved: v => ScreenTune.setTune(tuneRow.modelData, "brightness", v >= 100 ? null : Math.round(v) / 100)
+                    }
+                }
+                SettingRow {
+                    visible: ScreenTune.nvidia
+                    label: I18n.t("Насыщенность", "Saturation")
+                    hint: ScreenTune.vibranceError || I18n.t("NVIDIA Digital Vibrance: −100 % — серый, +100 % — вдвое ярче цвета", "NVIDIA Digital Vibrance: −100 % is grey, +100 % doubles the colour")
+                    PxSlider {
+                        width: parent.width
+                        from: -100
+                        to: 100
+                        stepSize: 5
+                        suffix: " %"
+                        value: Math.round(ScreenTune.saturationOf(tuneRow.modelData) * 100)
+                        onMoved: v => ScreenTune.setTune(tuneRow.modelData, "saturation", Math.round(v) === 0 ? null : Math.round(v) / 100)
+                    }
+                }
+                PxButton {
+                    compact: true
+                    icon: "refresh"
+                    text: I18n.t("Как было", "As it was")
+                    visible: ScreenTune.brightnessOf(tuneRow.modelData) < 1 || ScreenTune.saturationOf(tuneRow.modelData) !== 0
+                    onClicked: ScreenTune.reset(tuneRow.modelData)
+                }
+            }
+        }
+    }
+
+    PxGroup {
+        name: "arrangement"
         title: I18n.t("Расположение", "Arrangement")
         icon: "monitor"
         width: parent.width
@@ -78,12 +233,12 @@ PxPage {
                             }
                             PxText {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: mon.modelData
+                                text: (Shell.primaryName === mon.modelData ? "★ " : "") + mon.modelData
                                 font.bold: true
                             }
                             PxText {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: Math.round(mon.dd.x) + ", " + Math.round(mon.dd.y)
+                                text: Math.round(mon.dd.x) + ", " + Math.round(mon.dd.y) + (mon.dd.transform !== "normal" ? "  ↻ " + Outputs.turnOf(mon.dd.transform) + "°" + (Outputs.mirroredOf(mon.dd.transform) ? I18n.t(" зерк.", " mirr.") : "") : "")
                                 kind: "tiny"
                                 dim: true
                             }
@@ -142,6 +297,7 @@ PxPage {
     }
 
     PxGroup {
+        name: "output"
         visible: !!page.d
         title: page.selected + (page.o ? "  ·  " + (page.o.make || "") + " " + (page.o.model || "") : "")
         icon: "gear"
@@ -168,6 +324,7 @@ PxPage {
         }
         SettingRow {
             label: I18n.t("Масштаб", "Scale")
+            hint: page.d && Math.abs(page.d.scale - Math.round(page.d.scale)) > 0.001 ? I18n.t("Дробный масштаб размывает пиксельные шрифты и рамки angelOS: их пиксели ложатся между пикселями экрана. Чётко — целый масштаб (1, 2), а крупнее — размером пикселя и масштабом шрифтов («Тема и цвета» → «Размер пикселя», «Шрифты» → «Масштаб шрифтов»).", "A fractional scale blurs angelOS's pixel fonts and frames: their pixels fall between the screen's. Crisp: a whole scale (1, 2), and bigger with the pixel size and the font scale (Theme and colours → Pixel size, Fonts → Font scale).") : ""
             PxSpin {
                 from: 0.5
                 to: 3
@@ -177,13 +334,34 @@ PxPage {
                 onMoved: v => Outputs.set(page.selected, "scale", v)
             }
         }
+        // how it stands: applied at once, back in 15 s unless kept (the banner below)
         SettingRow {
-            label: I18n.t("Поворот", "Rotation")
-            PxCombo {
-                width: Theme.u * 100
-                model: Outputs.transforms
-                currentValue: page.d ? page.d.transform : "normal"
-                onActivated: v => Outputs.set(page.selected, "transform", v)
+            label: I18n.t("Ориентация", "Orientation")
+            hint: I18n.t("Монитор стоит вертикально или перевёрнут — поверни картинку. Меняется сразу; если не нажать «Оставить», через 15 секунд вернётся как было. Обои с вариантами сами возьмут вертикальный (9:16).", "The monitor stands upright or upside down: turn the picture. It changes at once and comes back in 15 seconds unless you keep it. Wallpapers with variants take their upright (9:16) file.")
+            Flow {
+                width: parent.width
+                spacing: Theme.u * 2
+                Repeater {
+                    model: Outputs.turns
+                    PxButton {
+                        required property var modelData
+                        compact: true
+                        icon: modelData.value === "0" ? "monitor" : "rotate"
+                        text: modelData.label
+                        checked: page.d ? Outputs.turnOf(page.d.transform) === modelData.value : false
+                        enabled: !Outputs.busy && !!page.d && !page.d.off
+                        onClicked: Outputs.turn(page.selected, Outputs.transformOf(modelData.value, Outputs.mirroredOf(page.d.transform)))
+                    }
+                }
+            }
+        }
+        SettingRow {
+            label: I18n.t("Зеркально", "Mirrored")
+            hint: I18n.t("отразить слева направо — для проектора на просвет или телесуфлёра", "flip left to right: for a rear projector or a teleprompter")
+            PxToggle {
+                enabled: !Outputs.busy && !!page.d && !page.d.off
+                checked: page.d ? Outputs.mirroredOf(page.d.transform) : false
+                onToggled: c => Outputs.turn(page.selected, Outputs.transformOf(Outputs.turnOf(page.d.transform), c))
             }
         }
         SettingRow {
@@ -209,6 +387,42 @@ PxPage {
                 enabled: page.o ? !!page.o.vrr_supported : false
                 checked: page.d ? page.d.vrr : false
                 onToggled: c => Outputs.set(page.selected, "vrr", c)
+            }
+        }
+    }
+
+    // a turned / re-moded screen comes back by itself unless kept
+    PxBox {
+        visible: Outputs.undo !== null
+        width: parent.width
+        height: keepRow.implicitHeight + Theme.u * 8
+        color: Theme.mix(Theme.face, Theme.accent, 0.25)
+        Row {
+            id: keepRow
+            x: Theme.u * 4
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width - Theme.u * 8
+            spacing: Theme.u * 3
+            PxText {
+                width: parent.width - keepBtn.width - backBtn.width - parent.spacing * 2
+                anchors.verticalCenter: parent.verticalCenter
+                wrapMode: Text.Wrap
+                text: I18n.t("Оставить так? Через ", "Keep this? Going back in ") + Outputs.confirmLeft + I18n.t(" с вернётся как было.", " s.")
+            }
+            PxButton {
+                id: keepBtn
+                accent: true
+                icon: "check"
+                text: I18n.t("Оставить", "Keep")
+                anchors.verticalCenter: parent.verticalCenter
+                onClicked: Outputs.keep()
+            }
+            PxButton {
+                id: backBtn
+                icon: "arrowLeft"
+                text: I18n.t("Вернуть", "Revert")
+                anchors.verticalCenter: parent.verticalCenter
+                onClicked: Outputs.revert()
             }
         }
     }

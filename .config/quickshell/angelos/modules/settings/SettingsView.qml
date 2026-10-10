@@ -1,233 +1,575 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Effects
 import Quickshell
-import Quickshell.Io
+import QtQml.Models
 import qs.config
 import qs.services
 import qs.widgets
-import qs.modules.bar.win
-import "../bar/win/NavIcons.js" as Nav
+import qs.modules.settings.views
+import qs.modules.settings.dresses
 
-// Settings content (frame, sidebar, pages). Hosted by SettingsWindow.
+// Settings content (frame, navigation, pages). Hosted by SettingsWindow.
+// Every page and every section is described once, here (pageList, runs) and in the pages'
+// own QML; the views (Config.settingsUi.view, modules/settings/views) are only ways of
+// laying them out:
+//   sidebar      like macOS's System Settings: search and the sections on the left, the
+//                page on the right (what every install had before the views)
+//   controlpanel a Win98 Control Panel: a folder of icons, a page fills the window
+//   properties   a Win98 properties sheet: pick a section, its pages are tabs
+//   tiles        big tiles under a big search field
+// A view gives three slots — searchSlot (the search field), resultsSlot (what it finds),
+// pageSlot (the page) — and this file puts its single search field, results list and page
+// Loader into them, so a page is never built twice and plugins' pages work in every view.
+// The keyboard is the same everywhere: Ctrl+F searches, ↓ from an empty search walks the
+// view's navigation (arrows, Enter; typing searches again), Ctrl+PgUp/PgDn the sections,
+// Ctrl+Tab the pages of a section, Alt+↑ goes up, Alt+←/→ through the history.
+// The skins (Config.settingsUi.skin: classic | windose | stream) dress any view. While the
+// demon rules it is her grimoire (GrimoireBook): the sidebar becomes the book's spread, any
+// other view is written on one parchment page inside the same leather cover — or the
+// circle's own dress (story/circles.json → dress, modules/settings/dresses: the case file,
+// the letter, the bill of fare…), the view written on its page the same way.
 Item {
     id: win
 
     Component.onCompleted: {
-        Shell.settingsView = win;
-        SettingsSearch.load();
+        lastLoc = loc;
+        if (main)
+            Shell.settingsView = win;
+        Theme.settingsViews = Theme.settingsViews.concat([win]);
+        if (typeof SettingsSearch.reload === "function")
+            SettingsSearch.reload();
+        else
+            SettingsSearch.load();
+        SettingsKeys.load();
+        // built already open (LazyWindows, a new window): what opening does
+        if (settingsNav.settingsOpen)
+            opened();
     }
-    Component.onDestruction: if (Shell.settingsView === win)
-        Shell.settingsView = null
+    Component.onDestruction: {
+        if (Shell.settingsView === win)
+            Shell.settingsView = null;
+        if (Shell.settingsActive === win)
+            Shell.settingsActive = null;
+        Theme.settingsViews = Theme.settingsViews.filter(v => v !== win);
+    }
     function diagnostics() {
         return {
-            page: Shell.settingsPage,
-            source: String(page.source),
-            status: page.status,
-            plugin: page.item && page.item.loadedPlugin !== undefined ? page.item.loadedPlugin : ""
+            page: win.settingsNav.settingsPage,
+            sub: win.settingsNav.settingsSub,
+            section: sectionOf(win.settingsNav.settingsPage),
+            view: viewId,
+            dress: dressId,
+            viewStatus: viewLoader.status,
+            atHome: atHome,
+            source: String(shownPage.source),
+            status: atHome ? Loader.Ready : shownPage.status,
+            sidebarVisible: !!viewItem && viewItem.sidebarVisible === true,
+            settingsSkin: shownPage.item && shownPage.item.settingsSkin !== undefined ? shownPage.item.settingsSkin : atHome ? skin : "",
+            plugin: shownPage.item && shownPage.item.loadedPlugin !== undefined ? shownPage.item.loadedPlugin : "",
+            query: query,
+            results: results.length,
+            navActive: navActive
         };
     }
     property var hostWindow: null
-    readonly property alias frame: frame
-    // Windows 11 layout + "Параметры как в Windows": Fluent chrome around the same pages
-    readonly property bool fluent: WinExtras.fluentSettings
-    readonly property Item blurItem: fluent ? fchrome : frame
-    Binding {
-        target: Shell
-        property: "fluentWindow"
-        value: win.fluent ? win.Window.window : null
-        when: win.fluent
-        restoreMode: Binding.RestoreValue
+    // where this window is: Shell for the main window, a SettingsNav for any other
+    // (Shell.newSettingsWindow); the pages find it by Shell.settingsNavFor
+    property var settingsNav: Shell
+    readonly property bool main: settingsNav === Shell
+    // the menu bar's System Settings menus act on the window in front
+    readonly property bool windowActive: Window.active
+    onWindowActiveChanged: if (windowActive)
+        Shell.settingsActive = win
+    // the page (or the one given) in a window of its own, next to this one
+    function openNew(page, sub) {
+        return Shell.newSettingsWindow(page || win.settingsNav.settingsPage, page ? sub : win.settingsNav.settingsSub);
     }
-    readonly property var groups: [
+    // a click on a section, a page or a tile: a middle click (or Ctrl+click) opens it in a new
+    // window, like a link in a browser — then true, and the view does nothing more
+    function clickedNew(mouse, page) {
+        if (mouse.button !== Qt.MiddleButton && !(mouse.modifiers & Qt.ControlModifier))
+            return false;
+        openNew(page);
+        return true;
+    }
+    readonly property Item frame: mac ? macFrame : pxFrame
+    readonly property var pageItem: atHome ? null : shownPage.item
+    // while the demon rules (Y2K → Angel or demon → Settings in hell): a grimoire (GrimoireBook)
+    // or a circle's own dress (HellLook.settingsPick)
+    readonly property string dressId: Angel.demon ? HellLook.settingsPick : ""
+    readonly property bool grimoire: dressId === "grimoire"
+    readonly property bool dressed: dressId !== "" && !grimoire
+    readonly property bool hellDress: grimoire || dressed
+    // …written by hand: every PxText in this window takes the grimoire's script (Theme.fontScript)
+    // (the letter, lust's dress, is handwritten too)
+    readonly property var scriptHost: grimoire || dressId === "letter" ? win.Window.window : null
+    readonly property var inkHost: hellDress ? win.Window.window : null
+    // Classic stays the default; Windose and Stream are optional settings skins. Golden Gate is
+    // the whole desktop's skin (services/GoldenGate): here it is macOS's System Settings — its
+    // own view (views/MacView.qml), the Windows 11 look's cards drawn as a Mac's grouped rows
+    readonly property string skin: ["classic", "windose", "stream", "goldengate"].includes(Config.settingsUi.skin) ? Config.settingsUi.skin : "classic"
+    readonly property bool mac: skin === "goldengate" && !hellDress
+    readonly property string settingsSkin: hellDress ? "classic" : mac ? "goldengate" : fluent ? "classic" : skin
+    readonly property var macHost: mac ? win.Window.window : null
+    // (there is no simple view or Expert any more: every page is a click away)
+    readonly property bool expert: true
+
+    // ---- the views ----
+    readonly property var views: [
         {
-            "title": I18n.t("Вид", "Appearance"),
-            "pages": [
-                {
-                    "id": "appearance",
-                    "label": I18n.t("Внешний вид", "Appearance"),
-                    "icon": "palette"
-                },
-                {
-                    "id": "fonts",
-                    "label": I18n.t("Шрифты", "Fonts"),
-                    "icon": "document"
-                },
-                {
-                    "id": "wallpaper",
-                    "label": I18n.t("Обои", "Wallpaper"),
-                    "icon": "image"
-                },
-                {
-                    "id": "capture",
-                    "label": I18n.t("Скриншоты", "Screenshots"),
-                    "icon": "image"
-                },
-                {
-                    "id": "cursor",
-                    "label": I18n.t("Курсор", "Cursor"),
-                    "icon": "cursor"
-                },
-                {
-                    "id": "widgets",
-                    "label": I18n.t("Виджеты", "Widgets"),
-                    "icon": "layers"
-                },
-                {
-                    "id": "layouts",
-                    "label": I18n.t("Раскладки", "Layouts"),
-                    "icon": "grid"
-                },
-                {
-                    "id": "bar",
-                    "label": I18n.t("Панель", "Bar"),
-                    "icon": "window"
-                },
-                {
-                    "id": "workspaces",
-                    "label": I18n.t("Воркспейсы", "Workspaces"),
-                    "icon": "layers"
-                },
-                {
-                    "id": "lyrics",
-                    "label": I18n.t("Лирика", "Lyrics"),
-                    "icon": "mic"
-                },
-                {
-                    "id": "y2k",
-                    "label": "Y2K ✧",
-                    "icon": "sparkle"
-                }
-            ]
-        },
-        {
-            "title": I18n.t("Устройства", "Devices"),
-            "pages": [
-                {
-                    "id": "monitor",
-                    "label": I18n.t("Монитор", "Monitor"),
-                    "icon": "monitor"
-                },
-                {
-                    "id": "keyboard",
-                    "label": I18n.t("Клавиатура и мышь", "Keyboard and mouse"),
-                    "icon": "keyboard"
-                },
-                {
-                    "id": "shortcuts",
-                    "label": I18n.t("Горячие клавиши", "Shortcuts"),
-                    "icon": "keyboard"
-                },
-                {
-                    "id": "windows",
-                    "label": I18n.t("Поведение окон", "Window behavior"),
-                    "icon": "window"
-                },
-                {
-                    "id": "sound",
-                    "label": I18n.t("Звук", "Sound"),
-                    "icon": "speaker"
-                },
-                {
-                    "id": "network",
-                    "label": I18n.t("Сеть и Wi-Fi", "Network and Wi-Fi"),
-                    "icon": "wifi"
-                },
-                {
-                    "id": "bluetooth",
-                    "label": "Bluetooth",
-                    "icon": "bluetooth"
-                },
-                {
-                    "id": "gamepad",
-                    "label": I18n.t("Геймпад", "Gamepad"),
-                    "icon": "gamepad"
-                }
-            ]
-        },
-        {
-            "title": I18n.t("Система", "System"),
-            "pages": [
-                {
-                    "id": "screentime",
-                    "label": I18n.t("Экранное время", "Screen time"),
-                    "icon": "gauge"
-                },
-                {
-                    "id": "defaults",
-                    "label": I18n.t("По умолчанию", "Default apps"),
-                    "icon": "star"
-                },
-                {
-                    "id": "notifications",
-                    "label": I18n.t("Уведомления", "Notifications"),
-                    "icon": "bell"
-                },
-                {
-                    "id": "plugins",
-                    "label": I18n.t("Плагины", "Plugins"),
-                    "icon": "plug"
-                },
-                {
-                    "id": "studio",
-                    "label": I18n.t("Мастер плагинов", "Plugin Studio"),
-                    "icon": "sparkle",
-                    "developer": true
-                },
-                {
-                    "id": "dotfiles",
-                    "label": "Dotfiles",
-                    "icon": "package",
-                    "owner": true
-                },
-                {
-                    "id": "lock",
-                    "label": I18n.t("Блокировка и заставка", "Lock and idle"),
-                    "icon": "lock"
-                },
-                {
-                    "id": "updates",
-                    "label": I18n.t("Обновления", "Updates"),
-                    "icon": "download"
-                },
-                {
-                    "id": "system",
-                    "label": "System",
-                    "icon": "chip"
-                }
-            ]
-        },
-        {
-            "title": I18n.t("Плагины", "Plugins"),
-            "pages": Plugins.settingsPages.map(p => ({
-                        "id": "plugin:" + p.id,
-                        "label": I18n.label(p.name),
-                        "icon": p.icon || "plug"
-                    }))
+            "id": "win11",
+            "file": "Win11View.qml",
+            "label": I18n.t("Как в Windows 11", "Like Windows 11"),
+            "hint": I18n.t("категории слева, карточки справа", "categories on the left, cards on the right")
         }
     ]
-    // owner-only pages vanish in the public version
-    readonly property var visibleGroups: groups.map(g => ({
-                "title": g.title,
-                "pages": g.pages.filter(p => (!p.owner || Owner.enabled) && (!p.developer || Config.developer.enabled))
-            })).filter(g => g.pages.length > 0)
-    readonly property var allPages: visibleGroups.reduce((a, g) => a.concat(g.pages), [])
-    readonly property var currentPage: allPages.find(p => p.id === Shell.settingsPage) || null
-    // simple view: advanced groups of a page folded; expert: every setting shown
-    readonly property bool expert: Config.settingsUi.expert
-    function setExpert(on) {
-        Config.settingsUi.expert = on;
+    // two looks only (2026-10-07): Windows 11 for the pixel skins, System Settings for Golden Gate
+    readonly property string viewId: mac ? "mac" : "win11"
+    // the Windows 11 look: a category with several pages has a page of its own ("cat:<id>",
+    // CategoryPage), sub-pages unfold in place (PxGroup), every setting is a card (SettingRow)
+    readonly property bool fluent: viewId === "win11" || viewId === "mac"
+    readonly property var viewItem: viewLoader.item
+    // a folder of icons / the tiles: "home" is the view's own screen, no page on it
+    readonly property bool hasHome: viewId === "controlpanel" || viewId === "tiles"
+    readonly property bool atHome: hasHome && (win.settingsNav.settingsPage === "home" || win.settingsNav.settingsPage === "more")
+    // properties: a section's pages and a page's sub-pages are its tabs, not links on the page
+    readonly property bool ownsSubpages: viewId === "properties"
+    // the grimoire's spread is the sidebar laid out as a book
+    readonly property bool spread: grimoire && viewId === "sidebar"
+
+    // ---- every page, by id: titles, the page loader, the search's crumbs ----
+    // The tree (services/SettingsTree, modules/settings/tree.json): your account, the
+    // categories and their pages, each put together from groups of the page files
+    // (ComposedPage); plugins' own pages are in it too.
+    readonly property var pageList: Object.keys(SettingsTree.pages).map(id => SettingsTree.pages[id])
+    function pageEntry(id) {
+        if (String(id).startsWith("cat:")) {
+            const c = SettingsTree.categories.find(x => x.id === id.slice(4));
+            return c ? {
+                "id": id,
+                "label": c.label,
+                "icon": c.icon
+            } : null;
+        }
+        return pageList.find(p => p.id === id) || null;
+    }
+    function labelOf(id) {
+        const p = pageEntry(id);
+        return p ? p.label : id;
+    }
+    // owner-only pages vanish in the public version, Plugin Studio is for developers
+    function pageShown(id) {
+        return SettingsTree.shown(pageEntry(id));
+    }
+
+    // ---- the sections: the tree's categories (the sidebar's lines, the folder's icons) ----
+    readonly property var runs: [
+        {
+            "title": "",
+            "sections": SettingsTree.categories
+        }
+    ]
+    // what is shown: pages the user may see, sections with something left
+    readonly property var visibleRuns: runs.map(r => ({
+                "title": r.title,
+                "sections": r.sections.map(s => Object.assign({}, s, {
+                        "pages": s.pages.filter(id => win.pageShown(id))
+                    })).filter(s => s.pages.length > 0)
+            })).filter(r => r.sections.length > 0)
+    readonly property var visibleSections: visibleRuns.reduce((a, r) => a.concat(r.sections), [])
+    // your account as a section of its own (the sidebar's card; the folder's and the
+    // properties' first entry)
+    readonly property var accountSection: ({
+            "id": "account",
+            "label": labelOf(SettingsTree.accountPage),
+            "icon": "heart",
+            "tint": Theme.accent,
+            "pages": [SettingsTree.accountPage]
+        })
+    // the views with a home show every section in its run, your account first
+    readonly property var homeRuns: [
+        {
+            "title": I18n.t("Ты", "You"),
+            "sections": [accountSection]
+        }
+    ].concat(visibleRuns)
+    readonly property var navSections: [accountSection].concat(visibleSections)
+    // the same as groups of sections (the grimoire's contents, Windose and Stream's home)
+    readonly property var visibleGroups: visibleRuns.map(r => ({
+                "title": r.title,
+                "pages": r.sections.map(s => ({
+                        "id": s.pages[0],
+                        "label": s.label,
+                        "icon": s.icon
+                    }))
+            }))
+    readonly property var allPages: [pageEntry("account")].concat(visibleSections.reduce((a, s) => a.concat(s.pages.map(id => win.pageEntry(id))), [])).filter(p => !!p)
+    // "home": the view's own screen (the folder, the tiles); the others open on Home (MainPage)
+    readonly property string currentId: win.settingsNav.settingsPage === "home" || win.settingsNav.settingsPage === "more" ? (hasHome ? "account" : "main") : win.settingsNav.settingsPage
+    readonly property var currentPage: currentId.startsWith("cat:") ? pageEntry(currentId) : allPages.find(p => p.id === currentId) || null
+    function sectionFor(id) {
+        return visibleSections.find(s => s.pages.includes(id)) || null;
+    }
+    function sectionOf(id) {
+        if (id === "home" || id === "more")
+            return hasHome ? "account" : "main";
+        if (id === "account")
+            return "account";
+        if (String(id).startsWith("cat:"))
+            return id.slice(4);
+        const s = sectionFor(id);
+        return s ? s.id : "";
+    }
+    // the section a page belongs to, your account included
+    function navSectionOf(id) {
+        const sid = sectionOf(id);
+        return navSections.find(s => s.id === sid) || null;
+    }
+    function tintOf(id) {
+        const s = sectionFor(id);
+        return s ? s.tint : Theme.accent;
+    }
+    // the section's first page for its other pages ("‹ Sound" on System sounds)
+    function parentOf(id) {
+        const s = sectionFor(id);
+        // the Windows 11 look: up from a page is its category's own page
+        if (fluent)
+            return s && s.pages.length > 1 ? "cat:" + s.id : "";
+        return s && s.pages[0] !== id ? s.pages[0] : "";
+    }
+    // a section's first page lists the others as links
+    function subpagesOf(id) {
+        if (fluent)
+            return [];
+        const s = sectionFor(id);
+        return s && s.pages[0] === id ? s.pages.slice(1).map(p => win.pageEntry(p)).filter(p => !!p) : [];
+    }
+    function sectionTarget(s) {
+        return fluent && s.pages.length > 1 ? "cat:" + s.id : s.pages[0];
+    }
+    function openSection(s) {
+        win.settingsNav.settingsPage = sectionTarget(s);
+        win.settingsNav.settingsSub = "";
+    }
+    // the page's advanced groups: its sub-pages ("Title ›")
+    readonly property var subTitles: pageItem && pageItem.advancedGroups ? pageItem.advancedGroups.map(g => g.title) : []
+    // every place in the current section, in order: its pages, each with its sub-pages
+    // (known for the open page only) — the properties' tabs, Ctrl+Tab everywhere
+    readonly property var sectionLocs: {
+        const s = navSectionOf(currentId);
+        const out = [];
+        for (const id of s ? s.pages : [currentId]) {
+            out.push({
+                "page": id,
+                "sub": "",
+                "label": labelOf(id),
+                "child": false
+            });
+            if (id === currentId)
+                for (const t of subTitles)
+                    out.push({
+                        "page": id,
+                        "sub": t,
+                        "label": t,
+                        "child": true
+                    });
+        }
+        return out;
+    }
+    function goLocOf(l) {
+        if (win.settingsNav.settingsPage !== l.page)
+            win.settingsNav.settingsPage = l.page;
+        win.settingsNav.settingsSub = l.sub || "";
+    }
+
+    // ---- old page ids (the wizard, the tour, the helper, scripts) → their places in the tree ----
+    Connections {
+        target: win.settingsNav
+        function onSettingsPageChanged() {
+            win.redirect();
+        }
+    }
+    // the skin changed the tree (SettingsTree.mac): a page the other one has leads to its place
+    Connections {
+        target: SettingsTree
+        function onMacChanged() {
+            win.redirect();
+        }
+    }
+    function redirect() {
+        const r = SettingsTree.resolve(win.settingsNav.settingsPage);
+        if (r.page === win.settingsNav.settingsPage)
+            return;
+        win.settingsNav.settingsPage = r.page;
+        if (r.to)
+            showGroup(r.to);
+    }
+    // scroll to a group ("src/name") once the page is there, opening it if it is a sub-page
+    function showGroup(ref) {
+        pendingTarget = {
+            "kind": "name",
+            "target": String(ref).split("/").slice(-1)[0],
+            "crumb": ""
+        };
+        targetTimer.restart();
+    }
+
+    // ---- moving around: the same keys in every view ----
+    function navSection(delta) {
+        const list = navSections;
+        if (!list.length)
+            return;
+        let i = list.findIndex(s => s.id === sectionOf(win.settingsNav.settingsPage));
+        if (atHome)
+            i = delta > 0 ? -1 : 0;
+        const next = list[((i < 0 ? 0 : i) + delta + list.length * 2) % list.length];
+        openSection(next);
+    }
+    function navPage(delta) {
+        const locs = sectionLocs;
+        if (locs.length < 2 || atHome)
+            return;
+        const i = Math.max(0, locs.findIndex(l => l.page === currentId && l.sub === win.settingsNav.settingsSub));
+        goLocOf(locs[(i + delta + locs.length) % locs.length]);
+    }
+    // up one level: a sub-page → its page → the section's first page → the view's home
+    function goUp() {
+        if (win.settingsNav.settingsSub !== "") {
+            win.settingsNav.settingsSub = "";
+            return true;
+        }
+        const parentId = parentOf(currentId);
+        if (parentId) {
+            win.settingsNav.settingsPage = parentId;
+            return true;
+        }
+        if (hasHome && !atHome) {
+            goHome();
+            return true;
+        }
+        return false;
+    }
+    function goHome() {
+        win.settingsNav.settingsPage = hasHome ? "home" : "main";
+        win.settingsNav.settingsSub = "";
+    }
+    // a page's subtitle, its first sentence (from the search index): the tiles' small print
+    function pageHint(id) {
+        const e = (SettingsSearch.entries || []).find(x => x.kind === "page" && x.page === id);
+        const t = e && e.hint ? String(I18n.english ? e.hint.en : e.hint.ru) : "";
+        const cut = t.search(/[.!?](\s|$)/);
+        return cut > 0 ? t.slice(0, cut) : t;
+    }
+    // the pages opened most (the account's "Everyday", the tiles' row)
+    function frequent(n) {
+        // visits counted under old page ids count for their pages in the tree
+        const raw = Config.settingsUi.usage || {};
+        const usage = {};
+        for (const id in raw) {
+            const to = SettingsTree.resolve(id).page;
+            usage[to] = (usage[to] || 0) + raw[id];
+        }
+        return Object.keys(usage).filter(id => usage[id] >= 2 && allPages.some(p => p.id === id)).sort((a, b) => usage[b] - usage[a]).slice(0, n).map(id => pageEntry(id));
+    }
+
+    // ---- "Revert changes" (properties): everything changed since the window opened ----
+    property var sessionStep: null
+    property bool sessionMarked: false
+    readonly property bool sessionChanged: sessionMarked && Config.canUndo && Config.lastStep !== sessionStep
+    function revertSession() {
+        Config.flush();
+        let guard = 60;
+        while (Config.canUndo && Config.lastStep !== sessionStep && guard-- > 0)
+            Config.undo();
+    }
+
+    // ---- history: ◀ ▶ like a browser (a page and its sub-page) ----
+    property var backStack: []
+    property var forwardStack: []
+    property string lastLoc: ""             // set once at start, then by recordLoc (no binding)
+    property bool travelling: false
+    readonly property string loc: win.settingsNav.settingsPage + "|" + win.settingsNav.settingsSub
+    onLocChanged: Qt.callLater(recordLoc)
+    function recordLoc() {
+        if (loc === lastLoc)
+            return;
+        if (!travelling) {
+            backStack = backStack.filter(l => l !== loc).concat([lastLoc]).slice(-30);
+            forwardStack = [];
+            // how often each page is opened: the account page's "Everyday" follows it (a
+            // category's own page is a way through, not a page anyone wants back)
+            if (Config.ready && win.settingsNav.settingsOpen && win.settingsNav.settingsSub === "" && win.settingsNav.settingsPage !== "home" && win.settingsNav.settingsPage !== "more" && !win.settingsNav.settingsPage.startsWith("cat:")) {
+                const u = Object.assign({}, Config.settingsUi.usage || {});
+                u[win.settingsNav.settingsPage] = (u[win.settingsNav.settingsPage] || 0) + 1;
+                Config.settingsUi.usage = u;
+            }
+        }
+        travelling = false;
+        lastLoc = loc;
+    }
+    Connections {
+        target: win.settingsNav
+        function onSettingsOpenChanged() {
+            idleHome.running = !win.settingsNav.settingsOpen && win.main && Shell.settingsWarm;
+            if (!win.settingsNav.settingsOpen) {
+                win.backStack = [];
+                win.forwardStack = [];
+                win.sessionMarked = false;
+                win.query = "";
+                searchInput.text = "";
+            } else
+                win.opened();
+        }
+    }
+    // the window kept hidden lets a heavy page go after a minute and holds Home instead (what
+    // opening without a page shows anyway), then the engine gives back what the page held
+    Timer {
+        id: idleHome
+        interval: 60000
+        onTriggered: {
+            if (win.settingsNav.settingsOpen || win.settingsNav.settingsPage === "main")
+                return;
+            win.settingsNav.settingsPage = "main";
+            win.settingsNav.settingsSub = "";
+            Qt.callLater(gc);
+        }
+    }
+    function opened() {
+        Config.flush();
+        sessionStep = Config.lastStep;
+        sessionMarked = true;
+        Qt.callLater(focusSearch);
+    }
+    function goLoc(l) {
+        const [p, sub] = l.split("|");
+        travelling = true;
+        win.settingsNav.settingsPage = p;
+        win.settingsNav.settingsSub = sub || "";
+        Qt.callLater(recordLoc);
+    }
+    readonly property bool canBack: backStack.length > 0
+    readonly property bool canForward: forwardStack.length > 0
+    readonly property string backTarget: canBack ? backStack[backStack.length - 1].split("|")[0] : "account"
+    readonly property string backLabel: labelOf(backTarget)
+    function back() {
+        recordLoc();
+        if (!canBack)
+            return;
+        const b = backStack.slice();
+        const target = b.pop();
+        backStack = b;
+        forwardStack = forwardStack.concat([loc]);
+        goLoc(target);
+    }
+    function forward() {
+        recordLoc();
+        if (!canForward)
+            return;
+        const f = forwardStack.slice();
+        const target = f.pop();
+        forwardStack = f;
+        backStack = backStack.concat([loc]);
+        goLoc(target);
+    }
+    // the home of the folder and tiles views, as the first crumb
+    readonly property string homeLabel: viewId === "controlpanel" ? I18n.t("Панель управления", "Control Panel") : I18n.t("Все настройки", "All settings")
+    // where you are, for the toolbar: Section › Page › Sub-page
+    readonly property var crumbs: {
+        const out = [];
+        if (fluent) {
+            const c = String(currentId).startsWith("cat:") ? SettingsTree.categories.find(x => x.id === currentId.slice(4)) : sectionFor(currentId);
+            if (currentId === "account" || !c)
+                out.push(labelOf(currentId));
+            else {
+                if (c.pages.length > 1 || currentId.startsWith("cat:"))
+                    out.push(c.label);
+                if (!currentId.startsWith("cat:"))
+                    out.push(labelOf(currentId));
+            }
+            if (win.settingsNav.settingsSub)
+                out.push(win.settingsNav.settingsSub);
+            return out;
+        }
+        if (hasHome)
+            out.push(homeLabel);
+        if (atHome)
+            return out;
+        const s = sectionFor(currentId);
+        if (currentId === "account")
+            out.push(labelOf("account"));
+        else if (s) {
+            out.push(s.label);
+            if (s.pages[0] !== currentId)
+                out.push(labelOf(currentId));
+        } else
+            out.push(labelOf(currentId));
+        if (win.settingsNav.settingsSub)
+            out.push(win.settingsNav.settingsSub);
+        return out;
+    }
+    // a crumb clicked: up to that level (the home, the section's first page, the page)
+    function crumbClicked(index) {
+        if (fluent) {
+            const c = sectionFor(currentId) || navSectionOf(currentId);
+            if (index === 0 && c && c.pages.length > 1 && !currentId.startsWith("cat:"))
+                openSection(c);
+            else
+                win.settingsNav.settingsSub = "";
+            return;
+        }
+        const at = hasHome ? index - 1 : index;
+        if (at < 0)
+            return goHome();
+        const s = sectionFor(currentId);
+        if (at === 0 && s)
+            openSection(s);
+        else
+            win.settingsNav.settingsSub = "";
     }
 
     // ---- search (services/SettingsSearch) ----
     property string query: ""
     property int sel: 0
     property var results: []
+    // ---- what was searched before: a click into the empty field shows it (not the focus the
+    // window gives the field when it opens); a query typed by hand and opened is remembered
+    readonly property var history: Config.settingsUi.searchHistory || []
+    property bool historyAsked: false
+    property bool typed: false              // the query was typed (not put there by a script)
+    property int hsel: -1
+    readonly property bool showHistory: historyAsked && searchFocused && query.trim() === "" && history.length > 0
+    // the results' place is taken: by what the query finds, or by the history
+    readonly property bool searching: query.trim() !== "" || showHistory
+    onShowHistoryChanged: hsel = -1
+    onSearchFocusedChanged: if (!searchFocused)
+        historyAsked = false
+    function remember(q, r) {
+        const h = history.filter(x => x.q.toLowerCase() !== q.toLowerCase());
+        Config.settingsUi.searchHistory = [{
+                "q": q,
+                "title": r.title || "",
+                "page": r.page || "",
+                "icon": r.icon || ""
+            }].concat(h).slice(0, 12);
+    }
+    function forget(q) {
+        Config.settingsUi.searchHistory = history.filter(x => x.q !== q);
+    }
+    function useHistory(item) {
+        if (!item)
+            return;
+        setQuery(item.q);
+        typed = true;
+    }
     onQueryChanged: {
         if (!query.trim())
             results = [];
         searchTimer.restart();
+        if (query.trim().length >= 3)
+            missTimer.restart();
+        else
+            missTimer.stop();
     }
     // one frame: keys typed together are searched once (a search takes ~1 ms)
     Timer {
@@ -249,80 +591,111 @@ Item {
         property: "pageInfo"
         value: {
             const m = {};
-            for (const p of win.allPages)
+            for (const p of win.allPages) {
+                const s = win.sectionFor(p.id);
                 m[p.id] = {
-                    "label": p.label,
+                    "label": s && s.pages[0] !== p.id ? s.label + " › " + p.label : p.label,
                     "icon": p.icon
                 };
+            }
             return m;
         }
     }
     // `angelos settingsQuery "…"`: type into the search box (scripts, previews)
     function setQuery(t) {
-        search.text = t;
+        searchInput.text = t;
         query = t;
         sel = 0;
-        search.focusField();
+        typed = false;
+        searchInput.focusField();
+    }
+    // asked = opened on purpose (Ctrl+F, the search button, «Найти»): the history shows at once;
+    // the focus the window gives the field when it opens leaves the page in sight
+    function focusSearch(asked) {
+        if (asked === true)
+            historyAsked = true;
+        if (win.settingsNav.settingsOpen)
+            searchInput.focusField();
     }
     function acceptGhost() {
         if (!ghost)
             return false;
-        search.text = query + ghost;
-        query = search.text;
+        searchInput.text = query + ghost;
+        query = searchInput.text;
         sel = 0;
         return true;
     }
     function openResult(r) {
         if (!r)
             return;
+        if (typed && query.trim())
+            remember(query.trim(), r);
+        typed = false;
+        historyAsked = false;
         pendingTarget = r.kind === "page" ? null : r;
         query = "";
-        search.text = "";
-        if (Shell.settingsPage === r.page)
+        searchInput.text = "";
+        if (win.settingsNav.settingsPage === r.page)
             targetTimer.restart();
         else
-            Shell.settingsPage = r.page;
+            win.settingsNav.settingsPage = r.page;
+        if (r.kind === "page")
+            win.settingsNav.settingsSub = "";
     }
-    // scroll the page to the found setting and flash it
-    function findItem(item, r) {
-        if (!item || !item.visible)
+    // the found setting: on the page (a visible one) or anywhere in it (`any`)
+    function findItem(item, r, any) {
+        if (!item || (!any && !item.visible))
             return null;
         if (r.kind === "row" && item.label === r.target && item.hint !== undefined)
             return item;
         if (r.kind === "group" && item.title === r.target && item.spacing !== undefined)
             return item;
+        if (r.kind === "name" && item.name === r.target && item.advanced !== undefined)
+            return item;
         for (const c of item.children) {
-            const f = findItem(c, r);
+            const f = findItem(c, r, any);
             if (f)
                 return f;
         }
         return null;
     }
-    function unfoldAll(item) {
-        let any = false;
-        if (item.folded === true && item.advanced !== undefined) {
-            item.open = true;
-            any = true;
-        }
-        for (const c of item.children)
-            any = unfoldAll(c) || any;
-        return any;
+    function groupOf(item) {
+        for (let p = item; p; p = p.parent)
+            if (p.advanced !== undefined && p.title !== undefined)
+                return p;
+        return null;
     }
+    // scroll the page to the found setting and flash it; one in a sub-page opens it first
     function showTarget() {
         const r = pendingTarget;
         pendingTarget = null;
-        const pg = page.item;
+        const pg = shownPage.item;
         if (!r || !pg || !pg.flick)
             return;
-        const it = findItem(pg.flick.contentItem, r) || (r.kind === "row" ? findItem(pg.flick.contentItem, {
-                "kind": "group",
-                "target": String(r.crumb).split(" › ")[1] || ""
-            }) : null);
+        const groupHint = {
+            "kind": "group",
+            "target": String(r.crumb).split(" › ").slice(-1)[0] || ""
+        };
+        let it = findItem(pg.flick.contentItem, r, false) || (r.kind === "row" ? findItem(pg.flick.contentItem, groupHint, false) : null);
         if (!it) {
-            // the setting may sit in a folded "Advanced" group of the simple view
-            if (!r.unfolded && unfoldAll(pg.flick.contentItem)) {
+            // a group left out of this part (its file is loaded for other groups) doesn't count
+            const anyHit = findItem(pg.flick.contentItem, r, true) || (r.kind === "row" ? findItem(pg.flick.contentItem, groupHint, true) : null);
+            const anyGroup = anyHit ? groupOf(anyHit) : null;
+            const hidden = anyGroup && anyGroup.leftOut ? null : anyHit;
+            const g = hidden ? anyGroup : null;
+            // under «Ещё…» (ComposedPage): open it, the parts load, then look again
+            if (!hidden && pg.hasMore && !pg.moreOpen && !r.moreOpened) {
+                pg.openMore();
                 pendingTarget = Object.assign({}, r, {
-                    "unfolded": true
+                    "moreOpened": true
+                });
+                targetTimer.restart();
+                return;
+            }
+            if (g && g.advanced && !r.opened && win.settingsNav.settingsSub !== g.title) {
+                win.settingsNav.settingsSub = g.title;
+                pendingTarget = Object.assign({}, r, {
+                    "opened": true
                 });
                 targetTimer.restart();
             }
@@ -334,7 +707,7 @@ Item {
     }
     Timer {
         id: targetTimer
-        interval: 60
+        interval: 80
         onTriggered: win.showTarget()
     }
     Component {
@@ -350,11 +723,11 @@ Item {
             SequentialAnimation on opacity {
                 running: true
                 PauseAnimation {
-                    duration: 900
+                    duration: Motion.ms(900)
                 }
                 NumberAnimation {
                     to: 0
-                    duration: 900
+                    duration: Motion.ms(900)
                 }
                 ScriptAction {
                     script: flash.destroy()
@@ -362,476 +735,175 @@ Item {
             }
         }
     }
-    Shortcut {
-        sequence: "Ctrl+F"
-        enabled: !win.fluent
-        onActivated: search.focusField()
-    }
 
-    // ================= TrollOS: macOS-style layout in the system's pixel look =================
-    // left: search, the profile card, every page with a coloured tile; right: a
-    // header with «назад» and the page name over the page itself.
-    Binding {
-        target: Shell
-        property: "settingsWindow"
-        value: win.Window.window
-        when: !win.fluent
-        restoreMode: Binding.RestoreValue
+    // ---- the keyboard ----
+    // the view's navigation (the sections, the icons, the tabs, the tiles) takes the arrows
+    // while this has the focus: ↓ from an empty search field, or a click into it
+    readonly property bool navActive: navFocus.activeFocus
+    function focusNav() {
+        navFocus.forceActiveFocus();
     }
-    readonly property var tileColors: ({
-            "appearance": "#e8262f", "fonts": "#6a5f64", "wallpaper": "#3a7bff", "capture": "#20a8c0",
-            "cursor": "#6a5f64", "widgets": "#ff7a2f", "layouts": "#8f4dff", "bar": "#6a5f64",
-            "workspaces": "#8f4dff", "lyrics": "#ff3d7a", "y2k": "#ff4fb0",
-            "monitor": "#3a7bff", "keyboard": "#6a5f64", "shortcuts": "#6a5f64", "windows": "#3a7bff",
-            "sound": "#ff3d7a", "network": "#3a7bff", "bluetooth": "#3a7bff", "gamepad": "#2fbf6b",
-            "defaults": "#e0a020", "notifications": "#ff6a2f", "plugins": "#2fbf6b", "studio": "#8f4dff",
-            "dotfiles": "#6a5f64", "lock": "#6a5f64", "updates": "#6a5f64", "system": "#6a5f64",
-            "screentime": "#7b4dff"
-        })
-    function tileColor(id) {
-        return tileColors[id] || (String(id).startsWith("plugin:") ? "#2fbf6b" : "#6a5f64");
+    function navKey(e) {
+        if (viewItem && viewItem.navKey && viewItem.navKey(e))
+            return true;
+        if (e.key === Qt.Key_Escape) {
+            if (!goUp())
+                focusSearch();
+            return true;
+        }
+        if (e.key === Qt.Key_Backspace)
+            return goUp() || true;
+        if (e.text && e.text.length === 1 && e.text >= " " && !(e.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+            // typing searches
+            searchInput.text = searchInput.text + e.text;
+            query = searchInput.text;
+            sel = 0;
+            searchInput.focusField();
+            return true;
+        }
+        return false;
     }
-    readonly property string pageTitle: Shell.settingsPage === "profile" ? I18n.t("Профиль", "Profile") : win.currentPage ? win.currentPage.label : Shell.settingsPage === "more" ? I18n.t("Все разделы", "All sections") : I18n.t("Главная", "Home")
-    // «назад»: the pages opened before, newest last
-    property var history: []
-    property string lastPage: Shell.settingsPage
-    property bool goingBack: false
-    Connections {
-        target: Shell
-        function onSettingsPageChanged() {
-            if (!win.goingBack && win.lastPage && win.lastPage !== Shell.settingsPage)
-                win.history = win.history.concat([win.lastPage]).slice(-30);
-            win.goingBack = false;
-            win.lastPage = Shell.settingsPage;
+    // `angelos settingsKey …` (dev): the same, without a real key press
+    function navKeyForTest(key) {
+        return navKey({
+            "key": key,
+            "text": "",
+            "modifiers": 0
+        });
+    }
+    Item {
+        id: navFocus
+        Keys.onPressed: e => {
+            if (win.navKey(e))
+                e.accepted = true;
         }
     }
-    function back() {
-        const h = history.slice();
-        const p = h.pop() || "home";
-        goingBack = true;
-        history = h;
-        Shell.settingsPage = p;
+    Shortcut {
+        sequences: ["Ctrl+F", "Ctrl+K"]
+        onActivated: win.focusSearch(true)
     }
-    // account name for the profile card: Settings → Профиль, else the passwd full name, else the login
-    property string accountName: WinStyle.userName
-    readonly property string displayName: Config.profile.name || accountName
-    Process {
-        running: true
-        command: ["getent", "passwd", WinStyle.userName]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const g = (text.split(":")[4] || "").split(",")[0].trim();
-                if (g)
-                    win.accountName = g;
+    // one more window, on the same page (Ctrl+W closes this one)
+    Shortcut {
+        sequence: "Ctrl+N"
+        onActivated: win.openNew()
+    }
+    Shortcut {
+        sequence: "Ctrl+W"
+        onActivated: win.settingsNav.settingsOpen = false
+    }
+    // Ctrl+Z: the last change of a setting goes back (Config.undo)
+    Shortcut {
+        sequence: "Ctrl+Z"
+        enabled: Config.canUndo
+        onActivated: Config.undo()
+    }
+    // ◀ ▶ from the keyboard too, like Finder (Ctrl+[ / Ctrl+], Alt+← / Alt+→)
+    Shortcut {
+        sequences: ["Ctrl+[", "Alt+Left"]
+        onActivated: win.back()
+    }
+    Shortcut {
+        sequences: ["Ctrl+]", "Alt+Right"]
+        onActivated: win.forward()
+    }
+    Shortcut {
+        sequence: "Alt+Up"
+        onActivated: win.goUp()
+    }
+    Shortcut {
+        sequence: "Alt+Home"
+        onActivated: win.goHome()
+    }
+    Shortcut {
+        sequence: "Ctrl+PgDown"
+        onActivated: win.navSection(1)
+    }
+    Shortcut {
+        sequence: "Ctrl+PgUp"
+        onActivated: win.navSection(-1)
+    }
+    Shortcut {
+        sequence: "Ctrl+Tab"
+        onActivated: win.navPage(1)
+    }
+    Shortcut {
+        sequences: ["Ctrl+Shift+Tab", "Ctrl+Backtab"]
+        onActivated: win.navPage(-1)
+    }
+
+    // ---- the grimoire: the book's cover (and, for the sidebar, its spread) ----
+    GrimoireBook {
+        id: book
+        anchors.fill: parent
+        view: win
+        visible: win.grimoire
+        spread: win.spread
+    }
+    // …or the circle's own dress round one page
+    Loader {
+        id: dressLoader
+        anchors.fill: parent
+        active: win.dressed
+        function load() {
+            if (win.dressed)
+                setSource(Qt.resolvedUrl("dresses/" + win.dressId.charAt(0).toUpperCase() + win.dressId.slice(1) + "Dress.qml"), {
+                    "view": win
+                });
+        }
+        Component.onCompleted: load()
+        Connections {
+            target: win
+            function onDressIdChanged() {
+                dressLoader.load();
             }
         }
     }
+    // the grimoire (or the dress) re-inks what it shows on its paper
+    readonly property var inkSource: dressed && dressLoader.item ? dressLoader.item : book
+    Component {
+        id: inkFx
+        ShaderEffect {
+            fragmentShader: Qt.resolvedUrl("../../shaders/grimoire.frag.qsb")
+            property color paper: win.inkSource.paper
+            property color ink: win.inkSource.ink
+            property color redInk: win.inkSource.redInk
+            property real invert: Theme.dark ? 1 : 0
+        }
+    }
 
+    // the Golden Gate skin: a Mac window — niri rounds and shadows it (templates/niri-mac.kdl), the
+    // view draws the traffic lights and the toolbar
+    Rectangle {
+        id: macFrame
+        visible: win.mac
+        anchors.fill: parent
+        color: GoldenGate.contentBg
+        Item {
+            id: macHost
+            anchors.fill: parent
+        }
+    }
     PxWindow {
-        id: frame
-        visible: !win.fluent
+        id: pxFrame
+        visible: !win.hellDress && !win.mac
         anchors.fill: parent
         anchors.rightMargin: Config.appearance.shadows ? Theme.u * 2 : 0
         anchors.bottomMargin: Config.appearance.shadows ? Theme.u * 2 : 0
-        title: "TrollOS · " + I18n.t("Настройки", "Settings")
-        icon: "splat"
+        skin: win.skin
+        title: win.viewId === "properties" ? I18n.t("Свойства: ", "Properties: ") + (win.navSectionOf(win.currentId) || win.accountSection).label : (win.skin === "windose" ? I18n.exe("settings") + " ♡ " : "angelOS · ") + (win.atHome ? win.homeLabel : win.currentPage ? win.currentPage.label : I18n.t("Настройки", "Settings"))
+        icon: win.atHome ? "gear" : win.currentPage ? win.currentPage.icon : "gear"
         minimizable: false
         maximizable: true
-        onCloseClicked: Shell.settingsOpen = false
+        onCloseClicked: win.settingsNav.settingsOpen = false
         onMaximizeClicked: if (win.hostWindow)
             win.hostWindow.maximized = !win.hostWindow.maximized
         onTitlePressed: if (win.hostWindow)
             win.hostWindow.startSystemMove()
-        bodyPadding: 0
+        bodyPadding: Theme.u * 4
 
-        // ---- sidebar ----
-        Rectangle {
-            id: sidebar
-            width: Theme.u * 118
-            height: parent.height
-            color: Qt.alpha(Theme.sunken, Config.appearance.blur ? 0.6 : 1)
-            Rectangle {
-                anchors.right: parent.right
-                width: Theme.u
-                height: parent.height
-                color: Theme.edge
-            }
-
-            PxField {
-                id: search
-                x: Theme.u * 5
-                y: Theme.u * 5
-                width: parent.width - Theme.u * 11
-                icon: "search"
-                placeholder: I18n.t("Поиск", "Search")
-                onEdited: {
-                    win.query = text;
-                    win.sel = 0;
-                }
-                onAccepted: win.openResult(win.results[Math.min(win.sel, win.results.length - 1)])
-                onKeyPressed: e => {
-                    if (e.key === Qt.Key_Tab || (e.key === Qt.Key_Right && search.input.cursorPosition === search.text.length)) {
-                        if (win.acceptGhost())
-                            e.accepted = true;
-                    } else if (e.key === Qt.Key_Down) {
-                        win.sel = Math.min(win.results.length - 1, win.sel + 1);
-                        e.accepted = true;
-                    } else if (e.key === Qt.Key_Up) {
-                        win.sel = Math.max(0, win.sel - 1);
-                        e.accepted = true;
-                    } else if (e.key === Qt.Key_Escape && search.text !== "") {
-                        search.text = "";
-                        win.query = "";
-                        e.accepted = true;
-                    }
-                }
-                // the rest of the suggested word, dimmed after the caret: "Bl" → "ur"
-                PxText {
-                    visible: win.ghost !== "" && search.input.activeFocus && search.input.contentWidth + implicitWidth < search.input.width
-                    x: search.input.x + search.input.contentWidth
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: win.ghost
-                    font: search.input.font
-                    color: Theme.textDim
-                    opacity: 0.8
-                }
-            }
-
-            // the user's card: avatar and name; opens Профиль
-            PxBox {
-                id: profileCard
-                readonly property bool sel: Shell.settingsPage === "profile"
-                x: Theme.u * 5
-                y: search.y + search.height + Theme.u * 5
-                width: parent.width - Theme.u * 11
-                height: Theme.u * 29
-                color: sel ? Theme.mix(Theme.face, Theme.accent, 0.25) : pm.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.12) : Theme.face
-                shadow: Config.appearance.shadows
-                TrollAvatar {
-                    id: avatar
-                    x: Theme.u * 3
-                    anchors.verticalCenter: parent.verticalCenter
-                    size: Theme.u * 22
-                    // «+»: change the picture
-                    Rectangle {
-                        x: parent.width - width + Theme.u * 3
-                        y: parent.height - height + Theme.u * 3
-                        width: Theme.u * 8
-                        height: Theme.u * 8
-                        color: Theme.accent
-                        border.width: Theme.u
-                        border.color: Theme.edge
-                        PxIcon {
-                            anchors.centerIn: parent
-                            name: "plus"
-                            pixel: 1
-                            ink: "#ffffff"
-                            fill: "#ffffff"
-                        }
-                    }
-                }
-                Column {
-                    anchors.left: avatar.right
-                    anchors.leftMargin: Theme.u * 5
-                    anchors.right: parent.right
-                    anchors.rightMargin: Theme.u * 2
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Theme.u
-                    PxText {
-                        width: parent.width
-                        text: win.displayName
-                        font.bold: true
-                        elide: Text.ElideRight
-                    }
-                    PxText {
-                        width: parent.width
-                        text: I18n.t("Профиль и аватарка", "Profile and picture")
-                        kind: "tiny"
-                        dim: true
-                        elide: Text.ElideRight
-                    }
-                }
-                MouseArea {
-                    id: pm
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: Shell.settingsPage = "profile"
-                }
-            }
-
-            // every page, the groups split by a gap (no headings, like macOS)
-            PxScroll {
-                id: navScroll
-                visible: win.query.trim() === ""
-                x: Theme.u * 4
-                y: profileCard.y + profileCard.height + Theme.u * 6
-                width: parent.width - Theme.u * 9
-                height: parent.height - y - Theme.u * 2
-                contentHeight: side.implicitHeight + Theme.u * 4
-
-                Column {
-                    id: side
-                    width: navScroll.width - Theme.u * 4
-                    spacing: Theme.u * 4
-
-                    Repeater {
-                        model: win.visibleGroups
-                        Column {
-                            id: grp
-                            required property var modelData
-                            width: side.width
-                            spacing: 0
-                            Repeater {
-                                model: grp.modelData.pages
-                                Item {
-                                    id: entry
-                                    required property var modelData
-                                    readonly property bool sel: Shell.settingsPage === modelData.id
-                                    width: grp.width
-                                    height: Theme.u * 18
-                                    PxBox {
-                                        anchors.fill: parent
-                                        visible: entry.sel
-                                        color: Theme.accent
-                                        hiColor: Theme.mix(Theme.accent, "#ffffff", 0.35)
-                                        loColor: Theme.mix(Theme.accent, "#000000", 0.45)
-                                        shadow: Config.appearance.shadows
-                                    }
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        visible: !entry.sel && em.containsMouse
-                                        color: Theme.mix(Theme.face, Theme.accent, 0.12)
-                                    }
-                                    PxBox {
-                                        id: tile
-                                        x: Theme.u * 2
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        width: Theme.u * 15
-                                        height: Theme.u * 15
-                                        readonly property color c: win.tileColor(entry.modelData.id)
-                                        color: c
-                                        hiColor: Theme.mix(c, "#ffffff", 0.3)
-                                        loColor: Theme.mix(c, "#000000", 0.35)
-                                        PxIcon {
-                                            anchors.centerIn: parent
-                                            name: entry.modelData.icon
-                                            // icons are drawn opaque: the fills are the tile tinted lighter
-                                            readonly property color soft: Theme.mix(tile.c, "#ffffff", 0.22)
-                                            ink: "#ffffff"
-                                            light: Theme.mix(tile.c, "#ffffff", 0.6)
-                                            fill: soft
-                                            fill2: soft
-                                            fill3: soft
-                                            body: soft
-                                            bad: soft
-                                        }
-                                    }
-                                    PxText {
-                                        anchors.left: tile.right
-                                        anchors.leftMargin: Theme.u * 4
-                                        anchors.right: parent.right
-                                        anchors.rightMargin: Theme.u * 2
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        elide: Text.ElideRight
-                                        text: entry.modelData.label
-                                        color: entry.sel ? Theme.selectText : Theme.text
-                                        font.bold: entry.sel
-                                    }
-                                    MouseArea {
-                                        id: em
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: Shell.settingsPage = entry.modelData.id
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // simple/expert: advanced settings folded or all shown
-                    Item {
-                        width: side.width
-                        height: Theme.u * 18
-                        Rectangle {
-                            width: parent.width
-                            height: Theme.u
-                            color: Qt.alpha(Theme.edge, 0.6)
-                        }
-                        PxText {
-                            x: Theme.u * 3
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - expertToggle.width - Theme.u * 8
-                            text: I18n.t("Все настройки (эксперт)", "Every setting (expert)")
-                            kind: "tiny"
-                            dim: true
-                            elide: Text.ElideRight
-                        }
-                        PxToggle {
-                            id: expertToggle
-                            anchors.right: parent.right
-                            anchors.rightMargin: Theme.u * 2
-                            anchors.verticalCenter: parent.verticalCenter
-                            checked: Config.settingsUi.expert
-                            onToggled: c => win.setExpert(c)
-                        }
-                    }
-                }
-            }
-
-            // search results in place of the page list
-            PxScroll {
-                id: resultsBox
-                visible: win.query.trim() !== ""
-                x: Theme.u * 4
-                y: profileCard.y
-                width: parent.width - Theme.u * 9
-                height: parent.height - y - Theme.u * 2
-                contentHeight: resultCol.implicitHeight
-                Column {
-                    id: resultCol
-                    width: parent.width
-                    spacing: Theme.u
-                    PxText {
-                        visible: win.ghost !== "" && search.input.activeFocus
-                        width: parent.width
-                        text: "Tab ↹ " + search.text + win.ghost
-                        kind: "tiny"
-                        dim: true
-                        horizontalAlignment: Text.AlignRight
-                        elide: Text.ElideLeft
-                    }
-                    PxText {
-                        visible: win.results.length === 0
-                        width: parent.width
-                        wrapMode: Text.Wrap
-                        text: SettingsSearch.loaded ? I18n.t("Ничего не нашлось. Попробуй другое слово — «экран», «прозрачность», «хоткеи»…", "Nothing found. Try another word — “display”, “transparency”, “hotkeys”…") : "…"
-                        dim: true
-                        leftPadding: Theme.u * 3
-                    }
-                    Repeater {
-                        model: win.results
-                        Rectangle {
-                            id: res
-                            required property var modelData
-                            required property int index
-                            readonly property bool picked: win.sel === index
-                            width: resultCol.width
-                            height: resRow.implicitHeight + Theme.u * 4
-                            color: picked ? Theme.select : rm.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.15) : "transparent"
-                            Row {
-                                id: resRow
-                                x: Theme.u * 3
-                                anchors.verticalCenter: parent.verticalCenter
-                                spacing: Theme.u * 3
-                                PxIcon {
-                                    name: res.modelData.icon || "gear"
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    ink: res.picked ? Theme.selectText : (Theme.dark ? Theme.text : Theme.edge)
-                                }
-                                Column {
-                                    width: res.width - Theme.u * 20
-                                    PxText {
-                                        width: parent.width
-                                        text: res.modelData.title
-                                        elide: Text.ElideRight
-                                        font.bold: res.modelData.kind === "page"
-                                        color: res.picked ? Theme.selectText : Theme.text
-                                    }
-                                    PxText {
-                                        visible: text !== ""
-                                        width: parent.width
-                                        text: res.modelData.crumb || res.modelData.hint
-                                        kind: "tiny"
-                                        elide: Text.ElideRight
-                                        color: res.picked ? Theme.selectText : Theme.textDim
-                                    }
-                                }
-                            }
-                            MouseArea {
-                                id: rm
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onEntered: win.sel = res.index
-                                onClicked: win.openResult(res.modelData)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ---- header: «назад» and the page name ----
-        Rectangle {
-            id: header
-            anchors.left: sidebar.right
-            anchors.right: parent.right
-            height: Theme.u * 20
-            color: Qt.alpha(Theme.sunken, Config.appearance.blur ? 0.45 : 1)
-            Rectangle {
-                anchors.bottom: parent.bottom
-                width: parent.width
-                height: Theme.u
-                color: Theme.edge
-            }
-            PxButton {
-                id: hdrBack
-                x: Theme.u * 6
-                anchors.verticalCenter: parent.verticalCenter
-                compact: true
-                icon: "arrowLeft"
-                enabled: win.history.length > 0 || Shell.settingsPage !== "home"
-                onClicked: win.back()
-            }
-            PxText {
-                anchors.left: hdrBack.right
-                anchors.leftMargin: Theme.u * 5
-                anchors.right: parent.right
-                anchors.rightMargin: Theme.u * 10
-                anchors.verticalCenter: parent.verticalCenter
-                text: win.pageTitle
-                kind: "title"
-                color: Theme.dark ? Theme.accent : Theme.edge
-                style: Theme.dark ? Text.Raised : Text.Normal
-                styleColor: Theme.edge
-                elide: Text.ElideRight
-            }
-        }
-
-        // ---- page ----
         Item {
-            id: pageBox
-            anchors.left: sidebar.right
-            anchors.right: parent.right
-            anchors.top: header.bottom
-            anchors.bottom: parent.bottom
-
-            Loader {
-                id: page
-                parent: win.fluent ? fpage : pageBox
-                anchors.fill: parent
-                anchors.margins: win.fluent ? 0 : Theme.u * 4
-                active: win.hostWindow ? win.hostWindow.visible : true
-                onLoaded: if (win.pendingTarget)
-                    targetTimer.restart()
-                source: {
-                    const id = Shell.settingsPage;
-                    if (id === "home")
-                        return "pages/HomePage.qml";
-                    if (id === "more")
-                        return "pages/MorePage.qml";
-                    if (id === "profile")
-                        return "pages/ProfilePage.qml";
-                    if (id.startsWith("plugin:"))
-                        return "pages/PluginSettingsPage.qml";
-                    if (id === "dotfiles")
-                        return Owner.enabled ? "file://" + Owner.dir + "/DotfilesPage.qml" : "pages/AppearancePage.qml";
-                    const name = id.charAt(0).toUpperCase() + id.slice(1);
-                    return "pages/" + (win.allPages.find(p => p.id === id) ? name : "Appearance") + "Page.qml";
-                }
-            }
+            id: viewHost
+            anchors.fill: parent
         }
 
         // resize grip
@@ -851,491 +923,418 @@ Item {
         }
     }
 
-    // ================= Windows 11 "Параметры" chrome =================
-    Rectangle {
-        id: fchrome
-        visible: win.fluent
+    // the chosen view; in the grimoire's spread its place is taken by the book
+    Item {
+        id: offstage
+        visible: false
+    }
+    Loader {
+        id: viewLoader
+        parent: win.mac ? macHost : !win.hellDress ? viewHost : win.spread ? offstage : win.dressed ? (dressLoader.item ? dressLoader.item.viewSlot : offstage) : book.viewSlot
         anchors.fill: parent
-        radius: 8
-        // Mica: the wallpaper's colour shows faintly through
-        color: WinStyle.dark ? Qt.rgba(0.125, 0.125, 0.125, 0.94) : Qt.rgba(0.953, 0.953, 0.953, 0.94)
-        border.width: 1
-        border.color: WinStyle.flyoutLine
-
-        readonly property var navPages: [{
-                "id": "home",
-                "label": I18n.t("Главная", "Home"),
-                "group": ""
-            }].concat(win.visibleGroups.reduce((a, g) => a.concat(g.pages.map(p => Object.assign({
-                    "group": g.title
-                }, p))), []))
-        readonly property var current: navPages.find(p => p.id === Shell.settingsPage) || navPages[0]
-        function navIcon(id) {
-            const k = id.startsWith("plugin:") ? "plugin" : id;
-            const e = Nav.nav[k] || Nav.nav.system;
-            return Qt.resolvedUrl("../bar/win/icons/c/" + e[0] + "-" + e[1].slice(1) + ".svg");
+        layer.enabled: (win.grimoire && !win.spread) || win.dressed
+        layer.effect: inkFx
+        function load() {
+            const v = win.viewId === "mac" ? {
+                "file": "MacView.qml"
+            } : win.views.find(x => x.id === win.viewId) || win.views[0];
+            setSource(Qt.resolvedUrl("views/" + v.file), {
+                "view": win
+            });
         }
-        property var history: []
+        Component.onCompleted: load()
         Connections {
-            target: Shell
-            function onSettingsPageChanged() {
-                if (!fchrome.goingBack && fchrome.lastPage && fchrome.lastPage !== Shell.settingsPage)
-                    fchrome.history = fchrome.history.concat([fchrome.lastPage]).slice(-30);
-                fchrome.goingBack = false;
-                fchrome.lastPage = Shell.settingsPage;
+            target: win
+            function onViewIdChanged() {
+                viewLoader.load();
             }
         }
-        property string lastPage: Shell.settingsPage
-        property bool goingBack: false
-        function back() {
-            if (!history.length)
-                return;
-            goingBack = true;
-            const h = history.slice();
-            const p = h.pop();
-            history = h;
-            Shell.settingsPage = p;
-        }
+    }
 
-        // ---- title bar ----
-        MouseArea {
+    // ---- the pages kept built: Home and the three opened most (Config.settingsUi.usage). Each is made
+    // the first time it is shown and after that only hidden and shown again — going back to one is
+    // instant (any other page is built anew each time: ~50–600 ms). A hidden one stops its
+    // previews (they run while visible). Only the main window keeps them.
+    readonly property string keptKey: main ? ["tree:main"].concat(frequent(3).map(p => "tree:" + p.id)).sort().join(",") : ""
+    readonly property var keptWants: keptKey ? keptKey.split(",") : []
+    property var keptLoaders: ({})
+    // the loader of the page on view: a kept one, or the one for every other page
+    readonly property var shownPage: keptLoaders[page.want] || page
+    Instantiator {
+        model: win.keptWants
+        delegate: Loader {
+            id: kept
+            required property string modelData
+            required property int index
+            readonly property bool current: page.want === modelData
+            property bool seen: current
+            // the window built ahead builds them too, one a second and a half (no CPU spike)
+            Timer {
+                running: Shell.settingsWarm && !kept.seen
+                interval: 1500 * (kept.index + 1)
+                onTriggered: kept.seen = true
+            }
+            onCurrentChanged: if (current) {
+                seen = true;
+                if (status === Loader.Ready && win.pendingTarget)
+                    targetTimer.restart();
+            }
+            parent: page.parent
+            anchors.fill: parent
+            layer.enabled: win.spread
+            layer.effect: inkFx
+            visible: current && !win.atHome
+            active: seen && (win.hostWindow ? win.hostWindow.visible || Shell.settingsWarm : true)
+            onLoaded: if (current && win.pendingTarget)
+                targetTimer.restart()
+            Component.onCompleted: setSource(Qt.resolvedUrl("ComposedPage.qml"), {
+                "pageKey": modelData.slice(5)
+            })
+        }
+        onObjectAdded: (i, o) => {
+            const m = Object.assign({}, win.keptLoaders);
+            m[o.modelData] = o;
+            win.keptLoaders = m;
+        }
+        onObjectRemoved: (i, o) => {
+            const m = Object.assign({}, win.keptLoaders);
+            if (m[o.modelData] === o)
+                delete m[o.modelData];
+            win.keptLoaders = m;
+        }
+    }
+
+    // ---- what every view shares: one search field, one results list, one page ----
+    readonly property int searchFieldHeight: searchInput.implicitHeight
+    readonly property bool searchFocused: searchInput.input.activeFocus
+    Item {
+        id: searchArea
+        parent: win.spread ? book.fieldSlot : win.viewItem && win.viewItem.searchSlot ? win.viewItem.searchSlot : offstage
+        anchors.fill: parent
+        z: 5
+        layer.enabled: win.spread
+        layer.effect: inkFx
+
+        PxField {
+            id: searchInput
+            keepFocus: true
             width: parent.width
-            height: 48
-            acceptedButtons: Qt.LeftButton
-            onPressed: if (win.hostWindow)
-                win.hostWindow.startSystemMove()
-            onDoubleClicked: if (win.hostWindow)
-                win.hostWindow.maximized = !win.hostWindow.maximized
-        }
-        Rectangle {
-            id: backBtn
-            visible: fchrome.history.length > 0
-            x: 6
-            y: 6
-            width: 40
-            height: 36
-            radius: 4
-            color: bma.pressed ? WinStyle.subtlePress : bma.containsMouse ? WinStyle.subtleHover : "transparent"
-            WinIcon {
-                anchors.centerIn: parent
-                name: "arrow_left-regular"
-                size: 16
+            kind: win.viewItem && win.viewItem.searchBig ? "title" : "body"
+            icon: "search"
+            placeholder: win.viewItem && win.viewItem.searchBig ? I18n.t("Что настроить?", "What would you like to change?") : I18n.t("Поиск", "Search")
+            onEdited: {
+                win.query = text;
+                win.sel = 0;
+                win.typed = true;
             }
-            MouseArea {
-                id: bma
-                anchors.fill: parent
-                hoverEnabled: true
-                onClicked: fchrome.back()
-            }
-        }
-        WinText {
-            x: backBtn.visible ? 56 : 16
-            y: 0
-            height: 48
-            text: I18n.t("Параметры", "Settings")
-            font.pixelSize: 12
-        }
-        Row {
-            anchors.right: parent.right
-            anchors.rightMargin: 1
-            y: 1
-            Repeater {
-                model: ["min", "max", "close"]
-                Rectangle {
-                    id: cap
-                    required property string modelData
-                    width: 46
-                    height: 32
-                    radius: modelData === "close" ? 0 : 0
-                    color: cma.containsMouse ? (cap.modelData === "close" ? "#c42b1c" : WinStyle.subtleHover) : "transparent"
-                    // Windows caption glyphs, drawn
-                    Item {
-                        anchors.centerIn: parent
-                        width: 10
-                        height: 10
-                        Rectangle {
-                            visible: cap.modelData === "min"
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 10
-                            height: 1
-                            color: WinStyle.text
-                        }
-                        Rectangle {
-                            visible: cap.modelData === "max"
-                            anchors.fill: parent
-                            color: "transparent"
-                            radius: 1.5
-                            border.width: 1
-                            border.color: WinStyle.text
-                        }
-                        Repeater {
-                            model: cap.modelData === "close" ? [45, -45] : []
-                            Rectangle {
-                                required property int modelData
-                                anchors.centerIn: parent
-                                width: 13
-                                height: 1
-                                rotation: modelData
-                                antialiasing: true
-                                color: cma.containsMouse ? "#ffffff" : WinStyle.text
-                            }
-                        }
-                    }
-                    MouseArea {
-                        id: cma
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: {
-                            if (cap.modelData === "close")
-                                Shell.settingsOpen = false;
-                            else if (cap.modelData === "max" && win.hostWindow)
-                                win.hostWindow.maximized = !win.hostWindow.maximized;
-                            else if (cap.modelData === "min")
-                                Shell.settingsOpen = false;
-                        }
-                    }
-                }
-            }
-        }
-
-        // ---- navigation pane ----
-        Item {
-            id: nav
-            x: 0
-            y: 48
-            width: 312
-            height: parent.height - 48
-
-            // account
-            Item {
-                id: acct
-                x: 20
-                y: 6
-                width: parent.width - 40
-                height: 84
-                Item {
-                    id: avBox
-                    width: 64
-                    height: 64
-                    anchors.verticalCenter: parent.verticalCenter
-                    Image {
-                        id: fav
-                        anchors.fill: parent
-                        source: WinStyle.avatar
-                        sourceSize: Qt.size(128, 128)
-                        fillMode: Image.PreserveAspectCrop
-                        visible: false
-                    }
-                    Rectangle {
-                        id: favMask
-                        anchors.fill: parent
-                        radius: 32
-                        visible: false
-                        layer.enabled: true
-                    }
-                    MultiEffect {
-                        anchors.fill: parent
-                        source: fav
-                        maskEnabled: true
-                        maskSource: favMask
-                        maskThresholdMin: 0.5
-                        maskSpreadAtMin: 1
-                        visible: fav.status === Image.Ready
-                    }
-                }
-                Column {
-                    anchors.left: avBox.right
-                    anchors.leftMargin: 16
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - 80
-                    WinText {
-                        width: parent.width
-                        text: fchrome.fullName
-                        strong: true
-                    }
-                    WinText {
-                        width: parent.width
-                        text: I18n.t("Локальная учётная запись", "Local account")
-                        color: WinStyle.text2
-                        font.pixelSize: 12
-                    }
-                }
-            }
-
-            // search
-            PxField {
-                id: fsearch
-                x: 16
-                y: 104
-                width: parent.width - 32
-                icon: "search"
-                placeholder: I18n.t("Найти параметр", "Find a setting")
-                onEdited: {
-                    win.query = text;
-                    win.sel = 0;
-                }
-                onAccepted: {
+            onAccepted: {
+                if (win.showHistory && win.hsel >= 0)
+                    win.useHistory(win.history[win.hsel]);
+                else
                     win.openResult(win.results[Math.min(win.sel, win.results.length - 1)]);
-                    fsearch.text = "";
-                }
-                onKeyPressed: e => {
-                    if (e.key === Qt.Key_Down) {
+            }
+            onKeyPressed: e => {
+                if (e.key === Qt.Key_Tab || (e.key === Qt.Key_Right && searchInput.input.cursorPosition === searchInput.text.length)) {
+                    if (win.acceptGhost())
+                        e.accepted = true;
+                } else if (e.key === Qt.Key_Down) {
+                    // results first; the history when it is open; with nothing typed ↓ walks the view's navigation
+                    if (win.showHistory)
+                        win.hsel = Math.min(win.history.length - 1, win.hsel + 1);
+                    else if (win.query.trim() === "")
+                        win.focusNav();
+                    else
                         win.sel = Math.min(win.results.length - 1, win.sel + 1);
-                        e.accepted = true;
-                    } else if (e.key === Qt.Key_Up) {
+                    e.accepted = true;
+                } else if (e.key === Qt.Key_Up) {
+                    if (win.showHistory)
+                        win.hsel = Math.max(-1, win.hsel - 1);
+                    else
                         win.sel = Math.max(0, win.sel - 1);
-                        e.accepted = true;
-                    } else if (e.key === Qt.Key_Escape && fsearch.text !== "") {
-                        fsearch.text = "";
-                        win.query = "";
-                        e.accepted = true;
-                    }
+                    e.accepted = true;
+                } else if (e.key === Qt.Key_Escape && searchInput.text !== "") {
+                    searchInput.text = "";
+                    win.query = "";
+                    e.accepted = true;
+                } else if (e.key === Qt.Key_Escape && win.showHistory) {
+                    win.historyAsked = false;
+                    e.accepted = true;
                 }
             }
-
-            // pages
-            Flickable {
-                id: navList
-                x: 4
-                y: 148
-                width: parent.width - 8
-                height: parent.height - y - 8
-                contentHeight: navCol.implicitHeight
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-
-                // the accent pill glides to the chosen page, like Windows
-                Rectangle {
-                    id: pill
-                    z: 2
-                    x: 12
-                    width: 3
-                    height: 16
-                    radius: 1.5
-                    color: WinStyle.accent
-                    readonly property Item target: {
-                        const i = fchrome.navPages.findIndex(p => p.id === Shell.settingsPage);
-                        return i >= 0 ? navRep.itemAt(i) : null;
-                    }
-                    visible: !!target
-                    y: target ? target.y + (target.height - height) / 2 : 0
-                    Behavior on y {
-                        NumberAnimation {
-                            duration: WinStyle.slow
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: WinStyle.decelerate
-                        }
-                    }
-                }
-                Column {
-                    id: navCol
-                    width: navList.width
-                    Repeater {
-                        id: navRep
-                        model: fchrome.navPages
-                        Item {
-                            id: ni
-                            required property var modelData
-                            readonly property bool sel: Shell.settingsPage === modelData.id
-                            width: navCol.width
-                            height: 40
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.leftMargin: 8
-                                anchors.rightMargin: 8
-                                anchors.topMargin: 2
-                                anchors.bottomMargin: 2
-                                radius: 4
-                                color: nma.pressed ? WinStyle.subtlePress : ni.sel || nma.containsMouse ? WinStyle.subtleHover : "transparent"
-                            }
-                            Image {
-                                x: 28
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 16
-                                height: 16
-                                sourceSize: Qt.size(32, 32)
-                                source: ni.modelData.id === "home" ? Qt.resolvedUrl("../bar/win/icons/c/person_circle-60cdff.svg") : fchrome.navIcon(ni.modelData.id)
-                            }
-                            WinText {
-                                x: 60
-                                width: parent.width - 76
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: ni.modelData.label
-                            }
-                            MouseArea {
-                                id: nma
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: Shell.settingsPage = ni.modelData.id
-                            }
-                        }
-                    }
+            // a click into the field (the press goes on to it): the history may show
+            MouseArea {
+                anchors.fill: parent
+                z: 10
+                cursorShape: Qt.IBeamCursor
+                onPressed: m => {
+                    win.historyAsked = true;
+                    m.accepted = false;
                 }
             }
+            // the rest of the suggested word, dimmed after the caret: "Bl" → "ur"
+            PxText {
+                visible: win.ghost !== "" && searchInput.input.activeFocus && searchInput.input.contentWidth + implicitWidth < searchInput.input.width
+                x: searchInput.input.x + searchInput.input.contentWidth
+                anchors.verticalCenter: parent.verticalCenter
+                text: win.ghost
+                font: searchInput.input.font
+                color: Theme.textDim
+                opacity: 0.8
+            }
+        }
+        PxText {
+            visible: win.ghost !== "" && searchInput.input.activeFocus
+            anchors.top: searchInput.bottom
+            anchors.right: searchInput.right
+            anchors.topMargin: Theme.u
+            text: "Tab ↹ " + searchInput.text + win.ghost
+            kind: "tiny"
+            dim: true
+            width: searchInput.width
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideLeft
+        }
+    }
 
-            // search results under the box
-            Rectangle {
-                visible: win.query.trim() !== ""
-                z: 20
-                x: 16
-                y: fsearch.y + fsearch.height + 4
-                width: fsearch.width
-                height: Math.min(360, resList.contentHeight + 8)
-                radius: 8
-                color: WinStyle.menu
-                border.width: 1
-                border.color: WinStyle.flyoutLine
-                ListView {
-                    id: resList
-                    anchors.fill: parent
-                    anchors.margins: 4
-                    clip: true
-                    model: win.results
-                    boundsBehavior: Flickable.StopAtBounds
-                    delegate: Item {
-                        id: fr
+    // results: wherever the view puts them, while there is a query
+    Item {
+        id: resultsArea
+        parent: win.spread ? book.resultsSlot : win.viewItem && win.viewItem.resultsSlot ? win.viewItem.resultsSlot : offstage
+        anchors.fill: parent
+        visible: win.searching
+        z: 5
+        layer.enabled: win.spread
+        layer.effect: inkFx
+        Rectangle {
+            visible: win.spread
+            anchors.fill: parent
+            color: Theme.face
+        }
+        PxScroll {
+            id: resultsBox
+            anchors.fill: parent
+            contentHeight: resultCol.implicitHeight
+            Column {
+                id: resultCol
+                width: parent.width
+                spacing: Theme.u
+                // what was searched before (a click into the empty field)
+                Item {
+                    visible: win.showHistory
+                    width: parent.width
+                    height: histHead.implicitHeight + Theme.u * 2
+                    PxText {
+                        id: histHead
+                        x: Theme.u * 3
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: I18n.t("Недавно искал", "Recent searches")
+                        kind: "tiny"
+                        dim: true
+                    }
+                    PxButton {
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.u * 3
+                        anchors.verticalCenter: parent.verticalCenter
+                        compact: true
+                        flat: true
+                        text: I18n.t("Очистить", "Clear")
+                        onClicked: Config.settingsUi.searchHistory = []
+                    }
+                }
+                Repeater {
+                    model: win.showHistory ? win.history : []
+                    Rectangle {
+                        id: hist
                         required property var modelData
                         required property int index
-                        width: resList.width
-                        height: 40
-                        Rectangle {
+                        readonly property bool picked: win.hsel === index
+                        width: resultCol.width
+                        height: histRow.implicitHeight + Theme.u * 4
+                        color: picked ? Theme.select : hm.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.15) : "transparent"
+                        MouseArea {
+                            id: hm
                             anchors.fill: parent
-                            anchors.margins: 2
-                            radius: 4
-                            color: win.sel === fr.index || frm.containsMouse ? WinStyle.subtleHover : "transparent"
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: win.useHistory(hist.modelData)
                         }
-                        Image {
-                            x: 10
+                        Row {
+                            id: histRow
+                            x: Theme.u * 3
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 16
-                            height: 16
-                            sourceSize: Qt.size(32, 32)
-                            source: fchrome.navIcon(fr.modelData.page || "system")
-                        }
-                        Column {
-                            x: 36
-                            width: parent.width - 44
-                            anchors.verticalCenter: parent.verticalCenter
-                            WinText {
-                                width: parent.width
-                                text: fr.modelData.title
-                                font.pixelSize: 13
+                            spacing: Theme.u * 3
+                            PxIcon {
+                                name: "clock"
+                                anchors.verticalCenter: parent.verticalCenter
+                                ink: hist.picked ? Theme.selectText : (Theme.dark ? Theme.text : Theme.edge)
                             }
-                            WinText {
-                                visible: text !== ""
-                                width: parent.width
-                                text: fr.modelData.crumb || ""
-                                color: WinStyle.text2
-                                font.pixelSize: 11
+                            Column {
+                                width: hist.width - Theme.u * 20 - histX.width
+                                PxText {
+                                    width: parent.width
+                                    text: hist.modelData.q
+                                    elide: Text.ElideRight
+                                    color: hist.picked ? Theme.selectText : Theme.text
+                                }
+                                PxText {
+                                    visible: text !== ""
+                                    width: parent.width
+                                    text: hist.modelData.title ? "→ " + hist.modelData.title : ""
+                                    kind: "tiny"
+                                    elide: Text.ElideRight
+                                    color: hist.picked ? Theme.selectText : Theme.textDim
+                                }
+                            }
+                            PxButton {
+                                id: histX
+                                anchors.verticalCenter: parent.verticalCenter
+                                compact: true
+                                flat: true
+                                text: "✕"
+                                onClicked: win.forget(hist.modelData.q)
+                            }
+                        }
+                    }
+                }
+                PxText {
+                    visible: win.results.length === 0 && win.query.trim() !== ""
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: SettingsSearch.loaded ? I18n.t("Ничего не нашлось. Попробуй другое слово — «экран», «прозрачность», «хоткеи»… или спроси ангела.", "Nothing found. Try another word — “display”, “transparency”, “hotkeys”… or ask the angel.") : "…"
+                    dim: true
+                    leftPadding: Theme.u * 3
+                }
+                // nothing found: ask her (she knows the settings and more), and the miss is noted
+                PxButton {
+                    visible: win.results.length === 0 && win.query.trim() !== "" && SettingsSearch.loaded && Angel.shown
+                    x: Theme.u * 3
+                    compact: true
+                    icon: "chat"
+                    text: (Angel.demon ? I18n.t("Спросить демоницу: «", "Ask the demon: “") : I18n.t("Спросить ангела: «", "Ask the angel: “")) + win.query.trim() + I18n.t("»", "”")
+                    onClicked: {
+                        const q = win.query.trim();
+                        win.setQuery("");
+                        Angel.answer(q);
+                    }
+                }
+                Timer {
+                    // a query that found nothing and stayed for a while is a miss worth noting
+                    id: missTimer
+                    interval: 1500
+                    onTriggered: if (win.results.length === 0 && SettingsSearch.loaded)
+                        SettingsSearch.logMiss(win.query)
+                }
+                Repeater {
+                    model: win.results
+                    Rectangle {
+                        id: res
+                        required property var modelData
+                        required property int index
+                        readonly property bool picked: win.sel === index
+                        width: resultCol.width
+                        height: resRow.implicitHeight + Theme.u * 4
+                        color: picked ? Theme.select : rm.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.15) : "transparent"
+                        Row {
+                            id: resRow
+                            x: Theme.u * 3
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Theme.u * 3
+                            PxIcon {
+                                name: res.modelData.icon || "gear"
+                                anchors.verticalCenter: parent.verticalCenter
+                                ink: res.picked ? Theme.selectText : (Theme.dark ? Theme.text : Theme.edge)
+                            }
+                            Column {
+                                width: res.width - Theme.u * 20 - (resToggle.visible ? resToggle.width + Theme.u * 4 : 0)
+                                PxText {
+                                    width: parent.width
+                                    text: res.modelData.title
+                                    elide: Text.ElideRight
+                                    font.bold: res.modelData.kind === "page"
+                                    color: res.picked ? Theme.selectText : Theme.text
+                                }
+                                // where it is; found through a concept («рулетка») says so first
+                                PxText {
+                                    visible: text !== ""
+                                    width: parent.width
+                                    text: (res.modelData.related ? "≈ " + res.modelData.related + (res.modelData.crumb || res.modelData.hint ? "  ·  " : "") : "") + (res.modelData.crumb || res.modelData.hint)
+                                    kind: "tiny"
+                                    elide: Text.ElideRight
+                                    color: res.picked ? Theme.selectText : Theme.textDim
+                                }
                             }
                         }
                         MouseArea {
-                            id: frm
+                            id: rm
                             anchors.fill: parent
                             hoverEnabled: true
-                            onEntered: win.sel = fr.index
-                            onClicked: {
-                                win.openResult(fr.modelData);
-                                fsearch.text = "";
-                            }
+                            cursorShape: Qt.PointingHandCursor
+                            onEntered: win.sel = res.index
+                            onClicked: win.openResult(res.modelData)
+                        }
+                        // a plain switch: flipped right in the results, the page stays where it is
+                        PxToggle {
+                            id: resToggle
+                            readonly property var key: res.modelData.toggle ? String(res.modelData.toggle).split(".") : []
+                            visible: key.length === 2 && !!Config[key[0]]
+                            anchors.right: parent.right
+                            anchors.rightMargin: Theme.u * 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: visible && !!Config[key[0]][key[1]]
+                            onToggled: v => Config[key[0]][key[1]] = v
                         }
                     }
-                    WinText {
-                        visible: win.results.length === 0
-                        x: 10
-                        height: 36
-                        text: I18n.t("Ничего не найдено", "No results")
-                        color: WinStyle.text2
-                    }
                 }
             }
         }
+    }
 
-        // ---- content ----
-        Item {
-            id: content
-            anchors.left: nav.right
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.topMargin: 48
-
-            // breadcrumb title: "Group › Page"
-            Row {
-                id: crumb
-                x: 20
-                y: 8
-                spacing: 12
-                WinText {
-                    visible: !!fchrome.current.group
-                    text: fchrome.current.group || ""
-                    color: WinStyle.text2
-                    font.pixelSize: 28
-                    font.family: WinStyle.fontDisplay
-                    strong: true
-                }
-                WinIcon {
-                    visible: !!fchrome.current.group
-                    anchors.verticalCenter: parent.verticalCenter
-                    name: "chevron_right-regular"
-                    size: 16
-                }
-                WinText {
-                    text: fchrome.current.label
-                    font.pixelSize: 28
-                    font.family: WinStyle.fontDisplay
-                    strong: true
-                }
+    // the page itself
+    Loader {
+        id: page
+        parent: win.spread ? book.pageSlot : win.viewItem && win.viewItem.pageSlot ? win.viewItem.pageSlot : offstage
+        anchors.fill: parent
+        layer.enabled: win.spread
+        layer.effect: inkFx
+        visible: !win.atHome
+        // a kept page (above) is shown by its own loader; the main window built ahead
+        // (Shell.settingsWarm) keeps its page while hidden
+        active: !win.keptWants.includes(want) && (win.hostWindow ? win.hostWindow.visible || (win.main && Shell.settingsWarm) : true)
+        onLoaded: if (win.pendingTarget)
+            targetTimer.restart()
+        // the page to show: a page of the tree is put together (ComposedPage) — the same file
+        // for every one of them, so it is loaded anew with its key whenever the page changes
+        readonly property string want: {
+            const id = win.settingsNav.settingsPage;
+            if (id === "home" || id === "more") {
+                // the folder and the tiles show their own home, no page
+                if (win.hasHome)
+                    return "";
+                // Home (MainPage, the flat list's first section); Windose and Stream in the sidebar
+                // view keep their own home
+                return win.skin === "classic" || win.hellDress || win.viewId !== "sidebar" ? "tree:main" : id === "home" ? "pages/HomePage.qml" : "pages/MorePage.qml";
             }
-            Item {
-                id: fpage
-                x: 20
-                y: 72
-                width: parent.width - 28
-                height: parent.height - y - 4
-                clip: true
-                // page change: slide up a little and fade in, like Windows
-                property real t: 1
-                opacity: t
-                transform: Translate {
-                    y: (1 - fpage.t) * 24
-                }
-                Connections {
-                    target: Shell
-                    function onSettingsPageChanged() {
-                        if (win.fluent)
-                            pageIn.restart();
-                    }
-                }
-                NumberAnimation {
-                    id: pageIn
-                    target: fpage
-                    property: "t"
-                    from: 0
-                    to: 1
-                    duration: WinStyle.slow
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: WinStyle.decelerate
-                }
-            }
+            if (id.startsWith("plugin:"))
+                return "pages/PluginSettingsPage.qml";
+            if (id.startsWith("cat:"))
+                return id;
+            if (id === "dotfiles" && !Owner.enabled)
+                return "tree:" + SettingsTree.accountPage;
+            return "tree:" + (win.allPages.find(p => p.id === id) ? id : SettingsTree.accountPage);
         }
-
-        property string fullName: WinStyle.userName
-        Process {
-            running: win.fluent
-            command: ["getent", "passwd", WinStyle.userName]
-            stdout: StdioCollector {
-                onStreamFinished: {
-                    const g = (text.split(":")[4] || "").split(",")[0].trim();
-                    if (g)
-                        fchrome.fullName = g;
-                }
-            }
-        }
-        Shortcut {
-            sequence: "Ctrl+F"
-            enabled: win.fluent
-            onActivated: fsearch.focusField()
+        onWantChanged: reload()
+        Component.onCompleted: reload()
+        function reload() {
+            if (want.startsWith("tree:"))
+                setSource(Qt.resolvedUrl("ComposedPage.qml"), {
+                    "pageKey": want.slice(5)
+                });
+            else if (want.startsWith("cat:"))
+                setSource(Qt.resolvedUrl("CategoryPage.qml"), {
+                    "categoryId": want.slice(4)
+                });
+            else
+                source = want;
         }
     }
 }

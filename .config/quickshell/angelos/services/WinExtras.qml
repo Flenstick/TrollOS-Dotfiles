@@ -13,7 +13,8 @@ Singleton {
     id: root
 
     readonly property bool active: Config.bar.style === "windows"
-    readonly property bool fluentSettings: active && Config.win.settingsSkin
+    // TrollOS: Settings have their own views and skins since the angelOS 3 merge; the Fluent skin is gone
+    readonly property bool fluentSettings: false
     readonly property bool wantBloom: active && Config.win.gradient
     readonly property bool wantIcons: active && Config.win.icons === "windows"
     readonly property string bloomPath: Quickshell.env("HOME") + "/Pictures/wallpapers/win11-bloom-" + (Theme.dark ? "dark" : "light") + ".png"

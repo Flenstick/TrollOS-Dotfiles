@@ -44,6 +44,15 @@ def settings():
         return {}
 
 
+def exe(name):
+    """"screenshot" → "screenshot.exe": the ending of Settings → Appearance (I18n.exe in QML)"""
+    try:
+        ext = (json.loads(CONFIG.read_text()).get("desktop") or {}).get("titleSuffix") or "exe"
+    except (OSError, ValueError, AttributeError):
+        ext = "exe"
+    return name + "." + (ext if ext in ("exe", "sh", "bin") else "exe")
+
+
 def load(name=None):
     """The skin to use, or None for the built-in ropes."""
     conf = settings()
@@ -282,11 +291,11 @@ class WindowSkin(Skin):
         self.dim(cr, W, H, 0.42)
         self.dots(cr, W, H, rgb(self.c["accent"], 0.10))
         if sel is None:
-            self.hint(cr, W, H, "✧ screenshot.exe ✧", "выдели область мышкой ♡  ·  Esc — отмена")
+            self.hint(cr, W, H, "✧ " + exe("screenshot") + " ✧", "выдели область или кликни по окну ♡  ·  Esc — отмена")
             return
         x, y, w, h = sel
         self.hole(cr, x, y, w, h)
-        self.frame(cr, x, y, w, h, "screenshot.exe", t)
+        self.frame(cr, x, y, w, h, exe("screenshot"), t)
         bx = min(max(0, x + w - 110), W - 120)
         by = y + h + 3 * CELL + 6 if y + h + 40 < H else y + 6
         self.badge(cr, bx, by, f"{w} × {h}")
@@ -296,7 +305,7 @@ class WindowSkin(Skin):
         self.dim(cr, W, H, 0.25)
         x, y, w, h = hole
         self.hole(cr, x, y, w, h)
-        self.frame(cr, x, y, w, h, "REC  recording.exe  " + self.elapsed(), t, ants=False, recording=True)
+        self.frame(cr, x, y, w, h, "REC  " + exe("recording") + "  " + self.elapsed(), t, ants=False, recording=True)
 
 
 class StreamSkin(Skin):
@@ -371,7 +380,7 @@ class StreamSkin(Skin):
         self.px(cr, 0, 0, W, H, rgb(self.c["accent"], 0.06))
         self.scanlines(cr, W, H)
         if sel is None:
-            self.hint(cr, W, H, "♡ angel stream ♡", "выдели кадр для стрима  ·  Esc — отмена")
+            self.hint(cr, W, H, "♡ angel stream ♡", "выдели кадр или кликни по окну  ·  Esc — отмена")
             return
         x, y, w, h = sel
         self.hole(cr, x, y, w, h)

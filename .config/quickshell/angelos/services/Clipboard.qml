@@ -9,6 +9,8 @@ import qs.config
 // MIME-aware clipboard history via `wl-paste --watch scripts/clipboard.py capture`.
 // Text entries stay in clipboard.json; images are private files under
 // ~/.local/state/angelos/clipboard/ (removed together with their entry).
+// Favourites (`fav: true`, issue #21) never fall off the end, survive "Clear"
+// and go only by hand (Delete, or "Clear favourites").
 Singleton {
     id: root
 
@@ -32,16 +34,47 @@ Singleton {
 
     readonly property string helper: Quickshell.shellDir + "/scripts/clipboard.py"
     readonly property int imageCount: history.filter(h => h.kind === "image").length
+    readonly property int favCount: history.filter(h => h.fav).length
 
+    // keeps every favourite and the newest `limit` of the rest, in order
+    function trim(list) {
+        let rest = 0;
+        return list.filter(h => h.fav || rest++ < limit);
+    }
     function push(entry) {
         entry = normalize(entry);
         if (!entry.id || (entry.kind === "text" && !String(entry.text || "").trim()) || (entry.kind === "image" && !entry.path))
             return;
-        const dropped = history.length >= limit || history.some(h => key(h) === key(entry));
-        history = [entry].concat(history.filter(h => key(h) !== key(entry))).slice(0, limit);
+        // copied back from the history: still a favourite
+        const old = history.find(h => key(h) === key(entry));
+        if (old && old.fav)
+            entry = Object.assign({}, entry, {
+                "fav": true
+            });
+        const before = history.length;
+        history = trim([entry].concat(history.filter(h => key(h) !== key(entry))));
         saveTimer.restart();
-        if (dropped)
+        if (history.length < before + 1)
             pruneTimer.restart();
+    }
+    function toggleFav(entry) {
+        entry = normalize(entry);
+        history = history.map(h => key(h) === key(entry) ? Object.assign({}, h, {
+                    "fav": !h.fav
+                }) : h);
+        history = trim(history);
+        saveTimer.restart();
+        pruneTimer.restart();
+    }
+    function isFav(entry) {
+        return !!(entry && history.find(h => key(h) === key(normalize(entry)) && h.fav));
+    }
+    function clearFavorites() {
+        history = trim(history.map(h => h.fav ? Object.assign({}, h, {
+                    "fav": false
+                }) : h));
+        saveTimer.restart();
+        pruneTimer.restart();
     }
 
     function copy(entry) {
@@ -57,13 +90,14 @@ Singleton {
         saveTimer.restart();
         pruneTimer.restart();
     }
+    // favourites stay: they go only by hand
     function clear() {
-        history = [];
+        history = history.filter(h => h.fav);
         saveTimer.restart();
         pruneTimer.restart();
     }
     function clearImages() {
-        history = history.filter(h => h.kind !== "image");
+        history = history.filter(h => h.kind !== "image" || h.fav);
         saveTimer.restart();
         pruneTimer.restart();
     }
@@ -119,16 +153,18 @@ Singleton {
     Timer {
         id: saveTimer
         interval: 1000
-        onTriggered: store.setText(JSON.stringify(root.history))
+        onTriggered: store.write(JSON.stringify(root.history))
     }
-    FileView {
+    AsyncFile {
         id: store
         path: Config.stateDir + "/clipboard.json"
         printErrors: false
         onLoaded: {
             try {
-                const old = JSON.parse(text()) || [];
-                root.history = old.map(root.normalize).filter(e => e.id || e.path).slice(0, root.limit);
+                const old = (JSON.parse(text()) || []).map(root.normalize).filter(e => e.id || e.path);
+                // anything captured before the file finished loading stays on top
+                const fresh = root.history.filter(h => !old.some(o => root.key(o) === root.key(h)));
+                root.history = root.trim(fresh.concat(old));
             } catch (e) {}
         }
     }

@@ -69,7 +69,7 @@ PanelWindow {
         anchors.centerIn: parent
         width: Math.max(Theme.u * 80, content.implicitWidth + Theme.pad * 2 + Theme.u * 6)
         height: titleHeight + content.implicitHeight + Theme.pad * 2 + Theme.u * 8
-        title: win.label.replace(/\s+/g, "_") + ".exe"
+        title: I18n.exe(win.label.replace(/\s+/g, "_"))
         icon: "layers"
         compact: true
         closable: false
@@ -103,12 +103,12 @@ PanelWindow {
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: Theme.u * 3
                 Repeater {
-                    model: win.ws ? Niri.workspacesOn(win.ws.output).filter(w => w.name !== "privacy") : []
-                    PxIcon {
+                    model: win.ws ? Niri.workspacesOn(win.ws.output) : []
+                    WsSprite {
                         required property var modelData
-                        name: "heart"
+                        lit: modelData.is_active
+                        playful: false
                         hollow: !modelData.is_active && Niri.windowsOn(modelData.id).length === 0
-                        fill: modelData.is_active ? Theme.accent : Theme.accent4
                         pixel: modelData.is_active ? Theme.u + 1 : Theme.u
                         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
                     }
@@ -137,7 +137,7 @@ PanelWindow {
                 value: 0.6
             }
             PauseAnimation {
-                duration: 35
+                duration: Motion.ms(35)
             }
             PropertyAction {
                 target: frame
@@ -145,7 +145,7 @@ PanelWindow {
                 value: 0.85
             }
             PauseAnimation {
-                duration: 35
+                duration: Motion.ms(35)
             }
             PropertyAction {
                 target: frame
@@ -153,7 +153,7 @@ PanelWindow {
                 value: 1.08
             }
             PauseAnimation {
-                duration: 50
+                duration: Motion.ms(50)
             }
             PropertyAction {
                 target: frame
@@ -169,7 +169,7 @@ PanelWindow {
                 value: 0.9
             }
             PauseAnimation {
-                duration: 40
+                duration: Motion.ms(40)
             }
             PropertyAction {
                 target: frame
@@ -182,7 +182,7 @@ PanelWindow {
                 value: 0.7
             }
             PauseAnimation {
-                duration: 40
+                duration: Motion.ms(40)
             }
             PropertyAction {
                 target: frame
@@ -195,7 +195,7 @@ PanelWindow {
                 value: 0.5
             }
             PauseAnimation {
-                duration: 40
+                duration: Motion.ms(40)
             }
             ScriptAction {
                 script: win.shown = false

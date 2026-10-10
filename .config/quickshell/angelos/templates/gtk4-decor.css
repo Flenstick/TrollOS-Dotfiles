@@ -1,0 +1,69 @@
+/* angelOS window decorations ({{realm}}) — GTK 4 / libadwaita, generated (templates/gtk4-decor.css).
+   Window buttons like angelOS's own windows: bevelled pixel boxes, close red under
+   the pointer; the header bar in the menu colour. In hell: obsidian and blood. */
+headerbar,
+.titlebar {
+    background-color: {{decorHeader}};
+    color: {{decorText}};
+    box-shadow: inset 0 -1px {{decorEdge}};
+}
+headerbar:backdrop,
+.titlebar:backdrop {
+    background-color: {{decorFaceAlt}};
+    color: {{decorTextDim}};
+}
+
+windowcontrols > button,
+headerbar windowcontrols > button {
+    min-width: 18px;
+    min-height: 18px;
+    padding: 0;
+    margin: 0 1px;
+    border-radius: 0;
+    border: 1px solid {{decorEdge}};
+    background-color: {{decorFace}};
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 14px 14px;
+    box-shadow: inset 1px 1px {{decorHi}}, inset -1px -1px {{decorLo}};
+    color: {{decorText}};
+    outline: none;
+}
+
+windowcontrols > button > image,
+headerbar windowcontrols > button > image {
+    opacity: 0;
+    background: none;
+    box-shadow: none;
+}
+
+windowcontrols > button.close,
+headerbar windowcontrols > button.close {
+    background-image: url("assets/close.svg");
+}
+
+windowcontrols > button.maximize,
+headerbar windowcontrols > button.maximize {
+    background-image: url("assets/maximize.svg");
+}
+
+windowcontrols > button.minimize,
+headerbar windowcontrols > button.minimize {
+    background-image: url("assets/minimize.svg");
+}
+
+windowcontrols > button:hover,
+headerbar windowcontrols > button:hover {
+    background-color: {{decorHover}};
+}
+
+windowcontrols > button.close:hover,
+headerbar windowcontrols > button.close:hover {
+    background-color: {{decorDanger}};
+    background-image: url("assets/close-hover.svg");
+}
+
+windowcontrols > button:active,
+headerbar windowcontrols > button:active {
+    box-shadow: inset 1px 1px {{decorLo}}, inset -1px -1px {{decorHi}};
+}

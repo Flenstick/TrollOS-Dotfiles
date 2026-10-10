@@ -1,4 +1,5 @@
 /* angelOS {{flavor}} / {{mode}} (GTK4) — generated */
+@import url("angelos-decor.css");
 @define-color accent_color {{accent}};
 @define-color accent_bg_color {{accent}};
 @define-color accent_fg_color {{selectText}};
@@ -57,24 +58,100 @@
     --window-radius: 0px;
 }
 
-/* Keep floating windows square too; libadwaita inherits this into content. */
+/* Windows stay square in GTK: niri rounds every window by 4 px (templates/niri.kdl, it clips
+   them), so GTK, Qt and the rest meet the same corner. */
 window {
     --window-radius: 0px;
 }
 
-/* Square desktop decorations, including libadwaita in-window dialogs. */
+/* angelOS pixel frames, like the shell's own boxes (PxBox): a 2 px outline whose corners step
+   in by one art pixel, and a 2 px bevel inside — light top-left, dark bottom-right on buttons,
+   the other way round on fields and pressed buttons. The outline is an image
+   (assets/frame-*.svg, drawn by scripts/gtk-live.py in the palette's edge colour) laid 4 px wide
+   over a 2 px border: the pixels outside the step fall on the border, where nothing is painted,
+   so what is behind shows and the corner looks round in pixels. Qt apps get the same frames
+   (scripts/qt-theme.py). */
 window,
 window.csd,
 window.solid-csd,
 headerbar,
 .titlebar,
 windowcontrols button,
-popover,
+floating-sheet > sheet,
+dialog sheet,
+dialog sheet > outline,
+list,
+list > row,
+list.boxed-list > row,
+.navigation-sidebar > row,
+notebook,
+progressbar > trough,
+progressbar > trough > progress,
+scale > trough,
+scale > trough > highlight,
+checkbutton > check,
+switch,
+searchbar > revealer > box,
+.osd {
+    border-radius: 0;
+}
+
+button:not(.flat):not(.titlebutton):not(.link):not(.image-text-button):not(.toggle-pill),
+splitbutton > button,
+menubutton:not(.flat) > button,
 popover > contents,
 tooltip,
 tooltip.background,
-floating-sheet > sheet,
-dialog sheet,
-dialog sheet > outline {
+switch > slider,
+scale > trough > slider {
+    border: 2px solid transparent;
+    border-image: url("assets/frame-raised.svg") 4 / 4px stretch;
     border-radius: 0;
+    background-clip: padding-box;
+    box-shadow: none;
+}
+headerbar button:not(.flat):not(.titlebutton):not(.link) {
+    border-image: url("assets/frame-raised.svg") 4 / 4px stretch;
+}
+button:not(.flat):not(.titlebutton):not(.link):active,
+button:not(.flat):not(.titlebutton):not(.link):checked,
+splitbutton > button:active,
+menubutton > button:checked {
+    border-image: url("assets/frame-sunken.svg") 4 / 4px stretch;
+}
+entry,
+spinbutton,
+list.boxed-list,
+.boxed-list,
+.card,
+switch,
+searchbar > revealer > box > entry {
+    border: 2px solid transparent;
+    border-image: url("assets/frame-sunken.svg") 4 / 4px stretch;
+    border-radius: 0;
+    background-clip: padding-box;
+    box-shadow: none;
+    outline-offset: -2px;
+}
+/* inside a spin button the box around the text and the buttons is the frame */
+spinbutton > text,
+spinbutton > button.up,
+spinbutton > button.down {
+    border-image: none;
+    border-style: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+spinbutton > button.up,
+spinbutton > button.down {
+    border-left: 2px solid alpha({{fg}}, 0.2);
+    background-clip: padding-box;
+}
+scale > trough > slider {
+    min-width: 16px;
+    min-height: 16px;
+    margin: -8px;
+}
+switch > slider {
+    margin: 0;
 }

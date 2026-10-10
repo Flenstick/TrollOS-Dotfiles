@@ -1,0 +1,41 @@
+/* angelOS for Steam (Millennium; scripts/steam-theme.py): what Steam's own colours can't say.
+   The colours themselves are Steam's, recoloured by angelos.js onto the --ao-* variables
+   (colors.css, rewritten for every palette). */
+::selection {
+    background: var(--ao-accent);
+    color: var(--ao-onAccent);
+}
+::-webkit-scrollbar {
+    width: 10px !important;
+    height: 10px !important;
+}
+::-webkit-scrollbar-track {
+    background: var(--ao-desk) !important;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--ao-line) !important;
+    border: 2px solid var(--ao-desk) !important;
+    border-radius: 0 !important;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--ao-accent) !important;
+}
+::-webkit-scrollbar-corner {
+    background: var(--ao-desk) !important;
+}
+/* buttons and fields: angelOS's square-ish corners */
+.DialogButton,
+.DialogInput,
+.DialogDropDown,
+.DialogTextInputBase {
+    border-radius: 2px !important;
+}
+.DialogButton:focus-visible,
+.DialogInput:focus {
+    outline: 2px solid var(--ao-accent) !important;
+    outline-offset: 0 !important;
+}
+/* the window's close button burns in the danger colour */
+.title-area .title-area-icon.closeButton:hover {
+    background: var(--ao-danger) !important;
+}

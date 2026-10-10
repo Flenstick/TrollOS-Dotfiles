@@ -1,0 +1,84 @@
+{
+  "id": "close-greed-2",
+  "title": {
+    "ru": "Жадность: близкая",
+    "en": "Greed: close"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"greed\" and closeness == 2",
+      "next": "ask",
+      "note": "the demon of greed and the player: closeness close (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Я посчитала, сколько вы мне должны. Ноль. Это ошибка?",
+        "en": "I counted what you owe me. Zero. Is that a mistake?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Не ошибка",
+            "en": "No mistake"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Тогда я переписала всё набело.",
+              "en": "Then I've written it all out clean."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Ошибка",
+            "en": "It is"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Исправлю. Нет. Не буду.",
+              "en": "I'll correct it. No. I won't."
+            }
+          },
+          "next": "end",
+          "set": {
+            "greed": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Ноль. Красивое число.",
+              "en": "Zero. A pretty number."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

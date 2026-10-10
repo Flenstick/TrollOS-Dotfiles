@@ -1,6 +1,7 @@
 import QtQuick
 import qs.config
 import qs.services
+import "A11y.js" as A11y
 
 Item {
     id: root
@@ -8,32 +9,47 @@ Item {
     property bool checked: false
     property string text: ""
     signal toggled(bool checked)
-    readonly property bool fluent: WinExtras.fluentSettings && !!Window.window && Window.window === Shell.fluentWindow
+
+    function flip() {
+        const next = !checked;
+        toggled(next);
+        if (checked !== next)
+            checked = next;
+    }
+    Accessible.role: Accessible.CheckBox
+    Accessible.name: A11y.name(text, root)
+    Accessible.checkable: true
+    Accessible.checked: checked
+    Accessible.focusable: true
+    Accessible.onPressAction: flip()
+    Accessible.onToggleAction: flip()
+    // the Golden Gate skin's System Settings: a Mac checkbox (rounded, the accent with a ✓)
+    readonly property bool mac: Theme.settingsSkinFor(root.parent) === "goldengate"
 
     implicitWidth: box.width + (text !== "" ? label.implicitWidth + Theme.u * 4 : 0)
     implicitHeight: Math.max(box.height, label.implicitHeight)
     opacity: enabled ? 1 : 0.45
 
     Rectangle {
-        visible: root.fluent
+        visible: root.mac
         anchors.fill: box
-        radius: 4
-        color: root.checked ? WinStyle.accent : WinStyle.field
+        radius: GoldenGate.px(4)
+        color: root.checked ? GoldenGate.accent : GoldenGate.dark ? Qt.rgba(1, 1, 1, 0.12) : "#ffffff"
         border.width: root.checked ? 0 : 1
-        border.color: WinStyle.text2
-        Text {
-            anchors.centerIn: parent
+        border.color: GoldenGate.separator
+        MacIcon {
             visible: root.checked
-            text: "✓"
-            color: WinStyle.onAccent
-            font.pixelSize: 14
-            font.bold: true
+            anchors.centerIn: parent
+            name: "check"
+            size: parent.width * 0.8
+            stroke: 3
+            color: "#ffffff"
         }
     }
     PxBox {
         id: box
-        opacity: root.fluent ? 0 : 1
-        width: root.fluent ? 20 : Theme.u * 10
+        opacity: root.mac ? 0 : 1
+        width: root.mac ? GoldenGate.px(16) : Theme.u * 10
         height: width
         sunken: true
         color: Theme.sunken
@@ -56,9 +72,6 @@ Item {
     MouseArea {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            root.checked = !root.checked;
-            root.toggled(root.checked);
-        }
+        onClicked: root.flip()
     }
 }

@@ -12,7 +12,7 @@ Item {
 
     Timer {
         interval: 5000
-        running: true
+        running: !Shell.locked   // nothing to show behind the lock screen
         repeat: true
         onTriggered: {
             root.high = Stats.stress > 0.9 ? root.high + 1 : 0;

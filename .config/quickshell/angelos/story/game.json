@@ -1,0 +1,56 @@
+{
+  "_comment": "The rules of the game (services/Game). Draft numbers — tune freely, no code needed. order: the nine circles from the top down (story/circles.json). The circle a fall begins in: the heaviest sin among the circles no fall has begun in yet (all at zero: limbo); then all nine are open again. attempt: the minutes between tries to get out (each try is a trial scene in the circle — story/scenes, trigger \"trial\"); pactAfter: from this many failed tries in one circle the trial offers the pact; limboAfter: trials answered with silence (this fall) before the player sinks into the limbo outcome; limboReturn: minutes away from the computer (locked, asleep) before the angel finds them in limbo. actions: what the player does outside the scenes and which sin it weighs ({set} like a scene's, `every`: at most once per that many minutes; `realm`: only in heaven or hell).",
+  "order": ["limbo", "lust", "gluttony", "greed", "wrath", "heresy", "violence", "fraud", "treachery"],
+  "attempt": 10,
+  "pactAfter": 3,
+  "limboAfter": 3,
+  "limboReturn": 10,
+  "pace": {
+    "_comment": "Heaven ⇄ hell, the shows. quickSwitch: seconds — a switch this soon after the last one is instant: no circle splash, no quake, no breaking glass, no sound (someone clicking back and forth). soundGap: seconds between two plays of the same transition sound (the blow, the rocks, the glass, the choir) — they never pile up.",
+    "quickSwitch": 60,
+    "soundGap": 2
+  },
+  "angel": {
+    "_comment": "How the angel cools towards the player (services/Story → angelStep): every throw into hell adds its `chill` (actions below), and she is a step colder when she comes back — steps: chill from which she is reserved, cool, and cold (the cold route: from then on for good, until `angelos game reset`). thawHours: a day without a throw gives one step back (not out of the cold route). The player sees no number anywhere: only how she talks (story/angel.json) and her cursor.",
+    "steps": [1, 2, 3],
+    "thawHours": 24,
+    "fallen": {
+      "_comment": "Her step past cold (Story → angelStep 4, \"fallen\"). A fall into hell that begins while she is already on the cold route (coldRoute: true), or after more than `moreThan` betrayals — the actions in `betrayal` — marks the trip; when the player comes back from it, she has changed: from then on for good, until `angelos game reset`. She shows as `look` whatever look Settings pick (the pick is kept), speaks in her broken voice, cries, and talks by herself oftener — her timer × `talkEvery` (not in calm motion). Her lines: story/angel.json → fallen. Nothing on screen counts or hints at any of it.",
+      "coldRoute": true,
+      "moreThan": 5,
+      "betrayal": ["throw.fling", "throw.push"],
+      "look": "ophanim",
+      "talkEvery": 0.3
+    }
+  },
+  "closeness": {
+    "_comment": "Each circle's demon and the player (services/Story → closeness): her own count of points, in the save (hell.close). steps: the points from which she is acquainted, close, and your own (0 below: a stranger); each step up plays her scene (story/scenes, trigger \"close\", cond circle and closeness). The actions are demon.talk, demon.gift, demon.stay below — close: points, every: minutes between two of them (with her), sin: the gift feeds her circle's sin, costsTry: staying puts off the next try to get out. gifts: what her sin loves, the gift button's word. Her lines for them: story/voices.json → demons.",
+    "steps": [3, 8, 15],
+    "gifts": {
+      "limbo": {"ru": "минута тишины", "en": "a minute of silence"},
+      "lust": {"ru": "письмо", "en": "a letter"},
+      "gluttony": {"ru": "пирожное", "en": "a pastry"},
+      "greed": {"ru": "монета", "en": "a coin"},
+      "wrath": {"ru": "камень", "en": "a stone"},
+      "heresy": {"ru": "запретная книга", "en": "a forbidden book"},
+      "violence": {"ru": "осколок", "en": "a shard"},
+      "fraud": {"ru": "маска", "en": "a mask"},
+      "treachery": {"ru": "чужой секрет", "en": "someone's secret"}
+    }
+  },
+  "actions": {
+    "demon.talk": {"close": 1, "every": 30, "realm": "hell", "note": "“Talk” in the demon's menu: a word with her"},
+    "demon.gift": {"close": 2, "every": 1440, "realm": "hell", "sin": 1, "note": "a gift her sin loves: closer, and the circle's sin +1"},
+    "demon.stay": {"close": 1, "every": 60, "realm": "hell", "costsTry": true, "note": "stay in her circle a while: closer, and the next try to get out waits"},
+    "throw.fling": {"set": {"wrath": "+1"}, "chill": 1, "note": "the angel flung down hard"},
+    "throw.push": {"set": {"treachery": "+1"}, "chill": 1, "note": "the angel pushed down slowly, on purpose"},
+    "wheel.spin": {"set": {"greed": "+1"}, "note": "a spin of the Wheel of Hell"},
+    "joke.more": {"set": {"gluttony": "+1"}, "every": 3, "note": "“Another!” — one more joke"},
+    "ask.love": {"set": {"lust": "+1"}, "every": 10, "note": "“I love you” to her"},
+    "helper.off": {"set": {"heresy": "+1"}, "note": "turned her off"},
+    "helper.hide": {"set": {"limbo": "+1"}, "every": 30, "note": "“leave me for an hour”"},
+    "plea.early": {"set": {"wrath": "+1"}, "every": 5, "realm": "hell", "note": "begging again before the time is up"},
+    "portal": {"set": {"fraud": "+1"}, "note": "the portal: a way round"},
+    "choice.silent": {"set": {"limbo": "+1"}, "note": "any answer of the silent tone, in any scene"}
+  }
+}

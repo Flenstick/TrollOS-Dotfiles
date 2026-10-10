@@ -8,7 +8,8 @@ PxPage {
     heading: I18n.t("Уведомления", "Notifications")
 
     PxGroup {
-        title: I18n.t("Поведение", "Behavior")
+        name: "behavior"
+        title: I18n.t("Как показывать", "How they show")
         icon: "bell"
         width: parent.width
         SettingRow {
@@ -20,7 +21,7 @@ PxPage {
             }
         }
         SettingRow {
-            label: I18n.t("Висит на экране", "Display duration")
+            label: I18n.t("Сколько висят", "How long they stay")
             PxSlider {
                 width: parent.width
                 from: 2000
@@ -51,13 +52,17 @@ PxPage {
         }
         SettingRow {
             label: I18n.t("Монитор", "Monitor")
-            hint: I18n.t("пусто = где фокус", "Empty = focused display")
+            hint: I18n.t("где фокус, на главном экране (страница «Монитор») или на выбранном", "The focused display, the main one (Monitor page) or a fixed one")
             PxCombo {
                 width: Theme.u * 100
                 model: [
                     {
                         "label": I18n.t("где фокус", "Focused display"),
                         "value": ""
+                    },
+                    {
+                        "label": I18n.t("главный (", "main (") + Shell.primaryName + ")",
+                        "value": "primary"
                     }
                 ].concat(Quickshell.screens.map(s => ({
                             "label": s.name,
@@ -69,6 +74,7 @@ PxPage {
         }
     }
     PxGroup {
+        name: "history"
         title: I18n.t("История (", "History (") + Notifs.history.length + ")"
         icon: "calendar"
         width: parent.width

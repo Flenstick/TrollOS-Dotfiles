@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.config
+import qs.widgets
 import qs.services
 
 // Windows-style resizing for the Windows 11 copy: niri runs with prefer-no-csd, so
@@ -225,5 +226,7 @@ Variants {
             width: win.corner
             height: win.corner
         }
+        // a right click into the window's corner can crash Qt (widgets/RightClickGuard)
+        RightClickGuard {}
     }
 }

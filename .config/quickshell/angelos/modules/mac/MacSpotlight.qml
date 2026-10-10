@@ -1,0 +1,622 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import Quickshell
+import qs.config
+import qs.services
+import qs.widgets
+import "../../widgets/MacIcons.js" as MacIcons
+
+// Spotlight of the Golden Gate skin (StartOverlay's look while the skin is on): a big dark glass
+// capsule a fifth down the screen, the results under it in a glass panel by section — the
+// calculator, apps, settings, folders, actions. On the capsule's right, like macOS 26/27, the
+// browsing modes: Apps (every app as a grid — the Dock's Apps opens it too), Files (the folders,
+// and typed: files by name or type — FileSearch), Actions and the Clipboard (its history).
+// Ctrl+1…4 switch them, ↑↓ (←→ in the grid) choose, Enter opens, Ctrl+Enter shows a file in its
+// folder, Esc clears and closes. Found files get thumbnails and, on the panel's right, a preview
+// (Settings → Spotlight turns either off). Same interface as the other Start looks.
+Item {
+    id: root
+
+    signal closeRequested
+    property int current: 0
+    // the pointer takes the selection only when it moves, as on a Mac: results appearing under
+    // a still pointer leave the top hit selected. Moved = away from where it stood when these
+    // results came (not between two events: a 1000 Hz mouse moves a pixel or less per event, and
+    // the selection stuck until a fast flick); from then on it follows the pointer every event
+    property var _anchor: null
+    property bool _pointerMoved: false
+    function pointed(area, m, index) {
+        if (!_pointerMoved) {
+            const p = area.mapToItem(null, m.x, m.y);
+            if (!_anchor) {
+                _anchor = p;
+                return;
+            }
+            if (Math.abs(p.x - _anchor.x) + Math.abs(p.y - _anchor.y) < 3)
+                return;
+            _pointerMoved = true;
+        }
+        if (current !== index)
+            current = index;
+    }
+    function _stillPointer() {
+        _anchor = null;
+        _pointerMoved = false;
+    }
+    onRowsChanged: _stillPointer()
+    property string query: ""
+    property string mode: ""                  // "" search | apps | files | actions | clipboard
+    property real room: 0                     // StartOverlay: the screen's room for it
+    readonly property bool searching: query.trim() !== ""
+    // the screen's width (the Loader's parent is StartOverlay's window)
+    readonly property real screenW: parent && parent.parent ? parent.parent.width : 1200
+    readonly property real capW: Math.min(GoldenGate.px(680), Math.max(Math.min(GoldenGate.px(420), screenW - GoldenGate.px(32)), screenW * 0.46))
+    readonly property real capH: GoldenGate.px(52)
+    readonly property real rowH: GoldenGate.px(40)
+    readonly property int maxRows: room > 0 ? Math.max(4, Math.min(10, Math.floor((room - capH - GoldenGate.px(40)) / rowH))) : 9
+    readonly property int gridCols: Math.max(4, Math.floor((capW - GoldenGate.px(24)) / GoldenGate.px(104)))
+
+    width: capW
+    height: capH + (panel.visible ? panel.height + GoldenGate.px(10) : 0)
+
+    function matches(label, q) {
+        return String(label).toLowerCase().indexOf(q) >= 0;
+    }
+    function appRow(a, section) {
+        return {
+            "section": section,
+            "label": a.name,
+            "sub": a.genericName || a.comment || "",
+            "app": a,
+            "run": () => StartApps.launch(a)
+        };
+    }
+    // ---- the plugins' launcher providers (manifest "launcher": web-search, claude-companion…) ----
+    // made with Spotlight (it lives only while it is open or lingers) — their results go in a
+    // section of their own; a provider's prefix ("web …", "claude …") narrows to it alone.
+    // Their pixel icon names become line icons (MacIcons.fromPixel), pictures stay pictures
+    property var providers: []
+    property int providerTick: 0
+    Instantiator {
+        model: Plugins.launcherProviders
+        delegate: LazyLoader {
+            required property var modelData
+            active: true
+            source: Plugins.url(modelData, modelData.launcher)
+            onItemChanged: {
+                if (!item)
+                    return;
+                if (item.hasOwnProperty("plugin"))
+                    item.plugin = Plugins.context(modelData);
+                item.pluginId = modelData.id;
+                if (item.changed)
+                    item.changed.connect(() => root.providerTick++);
+                root.providers = root.providers.filter(p => p.pluginId !== modelData.id).concat([item]);
+            }
+        }
+        onObjectRemoved: (i, obj) => root.providers = root.providers.filter(p => p.pluginId !== (obj.modelData ? obj.modelData.id : ""))
+    }
+    readonly property var activeProvider: {
+        const q = query.replace(/^\s+/, "");
+        return providers.find(p => p.prefix && (q === p.prefix || q.startsWith(p.prefix + " "))) || null;
+    }
+    function providerRows(p, text, prefixed) {
+        let list = [];
+        try {
+            list = p.query(text, prefixed) || [];
+        } catch (e) {
+            console.warn("spotlight provider", p.pluginId, e);
+        }
+        const pl = Plugins.byId(p.pluginId);
+        const section = pl ? I18n.label(pl.name) : p.pluginId;
+        return list.slice().sort((x, y) => (y.score === undefined ? 10 : y.score) - (x.score === undefined ? 10 : x.score)).map(r => ({
+                    "section": section,
+                    "label": String(r.title || ""),
+                    "sub": String(r.subtitle || ""),
+                    "mac": MacIcons.fromPixel(r.icon || "") || "puzzle",
+                    "image": r.image ? (String(r.image).startsWith("/") ? "file://" + r.image : String(r.image)) : "",
+                    "provider": p,
+                    "r": r
+                }));
+    }
+    function fileRow(f, section) {
+        return {
+            "section": section,
+            "label": f.name,
+            "sub": FileSearch.where(f),
+            "mac": FileSearch.macIcon(f),
+            "file": f,
+            "run": () => FileSearch.open(f)
+        };
+    }
+    function plain(list, section, icon) {
+        return list.map(r => ({
+                    "section": section,
+                    "label": r.label,
+                    "sub": r.sub || "",
+                    "mac": icon || "",
+                    "run": r.run
+                }));
+    }
+    readonly property var rows: {
+        if (mode === "apps")
+            return StartApps.apps.filter(a => !searching || matches(a.name, query.trim().toLowerCase())).map(a => appRow(a, ""));
+        if (mode === "files")
+            return plain(StartItems.places, I18n.t("Папки", "Folders"), "folder").filter(r => !searching || matches(r.label, query.trim().toLowerCase())).concat(searching ? FileSearch.rows(query, 60).map(f => fileRow(f, I18n.t("Файлы", "Files"))) : []);
+        if (mode === "actions")
+            return plain(StartItems.power.concat(StartItems.settings), I18n.t("Действия", "Actions"), "zap").filter(r => !searching || matches(r.label, query.trim().toLowerCase()));
+        if (mode === "clipboard")
+            return (Clipboard.history || []).slice(0, 40).map(e => ({
+                        "section": I18n.t("Буфер обмена", "Clipboard"),
+                        "label": e.kind === "image" ? I18n.t("Изображение", "Image") : String(e.text || "").replace(/\s+/g, " ").slice(0, 120),
+                        "sub": e.kind === "image" ? String(e.path || "").split("/").pop() : "",
+                        "mac": e.kind === "image" ? "image" : "copy",
+                        "run": () => Clipboard.copy(e)
+                    })).filter(r => !searching || matches(r.label, query.trim().toLowerCase()));
+        if (!searching)
+            return [];
+        providerTick;
+        if (activeProvider)
+            return providerRows(activeProvider, query.replace(/^\s+/, "").slice(activeProvider.prefix.length).trim(), true).slice(0, 40);
+        const q = query.trim().toLowerCase();
+        const out = [];
+        for (const r of StartApps.searchAll(query, 24)) {
+            if (r.kind === "calc")
+                out.push({
+                    "section": I18n.t("Калькулятор", "Calculator"),
+                    "label": r.calc.title,
+                    "sub": r.calc.subtitle || I18n.t("Enter — скопировать", "Enter copies"),
+                    "mac": "calculator",
+                    "run": () => Calc.copy(r.calc)
+                });
+            else if (r.kind === "app")
+                out.push(appRow(r.app, I18n.t("Приложения", "Applications")));
+            else if (r.kind === "file")
+                out.push(fileRow(r.file, I18n.t("Файлы", "Files")));
+            else
+                out.push({
+                    "section": I18n.t("Системные настройки", "System Settings"),
+                    "label": r.doc.title,
+                    "sub": r.doc.crumb || r.doc.hint || "",
+                    "mac": "settings",
+                    "run": () => StartApps.openSetting(r.doc)
+                });
+        }
+        for (const p of plain(StartItems.places, I18n.t("Папки", "Folders"), "folder"))
+            if (matches(p.label, q))
+                out.push(p);
+        for (const a of plain(StartItems.power, I18n.t("Действия", "Actions"), "zap"))
+            if (matches(a.label, q))
+                out.push(a);
+        for (const p of providers)
+            if (p.global !== false)
+                for (const r of providerRows(p, query.trim(), false).slice(0, 6))
+                    out.push(r);
+        const order = [];
+        for (const r of out)
+            if (!order.includes(r.section))
+                order.push(r.section);
+        return order.reduce((acc, s) => acc.concat(out.filter(r => r.section === s)), []).slice(0, 40);
+    }
+    readonly property bool grid: mode === "apps"
+
+    function setQuery(t) {
+        field.text = t;
+        query = t;
+        current = 0;
+    }
+    function reset() {
+        _stillPointer();
+        query = "";
+        field.text = "";
+        current = 0;
+        mode = Shell.startMode || "";
+        Shell.startMode = "";
+        Qt.callLater(() => field.forceActiveFocus());
+    }
+    function setMode(m) {
+        mode = mode === m ? "" : m;
+        current = 0;
+    }
+    function runRow(r) {
+        if (!r)
+            return;
+        // a plugin's result: its provider acts; true keeps Spotlight open (it changed the query…)
+        if (r.provider) {
+            let keep = false;
+            try {
+                keep = r.provider.activate(r.r.id, r.r) === true;
+            } catch (e) {
+                console.warn("spotlight provider", r.provider.pluginId, e);
+            }
+            if (!keep)
+                closeRequested();
+            return;
+        }
+        closeRequested();
+        Qt.callLater(r.run);
+    }
+    function move(d) {
+        current = Math.max(0, Math.min(rows.length - 1, current + d));
+        if (grid)
+            gridView.positionViewAtIndex(current, GridView.Contain);
+        else
+            list.positionViewAtIndex(current, ListView.Contain);
+    }
+    readonly property var pickedFile: rows[current] && rows[current].file ? rows[current].file : null
+    function key(e) {
+        if ((e.modifiers & Qt.ControlModifier) && (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) && pickedFile) {
+            const f = pickedFile;
+            closeRequested();
+            FileSearch.reveal(f);
+            e.accepted = true;
+            return;
+        }
+        if ((e.modifiers & Qt.ControlModifier) && e.key >= Qt.Key_1 && e.key <= Qt.Key_4) {
+            setMode(["apps", "files", "actions", "clipboard"][e.key - Qt.Key_1]);
+            e.accepted = true;
+            return;
+        }
+        switch (e.key) {
+        case Qt.Key_Down:
+            move(grid ? gridCols : 1);
+            break;
+        case Qt.Key_Up:
+            move(grid ? -gridCols : -1);
+            break;
+        case Qt.Key_Right:
+            if (!grid)
+                return;
+            move(1);
+            break;
+        case Qt.Key_Left:
+            if (!grid)
+                return;
+            move(-1);
+            break;
+        case Qt.Key_Return:
+        case Qt.Key_Enter:
+            runRow(rows[current]);
+            break;
+        case Qt.Key_Escape:
+            if (query !== "")
+                setQuery("");
+            else if (mode !== "")
+                mode = "";
+            else
+                closeRequested();
+            break;
+        case Qt.Key_Backspace:
+            field.text = field.text.slice(0, -1);
+            query = field.text;
+            break;
+        default:
+            if (e.text && e.text.trim() !== "" && !(e.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+                field.text += e.text;
+                query = field.text;
+                current = 0;
+            } else
+                return;
+        }
+        e.accepted = true;
+    }
+
+    // the glass parts: StartOverlay asks niri to blur under them
+    readonly property Item capsuleItem: capsule
+    readonly property Item panelItem: panel
+
+    // ---- the capsule ----
+    MacGlass {
+        id: capsule
+        width: parent.width
+        height: root.capH
+        radius: height / 2
+        // dark glass, clearer over niri's blur (solid without it)
+        fill: GoldenGate.hell ? GoldenGate.glass(0.25) : Qt.rgba(0.08, 0.08, 0.09, GoldenGate.blurOn ? 0.5 + GoldenGate.tint * 0.38 : 0.94)
+        shadowSize: GoldenGate.px(36)
+        shadowY: GoldenGate.px(10)
+        MacIcon {
+            id: lens
+            x: GoldenGate.px(20)
+            anchors.verticalCenter: parent.verticalCenter
+            name: "search"
+            size: GoldenGate.px(20)
+            stroke: 2.2
+            color: Qt.rgba(1, 1, 1, 0.6)
+        }
+        TextInput {
+            id: field
+            anchors.left: lens.right
+            anchors.leftMargin: GoldenGate.px(12)
+            anchors.right: modes.left
+            anchors.rightMargin: GoldenGate.px(10)
+            anchors.verticalCenter: parent.verticalCenter
+            color: "#ffffff"
+            font.family: GoldenGate.font
+            font.pixelSize: GoldenGate.px(22)
+            selectionColor: GoldenGate.accent
+            clip: true
+            onTextEdited: {
+                root.query = text;
+                root.current = 0;
+            }
+            Keys.onPressed: e => {
+                if (e.key === Qt.Key_Down || e.key === Qt.Key_Up || e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Escape || ((e.modifiers & Qt.ControlModifier) && e.key >= Qt.Key_1 && e.key <= Qt.Key_4))
+                    root.key(e);
+            }
+            MacText {
+                visible: field.text === ""
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.mode === "apps" ? I18n.t("Поиск в приложениях", "Search Applications") : root.mode === "files" ? I18n.t("Поиск файлов: имя или .jpeg", "Search Files: a name or .jpeg") : root.mode === "actions" ? I18n.t("Поиск действий", "Search Actions") : root.mode === "clipboard" ? I18n.t("Поиск в буфере обмена", "Search Clipboard") : I18n.t("Поиск", "Search")
+                size: GoldenGate.px(22)
+                color: Qt.rgba(1, 1, 1, 0.45)
+            }
+        }
+        // the browsing modes, as on macOS 26/27
+        Row {
+            id: modes
+            anchors.right: parent.right
+            anchors.rightMargin: GoldenGate.px(12)
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: GoldenGate.px(4)
+            Repeater {
+                model: [["apps", "layout-grid"], ["files", "folder"], ["actions", "zap"], ["clipboard", "clipboard-paste"]]
+                Rectangle {
+                    id: mb
+                    required property var modelData
+                    width: GoldenGate.px(32)
+                    height: width
+                    radius: width / 2
+                    color: root.mode === modelData[0] ? Qt.rgba(1, 1, 1, 0.24) : mbHover.hovered ? Qt.rgba(1, 1, 1, 0.12) : "transparent"
+                    MacIcon {
+                        anchors.centerIn: parent
+                        name: mb.modelData[1]
+                        size: GoldenGate.px(17)
+                        stroke: 2
+                        color: Qt.rgba(1, 1, 1, 0.8)
+                    }
+                    HoverHandler {
+                        id: mbHover
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: root.setMode(mb.modelData[0])
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- the results ----
+    MacGlass {
+        id: panel
+        visible: root.rows.length > 0
+        y: root.capH + GoldenGate.px(10)
+        width: parent.width
+        height: root.grid ? Math.min(GoldenGate.px(460), gridView.contentHeight + GoldenGate.px(20)) : Math.max(previewPane.visible ? GoldenGate.px(300) : 0, Math.min(root.maxRows, root.rows.length) * root.rowH + sections * GoldenGate.px(26) + GoldenGate.px(16))
+        readonly property int sections: root.grid ? 0 : new Set(root.rows.slice(0, root.maxRows).map(r => r.section)).size
+        radius: GoldenGate.panelRadius
+
+        ListView {
+            id: list
+            visible: !root.grid
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.margins: GoldenGate.px(8)
+            width: (previewPane.visible ? parent.width * 0.56 : parent.width) - GoldenGate.px(16)
+            clip: true
+            model: root.grid ? [] : root.rows
+            boundsBehavior: Flickable.StopAtBounds
+            section.property: "section"
+            section.delegate: MacText {
+                required property string section
+                width: list.width
+                height: section ? GoldenGate.px(26) : 0
+                leftPadding: GoldenGate.px(10)
+                text: section
+                size: GoldenGate.smallSize
+                semibold: true
+                color: GoldenGate.secondaryLabel
+            }
+            delegate: Item {
+                id: row
+                required property var modelData
+                required property int index
+                width: list.width
+                height: root.rowH
+                readonly property bool sel: root.current === index
+                Rectangle {
+                    anchors.fill: parent
+                    radius: GoldenGate.px(10)
+                    color: GoldenGate.accent
+                    visible: row.sel
+                }
+                Image {
+                    id: ic
+                    visible: !!row.modelData.app
+                    x: GoldenGate.px(8)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: GoldenGate.px(28)
+                    height: width
+                    sourceSize: Qt.size(width * 2, height * 2)
+                    smooth: true
+                    source: row.modelData.app && row.modelData.app.icon ? (String(row.modelData.app.icon).startsWith("/") ? "file://" + row.modelData.app.icon : Quickshell.iconPath(row.modelData.app.icon, true)) : ""
+                }
+                FileThumb {
+                    id: fileThumb
+                    visible: ok
+                    x: GoldenGate.px(8)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: GoldenGate.px(28)
+                    height: width
+                    hit: row.modelData.file || null
+                }
+                Image {
+                    id: favicon
+                    visible: !row.modelData.app && !!row.modelData.image && status === Image.Ready
+                    x: GoldenGate.px(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: GoldenGate.px(20)
+                    height: width
+                    sourceSize: Qt.size(width * 2, height * 2)
+                    smooth: true
+                    asynchronous: true
+                    source: row.modelData.image || ""
+                }
+                MacIcon {
+                    visible: !row.modelData.app && !favicon.visible && !fileThumb.ok
+                    x: GoldenGate.px(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: row.modelData.mac || "circle-help"
+                    size: GoldenGate.px(20)
+                    color: row.sel ? "#ffffff" : GoldenGate.label
+                }
+                MacText {
+                    anchors.left: parent.left
+                    anchors.leftMargin: GoldenGate.px(46)
+                    anchors.right: subText.left
+                    anchors.rightMargin: GoldenGate.px(8)
+                    height: parent.height
+                    text: row.modelData.label
+                    color: row.sel ? "#ffffff" : GoldenGate.label
+                }
+                MacText {
+                    id: subText
+                    anchors.right: parent.right
+                    anchors.rightMargin: GoldenGate.px(12)
+                    width: Math.min(implicitWidth, parent.width * 0.4)
+                    height: parent.height
+                    text: row.modelData.sub
+                    color: row.sel ? Qt.rgba(1, 1, 1, 0.8) : GoldenGate.secondaryLabel
+                    size: GoldenGate.smallSize + GoldenGate.px(1)
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onPositionChanged: m => root.pointed(this, m, row.index)
+                    onClicked: root.runRow(row.modelData)
+                }
+            }
+        }
+        // the picked file, as Spotlight shows it: the picture big, then its name, kind, size, date
+        Item {
+            id: previewPane
+            readonly property var f: root.pickedFile
+            visible: !root.grid && FileSearch.preview && root.rows.some(r => !!r.file)
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.margins: GoldenGate.px(8)
+            width: parent.width * 0.44 - GoldenGate.px(8)
+            Rectangle {
+                width: 1
+                height: parent.height
+                color: GoldenGate.separator
+            }
+            Item {
+                id: pictureBox
+                x: GoldenGate.px(16)
+                y: GoldenGate.px(10)
+                width: parent.width - GoldenGate.px(28)
+                height: parent.height - info.height - GoldenGate.px(30)
+                FileThumb {
+                    id: bigThumb
+                    anchors.fill: parent
+                    crop: false
+                    decode: 640
+                    hit: previewPane.f
+                }
+                MacIcon {
+                    visible: !bigThumb.ok
+                    anchors.centerIn: parent
+                    name: previewPane.f ? FileSearch.macIcon(previewPane.f) : root.rows[root.current] ? root.rows[root.current].mac || "search" : "search"
+                    size: GoldenGate.px(72)
+                    stroke: 1.4
+                    color: GoldenGate.secondaryLabel
+                }
+            }
+            Column {
+                id: info
+                x: GoldenGate.px(16)
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: GoldenGate.px(6)
+                width: parent.width - GoldenGate.px(28)
+                spacing: GoldenGate.px(2)
+                MacText {
+                    width: parent.width
+                    text: previewPane.f ? previewPane.f.name : root.rows[root.current] ? root.rows[root.current].label : ""
+                    semibold: true
+                    elide: Text.ElideMiddle
+                    horizontalAlignment: Text.AlignHCenter
+                }
+                MacText {
+                    visible: !!previewPane.f
+                    width: parent.width
+                    text: previewPane.f ? (previewPane.f.isDir ? I18n.t("Папка", "Folder") : FileSearch.sizeText(previewPane.f.size)) + " · " + FileSearch.dateText(previewPane.f) : ""
+                    size: GoldenGate.smallSize
+                    color: GoldenGate.secondaryLabel
+                    horizontalAlignment: Text.AlignHCenter
+                }
+                MacText {
+                    visible: !!previewPane.f
+                    width: parent.width
+                    text: previewPane.f ? FileSearch.where(previewPane.f) + "  ·  " + I18n.t("⌃↩ показать в папке", "⌃↩ Show in Folder") : ""
+                    size: GoldenGate.smallSize
+                    color: GoldenGate.secondaryLabel
+                    elide: Text.ElideMiddle
+                    horizontalAlignment: Text.AlignHCenter
+                }
+            }
+        }
+        GridView {
+            id: gridView
+            visible: root.grid
+            anchors.fill: parent
+            anchors.margins: GoldenGate.px(10)
+            clip: true
+            cellWidth: width / root.gridCols
+            cellHeight: GoldenGate.px(100)
+            model: root.grid ? root.rows : []
+            boundsBehavior: Flickable.StopAtBounds
+            delegate: Item {
+                id: cell
+                required property var modelData
+                required property int index
+                width: gridView.cellWidth
+                height: gridView.cellHeight
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: GoldenGate.px(3)
+                    radius: GoldenGate.px(14)
+                    color: root.current === cell.index ? Qt.alpha(GoldenGate.accent, 0.85) : "transparent"
+                }
+                Image {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: GoldenGate.px(10)
+                    width: GoldenGate.px(56)
+                    height: width
+                    sourceSize: Qt.size(width * 2, height * 2)
+                    smooth: true
+                    source: cell.modelData.app && cell.modelData.app.icon ? (String(cell.modelData.app.icon).startsWith("/") ? "file://" + cell.modelData.app.icon : Quickshell.iconPath(cell.modelData.app.icon, true)) : ""
+                }
+                MacText {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: GoldenGate.px(70)
+                    width: parent.width - GoldenGate.px(8)
+                    horizontalAlignment: Text.AlignHCenter
+                    text: cell.modelData.label
+                    size: GoldenGate.smallSize + GoldenGate.px(1)
+                    color: root.current === cell.index ? "#ffffff" : GoldenGate.label
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onPositionChanged: m => root.pointed(this, m, cell.index)
+                    onClicked: root.runRow(cell.modelData)
+                }
+            }
+        }
+    }
+}

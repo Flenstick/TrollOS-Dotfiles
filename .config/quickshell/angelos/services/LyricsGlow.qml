@@ -1,0 +1,194 @@
+pragma Singleton
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import qs.config
+
+// How bright the lyric line on the bar is (Lyrics → Brightness follows the volume):
+//   rode   a RØDECaster: where its fader stands. scripts/lyrics-level.py lays the
+//          player's own sound over the console's mix after the faders (Config.lyrics.glowTap)
+//          and reads the fader's gain from it — the fader down, the line fades. With the
+//          main mix and a multitrack source on the same console it reads the multitrack
+//          instead: the player's own track against the mix, the mic a track of its own,
+//          so talking over the music doesn't dim the line
+//   level  everyone else: how loud the player really plays — its own output after its
+//          slider in the mixer, plus the master volume; the quiet parts of a song are
+//          dimmer too (fast up, slow down)
+// Between Config.lyrics.glowFloor (never under 30 %) and 100 %, in tenths; the script
+// reports at most twice a second. Measured only while a line is on screen and the
+// player plays; paused, the last brightness holds.
+Singleton {
+    id: root
+
+    readonly property string mode: ["off", "auto", "rode", "level"].includes(Config.lyrics.glow) ? Config.lyrics.glow : "auto"
+    // the console's sources (ALSA "pro" profile: pro-input-0 the stereo mix, pro-input-1 the multitrack)
+    readonly property var rodeSources: Audio.sources.filter(n => /alsa_input\..*(rodecaster|r__de)/i.test(n.name || ""))
+    readonly property bool rodePresent: rodeSources.length > 0
+    readonly property bool numpyMissing: _error.indexOf("numpy") >= 0
+    readonly property string effective: mode === "off" ? "off" : (mode === "rode" || (mode === "auto" && rodePresent)) && rodePresent && !numpyMissing ? "rode" : "level"
+    function channelsOf(n) {
+        const p = n && n.properties || {};
+        return parseInt(p["audio.channels"]) || String(p["audio.position"] || "").split(",").filter(c => c.trim()).length;
+    }
+    readonly property var multitrackNode: rodeSources.find(n => channelsOf(n) > 2) || rodeSources.find(n => /pro-input-1$/.test(n.name || "")) || null
+    // where the fader is read: "main", then every pair the multitrack has — aux01, aux23 …
+    // aux1819 on a Duo (20 channels); its count unknown, the first ten channels
+    readonly property var taps: {
+        const out = {
+            "main": []
+        };
+        const n = Math.max(channelsOf(multitrackNode), 10);
+        for (let c = 0; c + 1 < n; c += 2)
+            out["aux" + c + (c + 1)] = ["AUX" + c, "AUX" + (c + 1)];
+        return out;
+    }
+    readonly property var tapList: Object.keys(taps)
+    readonly property string tap: taps[Config.lyrics.glowTap] ? Config.lyrics.glowTap : "main"
+    readonly property var mixNode: tap === "main" ? rodeSources.find(n => /pro-input-0$/.test(n.name || "")) || rodeSources.find(n => n !== multitrackNode) || null : multitrackNode
+    // the multitrack pair the script found the player on (main / AUX0/1), or was given
+    property string track: ""
+
+    // the player's own stream in PipeWire: the MPRIS player matched by name
+    readonly property var stream: {
+        const p = Lyrics.player;
+        const list = Audio.appStreams;
+        if (!p || !list.length)
+            return null;
+        const keys = [p.identity, p.desktopEntry, String(p.dbusName || "").replace("org.mpris.MediaPlayer2.", "").split(".")[0]].filter(k => !!k).map(k => String(k).toLowerCase());
+        const hit = n => {
+            const pr = n.properties || {};
+            const bin = String(pr["application.process.binary"] || "").toLowerCase();
+            const hay = [pr["application.name"], bin, pr["application.id"], pr["node.name"]].filter(v => !!v).join(" ").toLowerCase();
+            return keys.some(k => hay.includes(k) || (bin && k.includes(bin)) || k.includes(String(pr["application.name"] || "~").toLowerCase()));
+        };
+        return list.find(hit) || (list.length === 1 ? list[0] : null);
+    }
+    readonly property string streamSerial: stream && stream.properties ? String(stream.properties["object.serial"] || "") : ""
+
+    property real db: NaN                    // last reading: fader gain (rode) or level (level)
+    property string _error: ""
+    property string _readingFor: ""          // which mode the reading belongs to
+    readonly property bool measuring: probe.running
+
+    readonly property bool wanted: Config.lyrics.enabled && effective !== "off" && Lyrics.hasLyrics && Lyrics.playing && !Lyrics.unseen && streamSerial !== "" && (effective !== "rode" || !!mixNode)
+    readonly property real floor: Math.max(0.3, Math.min(1, (Config.lyrics.glowFloor || 30) / 100))
+    // 0…1 between the calibrated ends
+    readonly property real frac: {
+        if (effective === "off")
+            return 1;
+        if (effective === "level" && (streamSerial === "" || isNaN(db) || _readingFor !== "level"))
+            // no stream to listen to: the master volume alone
+            return Math.max(0, Math.min(1, Audio.volume));
+        if (isNaN(db) || _readingFor !== effective)
+            return 1;
+        if (effective === "rode") {
+            const lo = Config.lyrics.glowRodeMin, hi = Config.lyrics.glowRodeMax;
+            return Math.max(0, Math.min(1, (db - lo) / Math.max(1, hi - lo)));
+        }
+        const v = db + 20 * Math.log(Math.max(0.001, Audio.muted ? 0.001 : Audio.volume)) / Math.LN10;
+        const lo = Config.lyrics.glowLevelMin, hi = Config.lyrics.glowLevelMax;
+        return Math.max(0, Math.min(1, (v - lo) / Math.max(1, hi - lo)));
+    }
+    // what the bar shows: frac in tenths, moved only once the reading leaves the
+    // current tenth by more than a margin. A fader standing still wobbles by a few dB;
+    // without this the line kept easing (and the bar repainting at 200 Hz) non-stop
+    property real _step: 1
+    function _settle() {
+        if (effective === "off")
+            _step = 1;
+        else if (Math.abs(frac - _step) >= 0.08)
+            _step = Math.round(frac * 10) / 10;
+    }
+    onFracChanged: _settle()
+    onEffectiveChanged: _settle()
+    readonly property real opacity: effective === "off" ? 1 : floor + (1 - floor) * _step
+
+    // calibration (Lyrics page): "this is the top" / "this is the bottom"
+    function markTop() {
+        if (isNaN(db))
+            return false;
+        if (effective === "rode")
+            Config.lyrics.glowRodeMax = Math.round(db);
+        else
+            Config.lyrics.glowLevelMax = Math.round(db + 20 * Math.log(Math.max(0.001, Audio.volume)) / Math.LN10);
+        return true;
+    }
+    function markBottom() {
+        if (isNaN(db))
+            return false;
+        if (effective === "rode")
+            Config.lyrics.glowRodeMin = Math.round(Math.max(-80, db));
+        else
+            Config.lyrics.glowLevelMin = Math.round(Math.max(-80, db + 20 * Math.log(Math.max(0.001, Audio.volume)) / Math.LN10));
+        return true;
+    }
+    function resetCalibration() {
+        Config.lyrics.glowRodeMin = -40;
+        Config.lyrics.glowRodeMax = 0;
+        Config.lyrics.glowLevelMin = -48;
+        Config.lyrics.glowLevelMax = -14;
+    }
+
+    readonly property var command: {
+        const script = Quickshell.shellDir + "/scripts/lyrics-level.py";
+        if (effective === "rode" && mixNode)
+            return ["python3", script, "rode", streamSerial, mixNode.name].concat(taps[tap].length ? [taps[tap].join(",")] : []);
+        return ["python3", script, "stream", streamSerial];
+    }
+    onCommandChanged: {
+        track = "";
+        if (probe.running) {
+            probe.running = false;
+            restart.restart();
+        }
+    }
+    Timer {
+        id: restart
+        interval: 300
+        onTriggered: probe.running = root.wanted
+    }
+    onWantedChanged: {
+        if (wanted)
+            restart.restart();
+        else
+            probe.running = false;
+    }
+
+    Process {
+        id: probe
+        command: root.command
+        onStarted: root._error = ""
+        stdout: SplitParser {
+            onRead: line => {
+                let d;
+                try {
+                    d = JSON.parse(line);
+                } catch (e) {
+                    return;
+                }
+                if (d.error) {
+                    root._error = d.error;
+                    return;
+                }
+                if (typeof d.db === "number") {
+                    root._readingFor = root.effective;
+                    root.db = d.db;
+                    root.track = typeof d.track === "string" ? d.track.replace(/\/AUX/, "/") : "";
+                }
+            }
+        }
+        // the capture ended (the player's stream went away, a new song): try again while wanted
+        onExited: code => {
+            if (root.wanted && !root.numpyMissing)
+                retry.restart();
+        }
+    }
+    Timer {
+        id: retry
+        interval: 3000
+        onTriggered: if (root.wanted && !probe.running)
+            probe.running = true
+    }
+}

@@ -1,0 +1,84 @@
+{
+  "id": "close-treachery-3",
+  "title": {
+    "ru": "Предательство: своя",
+    "en": "Treachery: your own"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"treachery\" and closeness == 3",
+      "next": "ask",
+      "note": "the demon of treachery and the player: closeness own (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Дай руку. Она замёрзнет.",
+        "en": "Give me your hand. It'll freeze."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Держи",
+            "en": "Here"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "…Не замёрзла.",
+              "en": "…It didn't freeze."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Нет",
+            "en": "No"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Правильно. Холодно.",
+              "en": "Right. It's cold."
+            }
+          },
+          "next": "end",
+          "set": {
+            "treachery": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Я подожду.",
+              "en": "I'll wait."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

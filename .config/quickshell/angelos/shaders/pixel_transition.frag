@@ -42,6 +42,17 @@ vec4 pick(vec2 uv, float t) {
 void main() {
     float p = clamp(progress, 0.0, 1.0);
     vec2 uv = qt_TexCoord0;
+    // at rest the picture is just the picture: no scanlines (old TV), leftover
+    // sparkles or glitch bands once a transition is over — "random" picks a style
+    // at startup, and it must not stay on screen
+    if (p >= 1.0) {
+        fragColor = texture(toTex, uv) * qt_Opacity;
+        return;
+    }
+    if (p <= 0.0) {
+        fragColor = texture(fromTex, uv) * qt_Opacity;
+        return;
+    }
     vec2 px = uv * resolution;
     vec4 outc;
 

@@ -1,0 +1,100 @@
+{
+  "id": "trial-gluttony",
+  "title": {
+    "ru": "Испытание: Чревоугодие",
+    "en": "Trial: Gluttony"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "trial",
+      "cond": "circle == \"gluttony\"",
+      "next": "pactCheck",
+      "note": "a try to get out of this circle (Ask → Seek the way out, the wheel's plea)"
+    },
+    "pactCheck": {
+      "type": "if",
+      "cond": "attempts >= pactAfter and not pact",
+      "then": "toPact",
+      "else": "ask"
+    },
+    "toPact": {
+      "type": "scene",
+      "to": "pact"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Ещё одно окно. Ещё одна песня. Ещё пять минут. Возьмёшь?",
+        "en": "One more window. One more song. Five more minutes. Will you take them?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Хватит",
+            "en": "Enough"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Хватит — редкое слово здесь. Иди вниз.",
+              "en": "Enough is a rare word here. Go down."
+            }
+          },
+          "next": "down"
+        },
+        {
+          "text": {
+            "ru": "Ещё",
+            "en": "More"
+          },
+          "tone": "negative",
+          "set": {
+            "gluttony": "+1"
+          },
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Ещё. И ещё. Дождь тоже не останавливается.",
+              "en": "More. And more. The rain doesn't stop either."
+            }
+          },
+          "next": "stay"
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Дождь не кончается и без твоего ответа.",
+              "en": "The rain doesn't stop without your answer either."
+            }
+          },
+          "next": "stay"
+        }
+      ],
+      "shuffle": true
+    },
+    "stay": {
+      "type": "circle",
+      "to": "stay"
+    },
+    "down": {
+      "type": "circle",
+      "to": "deeper"
+    }
+  }
+}

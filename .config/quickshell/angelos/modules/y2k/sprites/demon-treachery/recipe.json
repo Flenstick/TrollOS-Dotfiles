@@ -1,0 +1,126 @@
+{
+ "sheet": "~/Pictures/angelos-sprites/treachery/treachery.png",
+ "block": 3.39,
+ "mask": true,
+ "boxes": {
+  "body": [
+   32,
+   8,
+   504,
+   808
+  ],
+  "wing_left": [
+   552,
+   176,
+   1016,
+   656
+  ],
+  "wing_right": [
+   1056,
+   176,
+   1512,
+   688
+  ],
+  "tail": [
+   56,
+   776,
+   632,
+   1000
+  ],
+  "eyes": [
+   664,
+   792,
+   1048,
+   936
+  ],
+  "mouth": [
+   1096,
+   792,
+   1488,
+   936
+  ]
+ },
+ "overlays": {
+  "mouth": {
+   "scale": 0.4,
+   "x": 50,
+   "y": 78,
+   "clip": [
+    62,
+    84,
+    82,
+    94
+   ],
+   "thr": 80,
+   "file": "~/Pictures/angelos-sprites/treachery/talk.png"
+  },
+  "eyes": {
+   "scale": 0.65,
+   "x": 34,
+   "y": 58,
+   "clip": [
+    48,
+    66,
+    92,
+    78
+   ]
+  }
+ },
+ "parts": {
+  "wing_left": {
+   "pivot": [
+    126.7,
+    114.1
+   ],
+   "at": [
+    54,
+    112
+   ],
+   "angles": [
+    10,
+    5,
+    0,
+    -5,
+    -10
+   ],
+   "every": 1
+  },
+  "wing_right": {
+   "pivot": [
+    8.3,
+    119.7
+   ],
+   "at": [
+    84,
+    112
+   ],
+   "angles": [
+    -10,
+    -5,
+    0,
+    5,
+    10
+   ],
+   "every": 1
+  },
+  "tail": {
+   "pivot": [
+    11.7,
+    9.7
+   ],
+   "at": [
+    70,
+    160
+   ],
+   "angles": [
+    19,
+    22,
+    25,
+    28,
+    31
+   ],
+   "every": 2
+  }
+ },
+ "colors": 96
+}

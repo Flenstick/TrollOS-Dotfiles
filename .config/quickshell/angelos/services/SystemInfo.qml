@@ -9,15 +9,34 @@ Singleton {
 
     property var info: ({})
     property string powerProfile: ""
+    // popular keyboards / mice / microphones worth over $100 that are plugged in
+    // (scripts/gear.py, data/premium-gear.json) — Settings → System, fastfetch
+    property var gear: []
+    property real gearThreshold: 100
 
     function refresh() {
         probe.running = true;
+        gearProbe.running = true;
     }
     function setPowerProfile(p) {
         Quickshell.execDetached(["powerprofilesctl", "set", p]);
         powerProfile = p;
     }
 
+    Process {
+        id: gearProbe
+        running: true
+        command: ["python3", Quickshell.shellDir + "/scripts/gear.py"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const r = JSON.parse(text);
+                    root.gear = r.devices || [];
+                    root.gearThreshold = r.threshold || 100;
+                } catch (e) {}
+            }
+        }
+    }
     Process {
         id: probe
         running: true

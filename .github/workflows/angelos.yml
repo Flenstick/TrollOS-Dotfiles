@@ -1,0 +1,71 @@
+# angelOS checks on every push and pull request that touches the shell, the
+# configs, the installer, the check scripts or the package lists:
+# `niri validate` of the shipped config, and the repository check (scripts/check.sh:
+# syntax, shellcheck, Plugin Studio, the installer end to end, Settings → Updates
+# update/failure/restore with its UI, and with CHECK_UI=1 the offscreen UI self-test —
+# every settings page, preview scene, search speed, the right-click crash guard — all
+# side by side).
+# Any failing check fails the job.
+name: angelOS
+
+on:
+  push:
+    paths:
+      - ".config/**"
+      - ".local/**"
+      - "install.sh"
+      - ".install"
+      - "scripts/**"
+      - "packages/**"
+      - "sddm/**"
+      - "Pictures/**"
+      - ".github/workflows/angelos.yml"
+  pull_request:
+    paths:
+      - ".config/**"
+      - ".local/**"
+      - "install.sh"
+      - ".install"
+      - "scripts/**"
+      - "packages/**"
+      - "sddm/**"
+      - "Pictures/**"
+      - ".github/workflows/angelos.yml"
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      # noto-fonts: the image has no fonts at all, and a real install always has this
+      # Cyrillic fallback (packages/pacman.txt) — without it Russian labels get no
+      # glyphs (the bundled Jacquard is Latin only) and the text-layout checks fail.
+      # qt6-declarative also brings Qt 6 qmlformat (/usr/lib/qt6/bin), which Plugin
+      # Studio's checks need; shellcheck and ripgrep make check.sh run in full.
+      # diffutils: the image has no diff/cmp, which the installer and the update
+      # tests use. qt6-multimedia: the harp menu (and the angel's voice) import
+      # QtMultimedia, as on a real install (packages/angelos.txt). python-gobject: the Golden Gate
+      # menu bar's helper talks D-Bus through it (packages/pacman.txt), and its test needs it.
+      # python-cairo: Settings → Capture draws its frame previews with it (packages/pacman.txt).
+      # scripts/ci-local.sh runs this job locally in the same image —
+      # the publish script and the pre-push hook do that before every push.
+      - name: Packages
+        run: |
+          pacman -Syu --noconfirm --needed git dbus diffutils python python-pillow python-numpy python-gobject python-cairo \
+            quickshell qt6-declarative qt6-5compat qt6-imageformats qt6-svg qt6-multimedia \
+            qt6-multimedia-ffmpeg niri noto-fonts \
+            shellcheck ripgrep
+          test -x /usr/lib/qt6/bin/qmlformat
+      - uses: actions/checkout@v5
+      # the checkout belongs to another user than the container's root
+      - name: Git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: niri validate
+        run: |
+          T="$(mktemp -d)"; mkdir -p "$T/.config"; cp -r .config/niri "$T/.config/"
+          grep -rlF '@HOME@' "$T/.config/niri" | xargs -r sed -i "s#@HOME@#$T#g"
+          HOME="$T" XDG_CONFIG_HOME="$T/.config" niri validate -c "$T/.config/niri/config.kdl"
+      # the UI self-test runs inside check.sh, alongside the rest (CHECK_UI=1): all at once
+      - name: Repository checks and the UI self-test (scripts/check.sh)
+        run: CHECK_UI=1 REQUIRE_UI=1 bash scripts/check.sh

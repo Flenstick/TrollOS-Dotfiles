@@ -22,6 +22,7 @@ Read-only: it only records. Outputs are captured with stream.capture.sink, and t
 stream never falls back to another node (so a vanished output can't turn into the
 microphone, which is what cava's own `source = <sink>` did).
 """
+import errno
 import json
 import os
 import select
@@ -227,6 +228,50 @@ def stop(*_):
     sys.exit(0)
 
 
+# Nothing here may wait forever (B4: the widget froze): cava that died before opening its
+# end of the FIFO, a recorder that ignores SIGTERM after sleep, cava that stopped reading.
+def end(p, grace=2.0):
+    if p.poll() is None:
+        p.terminate()
+    try:
+        p.wait(grace)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        try:
+            p.wait(1)
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def open_writer(fifo, cava, timeout=10.0):
+    """the FIFO's writing end once cava has opened the other one; None if cava died or
+    never came (a plain blocking open would wait for it forever)"""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            return os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+        except OSError as e:
+            if e.errno != errno.ENXIO:
+                raise
+        if cava.poll() is not None or time.monotonic() > deadline:
+            return None
+        time.sleep(0.05)
+
+
+def write_all(fd, data, timeout=3.0):
+    """write to the FIFO; TimeoutError when cava hasn't read for `timeout` seconds"""
+    view = memoryview(data)
+    deadline = time.monotonic() + timeout
+    while view:
+        try:
+            view = view[os.write(fd, view):]
+        except BlockingIOError:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise TimeoutError
+            select.select([], [fd], [], left)
+
+
 def record(route):
     target, sink, pos, _, _ = route
     props = ("{ node.name = angelos-cava node.description = \"angelOS visualizer\" media.role = Music "
@@ -283,8 +328,13 @@ def run(conf, fifo, spec):
         os.mkfifo(fifo, 0o600)
     cava = subprocess.Popen(["cava", "-p", conf], stdin=subprocess.DEVNULL, preexec_fn=die_with_parent)
     children.append(cava)
-    out = os.open(fifo, os.O_WRONLY)  # waits for cava to open its end
+    out = open_writer(fifo, cava)
+    if out is None:
+        print("audio-tap: cava exited before reading (code %s)" % cava.poll(), file=sys.stderr)
+        reap()
+        sys.exit(3)
     auto = (spec or "auto") == "auto"
+    code = 0
     route, rec, fn, rest, frame = None, None, None, b"", 2
     restart, last_check, last_default, last_data = True, 0.0, None, time.monotonic()
     try:
@@ -303,9 +353,7 @@ def run(conf, fifo, spec):
             dead = rec is not None and (rec.poll() is not None or now - last_data > 5)
             if restart or rec is None or dead:
                 if rec is not None:
-                    if rec.poll() is None:
-                        rec.terminate()
-                    rec.wait()
+                    end(rec)
                     children.remove(rec)
                     rec = None
                     if dead:
@@ -326,14 +374,17 @@ def run(conf, fifo, spec):
                 continue
             chunk = os.read(rec.stdout.fileno(), frame * 441)
             if not chunk:
-                rec.wait()
+                end(rec, 1.0)
                 continue
             last_data = time.monotonic()
             chunk = rest + chunk
             cut = len(chunk) - len(chunk) % frame
             rest = chunk[cut:]
             if cut:
-                os.write(out, fn(chunk[:cut]) if fn else chunk[:cut])
+                write_all(out, fn(chunk[:cut]) if fn else chunk[:cut])
+    except TimeoutError:
+        print("audio-tap: cava stopped reading; starting over", file=sys.stderr)
+        code = 4
     except OSError:  # cava closed the FIFO
         pass
     finally:
@@ -342,6 +393,8 @@ def run(conf, fifo, spec):
             os.unlink(fifo)
         except OSError:
             pass
+    if code:
+        sys.exit(code)
 
 
 def main():

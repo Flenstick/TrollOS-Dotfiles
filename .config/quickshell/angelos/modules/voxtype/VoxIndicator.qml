@@ -87,7 +87,7 @@ Scope {
             id: frame
             width: Theme.u * 110
             height: titleHeight + Theme.u * 34
-            title: "voice.exe"
+            title: I18n.exe("voice")
             icon: "mic"
             compact: true
             closable: false
@@ -96,7 +96,7 @@ Scope {
             Behavior on opacity {
                 NumberAnimation {
                     id: fade
-                    duration: Theme.fast
+                    duration: Motion.ms(Theme.fast)
                 }
             }
 
@@ -110,16 +110,17 @@ Scope {
                     pixel: Theme.u * 2
                     fill: root.recording ? Theme.danger : Theme.accent2
                     SequentialAnimation on opacity {
-                        running: root.recording
+                        running: root.recording && !Motion.still
+                        alwaysRunToEnd: true
                         loops: Animation.Infinite
                         NumberAnimation {
                             to: 0.55
-                            duration: 700
+                            duration: Motion.ms(700)
                             easing.type: Easing.InOutSine
                         }
                         NumberAnimation {
                             to: 1
-                            duration: 700
+                            duration: Motion.ms(700)
                             easing.type: Easing.InOutSine
                         }
                     }

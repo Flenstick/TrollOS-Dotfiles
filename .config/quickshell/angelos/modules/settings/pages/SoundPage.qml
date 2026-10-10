@@ -10,7 +10,8 @@ PxPage {
     subtitle: I18n.t("Меняется только то, что ты трогаешь здесь. Маршрутизацию пульта angelOS не касается.", "Only controls you change here are applied. Audio routing is preserved.")
 
     PxGroup {
-        title: I18n.t("Выход", "Output")
+        name: "output"
+        title: I18n.t("Динамики и наушники", "Speakers and headphones")
         icon: "speaker"
         width: parent.width
         SettingRow {
@@ -49,7 +50,8 @@ PxPage {
     }
 
     PxGroup {
-        title: I18n.t("Вход", "Input")
+        name: "input"
+        title: I18n.t("Микрофон", "Microphone")
         icon: "mic"
         width: parent.width
         SettingRow {
@@ -114,20 +116,21 @@ PxPage {
     }
 
     PxGroup {
-        title: I18n.t("Приложения", "Applications")
+        name: "applications"
+        title: I18n.t("Громкость приложений", "App volume")
         icon: "music"
         width: parent.width
         PxText {
-            visible: Audio.streams.length === 0
+            visible: Audio.appStreams.length === 0
             text: I18n.t("сейчас ничего не звучит", "No audio is playing")
             dim: true
         }
         Repeater {
-            model: Audio.streams
+            model: Audio.appStreams
             SettingRow {
                 id: r
                 required property var modelData
-                label: modelData.properties["application.name"] || Audio.nodeName(modelData)
+                label: Audio.streamName(modelData)
                 hint: modelData.properties["media.name"] || ""
                 PxSlider {
                     width: parent.width
@@ -143,7 +146,8 @@ PxPage {
     }
 
     PxGroup {
-        title: "OSD"
+        name: "osd"
+        title: I18n.t("Индикаторы на экране", "On-screen indicators")
 
         advanced: true
         icon: "heart"
@@ -186,14 +190,15 @@ PxPage {
     }
 
     PxGroup {
-        title: I18n.t("Голосовой ввод (VoxType)", "Voice typing (VoxType)")
+        name: "voice-typing-voxtype"
+        title: I18n.t("Голосовой ввод", "Voice typing")
 
         advanced: true
         icon: "mic"
         width: parent.width
         SettingRow {
             label: I18n.t("Индикатор", "Indicator")
-            hint: I18n.t("«angelOS» — окошко voice.exe в стиле райса, «старый» — прежний кружок", "“angelOS” — a voice.exe window in the rice style, “classic” — the old circle")
+            hint: I18n.t("«angelOS» — окошко " + I18n.exe("voice") + " в стиле райса, «старый» — прежний кружок", "“angelOS” — a " + I18n.exe("voice") + " window in the rice style, “classic” — the old circle")
             PxSegmented {
                 model: [
                     {

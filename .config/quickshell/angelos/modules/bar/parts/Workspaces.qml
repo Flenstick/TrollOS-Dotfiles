@@ -6,12 +6,19 @@ import qs.services
 import qs.widgets
 import qs.modules.workspace
 
-// Hearts: filled = active, lavender = has windows, hollow = empty.
+// Hearts (or the Y2K star / CD, Config.workspaces.sprite): filled = active,
+// lavender = has windows, hollow = empty.
 Item {
     id: root
 
     required property string screenName
-    readonly property var list: Niri.workspacesOn(screenName).filter(w => w.name !== "privacy")
+    readonly property var list: Niri.workspacesOn(screenName)
+    // the hell bar (BarItem): the active desk is the accent (a state), a desk with windows the
+    // sprite tone, an empty one only its outline; app icons in the circle's ramp
+    property bool barInk: false
+    // a taskbar on the left or the right edge (BarItem): the hearts in a column, no name badge
+    // beside them (it would run off the bar)
+    property bool vertical: false
 
     // the badge only takes room while it is shown: the slot opens, then closes again
     readonly property real badgeWidth: Math.min(Theme.u * 64, badgeMetrics.advanceWidth("✧ " + flashText) + Theme.u * 10)
@@ -33,8 +40,9 @@ Item {
         font: badgeText.font
     }
 
-    Row {
+    Grid {
         id: row
+        columns: root.vertical ? 1 : Math.max(1, root.list.length)
         spacing: Theme.u * 2
 
         // model = the count, not the list: niri rebuilds the list on every switch and
@@ -66,8 +74,8 @@ Item {
                     anchors.fill: parent
                     anchors.topMargin: Theme.u
                     anchors.bottomMargin: Theme.u
-                    color: cell.lit ? Qt.alpha(Theme.accent, 0.28) : mouse.containsMouse ? Qt.alpha(Theme.accent, 0.12) : "transparent"
-                    border.width: cell.lit ? Math.max(1, Theme.u / 2) : 0
+                    color: root.barInk ? (cell.lit ? Theme.hellBarActive : mouse.containsMouse ? Theme.hellBarHover : "transparent") : cell.lit ? Qt.alpha(Theme.accent, 0.28) : mouse.containsMouse ? Qt.alpha(Theme.accent, 0.12) : "transparent"
+                    border.width: cell.lit && !root.barInk ? Math.max(1, Theme.u / 2) : 0
                     border.color: Theme.accent
                 }
                 Row {
@@ -82,8 +90,9 @@ Item {
                             required property var modelData
                             appId: modelData.app_id || ""
                             size: Theme.u * 8
-                            opacity: cell.lit ? 1 : 0.7
+                            opacity: cell.lit || root.barInk ? 1 : 0.7
                             tint: Config.bar.tintTasks && !cell.lit ? Config.bar.trayTint : "off"
+                            hellBar: root.barInk
                         }
                     }
                     PxText {
@@ -95,37 +104,40 @@ Item {
                     }
                 }
 
-                PxIcon {
+                WsSprite {
                     id: heart
                     visible: cell.showHeart
                     x: Theme.u * 2
                     anchors.verticalCenter: parent.verticalCenter
-                    name: "heart"
                     pixel: Theme.u
+                    lit: cell.lit
                     hollow: !cell.lit && !cell.occupied
-                    fill: cell.modelData.is_urgent ? Theme.danger : cell.lit ? Theme.accent : Theme.accent4
-                    opacity: cell.lit || mouse.containsMouse ? 1 : 0.75
+                    tone: root.barInk ? (cell.modelData.is_urgent ? Theme.hellAccent : Theme.hellSprite) : cell.modelData.is_urgent ? Theme.danger : Theme.accent4
+                    fill: root.barInk ? (cell.modelData.is_urgent || cell.lit ? Theme.hellAccent : Theme.hellSprite) : cell.modelData.is_urgent ? Theme.danger : cell.lit ? Theme.accent : Theme.accent4
+                    barInk: root.barInk
+                    opacity: cell.lit || mouse.containsMouse || root.barInk ? 1 : 0.75
                     scale: cell.lit ? 1.0 : 0.8
                     Behavior on scale {
                         NumberAnimation {
-                            duration: Theme.fast
+                            duration: Motion.ms(Theme.fast)
                             easing.type: Easing.OutBack
                         }
                     }
                     SequentialAnimation on opacity {
-                        running: cell.modelData.is_urgent
+                        running: cell.modelData.is_urgent && !Motion.still
+                        alwaysRunToEnd: true
                         loops: Animation.Infinite
                         PropertyAction {
                             value: 1
                         }
                         PauseAnimation {
-                            duration: 300
+                            duration: Motion.ms(300)
                         }
                         PropertyAction {
                             value: 0.3
                         }
                         PauseAnimation {
-                            duration: 300
+                            duration: Motion.ms(300)
                         }
                     }
                 }
@@ -163,6 +175,7 @@ Item {
         height: row.height
         z: 5
         style: Config.workspaces.heartAnim
+        sprite: Config.workspaces.sprite
         heart: Config.bar.workspaceStyle !== "icons"
         plate: Config.bar.workspaceStyle !== "hearts"
         cellRect: i => {
@@ -182,10 +195,10 @@ Item {
     Connections {
         target: Niri
         function onWorkspaceActivated(ws, focused) {
-            if (ws.output !== root.screenName || ws.name === "privacy")
+            if (ws.output !== root.screenName)
                 return;
             anim.play(root.previousIndex, root.list.findIndex(w => w.id === ws.id));
-            if (Config.workspaces.popupMode !== "bar")
+            if (Config.workspaces.popupMode !== "bar" || root.vertical)
                 return;
             const names = Config.workspaces.names || {};
             root.flashText = names[ws.output + ":" + ws.idx] || ws.name || String(ws.idx);
@@ -201,7 +214,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: root.badgeWidth
         height: Theme.u * 11
-        color: Theme.accent
+        color: root.barInk ? Theme.hellAccent : Theme.accent
         PxText {
             id: badgeText
             anchors.centerIn: parent
@@ -209,7 +222,7 @@ Item {
             text: "✧ " + root.flashText
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
-            color: Theme.selectText
+            color: root.barInk ? Theme.hellPlate : Theme.selectText
             font.bold: true
         }
     }
@@ -220,7 +233,7 @@ Item {
                 target: root
                 property: "slot"
                 to: root.badgeWidth + Theme.u * 6
-                duration: 120
+                duration: Motion.ms(120)
                 easing.type: Easing.OutCubic
             }
             NumberAnimation {
@@ -228,24 +241,24 @@ Item {
                 property: "opacity"
                 from: 0
                 to: 1
-                duration: 120
+                duration: Motion.ms(120)
             }
         }
         PauseAnimation {
-            duration: Math.max(250, Config.workspaces.popupMs)
+            duration: Motion.ms(Math.max(250, Config.workspaces.popupMs))
         }
         ParallelAnimation {
             NumberAnimation {
                 target: badge
                 property: "opacity"
                 to: 0
-                duration: 140
+                duration: Motion.ms(140)
             }
             NumberAnimation {
                 target: root
                 property: "slot"
                 to: 0
-                duration: 180
+                duration: Motion.ms(180)
                 easing.type: Easing.InCubic
             }
         }

@@ -1,0 +1,84 @@
+{
+  "id": "close-heresy-1",
+  "title": {
+    "ru": "Ересь: знакомая",
+    "en": "Heresy: acquainted"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"heresy\" and closeness == 1",
+      "next": "ask",
+      "note": "the demon of heresy and the player: closeness acquainted (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Ты веришь, что отсюда есть выход?",
+        "en": "Do you believe there's a way out of here?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Верю",
+            "en": "I do"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Ересь. Мне нравится.",
+              "en": "Heresy. I like it."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Не верю",
+            "en": "I don't"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Тогда ты здесь сво{g:й|я|й(я)}.",
+              "en": "Then you belong here."
+            }
+          },
+          "next": "end",
+          "set": {
+            "heresy": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Сомнение — тоже вера.",
+              "en": "Doubt is a faith too."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

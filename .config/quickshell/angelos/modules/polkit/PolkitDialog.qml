@@ -44,6 +44,7 @@ Scope {
         color: Qt.alpha(Theme.shadow, 0.35)
         WlrLayershell.namespace: "angelos-polkit"
         WlrLayershell.layer: WlrLayer.Overlay
+        // takes input: the password dialog
         WlrLayershell.keyboardFocus: visible ? (Shell.dev ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive) : WlrKeyboardFocus.None
 
         onVisibleChanged: if (visible) {
@@ -97,6 +98,7 @@ Scope {
                 }
                 PxField {
                     id: field
+                    keepFocus: true
                     width: parent.width
                     password: !(root.flow && root.flow.responseVisible)
                     enabled: root.flow && root.flow.isResponseRequired

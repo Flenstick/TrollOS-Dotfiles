@@ -23,10 +23,16 @@ Scope {
     property bool caps: false
     readonly property bool previewing: Shell.lockPreview && !Shell.locked
     readonly property bool shown: Shell.locked || previewing
+    // Settings → Lock → Look; the unlock picked there ("auto": the look's own)
+    readonly property string look: Config.lock.style === "heaven" ? "heaven" : "ngo"
+    readonly property var fxStyles: ["heart", "pixels", "crt", "gate", "glitch"]
+    readonly property string fx: !Config.lock.reactions || Config.lock.unlockFx === "none" ? "none" : fxStyles.includes(Config.lock.unlockFx) ? Config.lock.unlockFx : look === "heaven" ? "gate" : "heart"
 
     signal shake
     signal success
     signal typed(int length, bool added)
+    signal demo(string text)               // the preview types this in by itself
+    signal captureNow                      // every screen: a picture of yourself, please
 
     function submit(pw) {
         if (busy)
@@ -48,31 +54,129 @@ Scope {
         status = fails > 2 ? I18n.t("ну пожааалуйста, вспомни пароль…", "Try your password again…") : I18n.t("неправильный пароль ✕", "Incorrect password ✕");
         shake();
     }
+
+    // ---- the unlock ----
+    // 1. the lock plays its own part (a sticker, the gate swinging open)
+    // 2. every screen grabs a picture of itself
+    // 3. an overlay over the desktop puts those pictures up (still under the lock)
+    // 4. the lock goes; the overlay plays the pictures away (UnlockReveal)
+    property var shots: ({})               // screen name -> grab result
+    property var origins: ({})             // screen name -> where the heart grows from
+    property bool revealing: false         // the overlay is up
+    property bool revealGo: false          // …and playing
+    // a look that plays something longer at the unlock (the stream's highlights, heaven's
+    // prayer) asks for the time from its success handler; any key or click hurries it
+    property int hold: 0
+    // what this unlock brought (both looks show it): the day's login reward (LockStream.claim)
+    // and the prayer (HeavenStars.pull) — the preview prays for show, nothing counted
+    property var claimed: null
+    property var wished: null
     function succeed() {
         status = "";
-        fails = 0;
         unlocking = true;
+        hold = 0;
+        claimed = null;
+        wished = null;
+        if (Config.lock.reactions && !Motion.still) {
+            if (!previewing && Config.lock.dailyReward)
+                claimed = LockStream.claim();
+            if (previewing ? Config.lock.wish : HeavenStars.canWish && HeavenStars.payWish(true))
+                wished = HeavenStars.pull(previewing);
+            // the lock only teases the rarity (the falling star's colour): the prize itself
+            // opens in the chest on the desktop (services/Chests)
+            if (wished && !previewing)
+                Chests.fromLock(wished);
+        }
         success();
-        goodbye.restart();
+        if (!previewing)
+            HeavenStars.unlocked(fails);
+        fails = 0;
+        if (fx === "none" && hold === 0) {
+            leave();
+            return;
+        }
+        ownPart.interval = Motion.still ? 0 : Math.max(hold, look === "heaven" ? 700 : fx === "crt" ? 650 : 420);
+        ownPart.restart();
+    }
+    function hurry() {
+        if (ownPart.running) {
+            ownPart.stop();
+            ownPartDone();
+        }
+    }
+    function ownPartDone() {
+        if (fx === "none") {
+            leave();
+            return;
+        }
+        shots = {};
+        origins = {};
+        captureNow();
+        captureWait.restart();
+    }
+    function captured(name, result, origin) {
+        if (!unlocking || revealing)
+            return;
+        const s = Object.assign({}, shots);
+        s[name] = result;
+        shots = s;
+        const o = Object.assign({}, origins);
+        o[name] = origin;
+        origins = o;
+        if (Object.keys(s).length >= (previewing ? Shell.screens.length : Quickshell.screens.length))
+            startReveal();
+    }
+    function startReveal() {
+        if (!unlocking || revealing)
+            return;
+        captureWait.stop();
+        revealing = true;
+        revealUp.restart();
+    }
+    function leave() {
+        unlocking = false;
+        if (previewing)
+            Shell.lockPreview = false;
+        else
+            Shell.locked = false;
     }
     Timer {
-        id: goodbye
-        interval: Config.lock.reactions ? 650 : 0
+        id: ownPart
+        onTriggered: root.ownPartDone()
+    }
+    // a screen that does not answer is covered by plain colour
+    Timer {
+        id: captureWait
+        interval: 800
+        onTriggered: root.startReveal()
+    }
+    // the overlay maps and shows its pictures before the lock lets go
+    Timer {
+        id: revealUp
+        interval: 180
         onTriggered: {
-            root.unlocking = false;
-            if (root.previewing)
-                Shell.lockPreview = false;
-            else
-                Shell.locked = false;
+            root.leave();
+            root.revealGo = true;
+            revealEnd.restart();
+        }
+    }
+    Timer {
+        id: revealEnd
+        interval: 1400
+        onTriggered: {
+            root.revealGo = false;
+            root.revealing = false;
+            root.shots = {};
+            root.origins = {};
         }
     }
 
+    // heaven's stars count the minutes at the computer from the start, not from the first lock
+    readonly property bool starsReady: HeavenStars.loaded
     Component.onCompleted: Shell.lockPreviewTry = text => {
         if (!root.previewing)
             return;
-        for (let i = 1; i <= text.length; i++)
-            root.typed(i, true);
-        root.submit(text);
+        root.demo(text);
     }
     Connections {
         target: Shell
@@ -80,6 +184,9 @@ Scope {
             if (Shell.locked) {
                 root.lockedAt = Date.now();
                 root.status = "";
+                root.unlocking = false;
+                root.revealing = false;
+                root.revealGo = false;
                 Shell.lockPreview = false;
             }
         }
@@ -88,7 +195,21 @@ Scope {
                 root.lockedAt = Date.now();
                 root.status = "";
                 root.fails = 0;
+                root.unlocking = false;
+                if (Shell.lockPreviewDemo !== "")
+                    demoSoon.restart();
             }
+        }
+    }
+    // Settings → Lock → Show the unlock: the preview types the word in by itself
+    Timer {
+        id: demoSoon
+        interval: 1600
+        onTriggered: {
+            const text = Shell.lockPreviewDemo;
+            Shell.lockPreviewDemo = "";
+            if (root.previewing && text !== "")
+                root.demo(text);
         }
     }
 
@@ -113,6 +234,41 @@ Scope {
             root.buffer = "";
             root.status = I18n.t("ошибка PAM: ", "PAM error: ") + e;
         }
+    }
+
+    // ---- the finger (fprintd, Settings → Lock): a PAM conversation of its own beside the
+    // password's; a finger on the reader unlocks as the password does. Tried again after each
+    // round of misses or its timeout, for as long as the lock is up ----
+    readonly property bool fingerOn: Shell.locked && !unlocking && !previewing && Config.laptop.fingerprint && Laptop.fprintEnrolled > 0
+    property string fingerStatus: ""
+    onFingerOnChanged: {
+        if (fingerOn)
+            finger.start();
+        else if (finger.active)
+            finger.abort();
+    }
+    PamContext {
+        id: finger
+        configDirectory: Quickshell.shellDir + "/pam"
+        config: "angelos-fprint"
+        onMessageChanged: if (message)
+            root.fingerStatus = message
+        onCompleted: result => {
+            if (result === PamResult.Success && root.fingerOn) {
+                root.fingerStatus = "";
+                root.succeed();
+            } else {
+                root.fingerStatus = I18n.t("палец не узнан", "finger not recognised");
+                fingerAgain.restart();
+            }
+        }
+        onError: e => fingerAgain.restart()
+    }
+    Timer {
+        id: fingerAgain
+        interval: 2500
+        onTriggered: if (root.fingerOn && !finger.active)
+            finger.start()
     }
 
     // Caps Lock from the keyboard LEDs (a lock screen has no other way to know)
@@ -179,6 +335,7 @@ Scope {
                         Shell.lock();
                     } else {
                         root.sleeping = false;
+                        Shell.resumed();
                         // in case the lock could not come up before sleeping
                         if (!Shell.locked)
                             Shell.lock();
@@ -197,10 +354,10 @@ Scope {
         onTriggered: logind.running = root.sleepLock
     }
 
-    // idle auto-lock
-    IdleMonitor {
-        enabled: Config.lock.idleMinutes > 0
-        timeout: Math.max(1, Config.lock.idleMinutes) * 60
+    // idle auto-lock (on battery: Settings → Battery's own, services/Power)
+    IdleWatch {
+        enabled: Power.lockMinutes > 0
+        timeout: Math.max(1, Power.lockMinutes) * 60
         respectInhibitors: true
         onIsIdleChanged: if (isIdle)
             Shell.lock()
@@ -242,6 +399,7 @@ Scope {
             color: Theme.desk
             WlrLayershell.namespace: "angelos-lock-preview"
             WlrLayershell.layer: WlrLayer.Overlay
+            // takes input: the lock screen
             WlrLayershell.keyboardFocus: Shell.dev ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
 
             LockScreen {
@@ -250,6 +408,40 @@ Scope {
                 primary: previewWin.modelData === Shell.focusedScreen || Shell.screens.length === 1
                 lockScope: root
                 preview: true
+            }
+
+            RightClickGuard {}
+        }
+    }
+
+    // the unlock's second half, over the desktop (input passes through)
+    Variants {
+        model: root.revealing ? Shell.screens : []
+        PanelWindow {
+            id: revealWin
+            required property var modelData
+            screen: modelData
+            anchors {
+                top: true
+                bottom: true
+                left: true
+                right: true
+            }
+            exclusionMode: ExclusionMode.Ignore
+            color: "transparent"
+            mask: Region {}
+            WlrLayershell.namespace: "angelos-unlock"
+            WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+            UnlockReveal {
+                anchors.fill: parent
+                readonly property var grab: root.shots[revealWin.modelData.name] || null
+                shot: grab ? grab.url : ""
+                style: root.fx
+                origin: root.origins[revealWin.modelData.name] || Qt.point(0.5, 0.5)
+                primary: revealWin.modelData === Shell.focusedScreen || Shell.screens.length === 1
+                go: root.revealGo
             }
 
             RightClickGuard {}

@@ -22,6 +22,34 @@ PxPage {
     readonly property var questions: plan ? plan.questions : []
     readonly property var files: draft ? draft.files || [] : []
     readonly property string code: (files.find(f => f.path === selectedFile) || files[0] || {}).content || ""
+    // improving an installed plugin (Settings → Plugins → Improve, or the list below)
+    readonly property bool editing: PluginStudio.editing
+    readonly property var editPlugin: editing ? Plugins.byId(PluginStudio.target) : null
+    readonly property var userPlugins: Plugins.plugins.filter(p => !p.bundled)
+    property string pendingEdit: ""     // asks once before the current conversation is dropped
+    property string codeView: "code"    // code | diff
+    property bool editingFile: false
+    property string editBuffer: ""
+    property bool deleteConfirm: false
+    property bool rollbackConfirm: false
+    readonly property var changesList: draft && draft.changes ? draft.changes : []
+    readonly property var changeOf: changesList.find(c => c.path === selectedFile) || null
+    readonly property bool dirtyFile: editingFile && editBuffer !== code
+    onSelectedFileChanged: {
+        editingFile = false;
+        deleteConfirm = false;
+    }
+    function improve(id) {
+        if ((page.messages.length > 0 || page.draft) && pendingEdit !== id && !(page.editing && PluginStudio.target === id)) {
+            pendingEdit = id;
+            return;
+        }
+        pendingEdit = "";
+        if (PluginStudio.startEdit(id)) {
+            selectedFile = "manifest.json";
+            codeView = "code";
+        }
+    }
     readonly property var messages: (PluginStudio.session.messages || []).map(m => {
         if (m.role === "user")
             return {role: I18n.t("Ты", "You"), text: m.content};
@@ -48,16 +76,43 @@ PxPage {
             launcher: I18n.t("Поиск в лаунчере", "Launcher search")
         })[kind] || kind;
     }
-    Component.onCompleted: if (!PluginStudio.busy)
-        PluginStudio.refresh()
+    Component.onCompleted: {
+        if (!PluginStudio.busy)
+            PluginStudio.refresh();
+        takeEditRequest();
+    }
+    // Settings → Plugins → Improve
+    function takeEditRequest() {
+        const id = PluginStudio.editRequest;
+        if (!id || PluginStudio.busy)
+            return;
+        PluginStudio.editRequest = "";
+        improve(id);
+    }
     Connections {
         target: PluginStudio
         function onCompleted(action) {
             if (action === "save_key")
                 page.connectionOpen = false;
+            if (action === "save_file" || action === "update" || action === "rollback" || action === "edit_start")
+                page.editingFile = false;
+            if (action === "delete_file")
+                page.selectedFile = "manifest.json";
+            if (action === "generate" && page.editing && page.changesList.length) {
+                page.selectedFile = page.changesList[0].path;
+                page.codeView = "diff";
+            }
+            if (action === "edit_start")
+                Qt.callLater(() => page.contentY = 0);
             const section = action === "plan" ? planGroup : action === "generate" || action === "review" ? resultGroup : action === "install" ? installedGroup : null;
             if (section)
                 Qt.callLater(() => page.contentY = Math.max(0, Math.min(section.y, page.contentHeight - page.height)));
+        }
+        function onBusyChanged() {
+            page.takeEditRequest();
+        }
+        function onEditRequestChanged() {
+            page.takeEditRequest();
         }
         function onErrorChanged() {
             if (PluginStudio.error)
@@ -69,13 +124,13 @@ PxPage {
         width: parent.width
         spacing: Theme.u * 3
         Repeater {
-            model: [I18n.t("1 · Идея", "1 · Idea"), I18n.t("2 · План", "2 · Plan"), I18n.t("3 · Результат", "3 · Review"), I18n.t("4 · Установка", "4 · Install")]
+            model: page.editing ? [I18n.t("1 · Что изменить", "1 · What to change"), I18n.t("2 · План (можно пропустить)", "2 · Plan (optional)"), I18n.t("3 · Изменения", "3 · Changes"), I18n.t("4 · Обновление", "4 · Update")] : [I18n.t("1 · Идея", "1 · Idea"), I18n.t("2 · План", "2 · Plan"), I18n.t("3 · Результат", "3 · Review"), I18n.t("4 · Установка", "4 · Install")]
             PxButton {
                 required property string modelData
                 required property int index
                 text: modelData
                 compact: true
-                checked: index === (page.installed ? 3 : page.draft ? 2 : page.plan ? 1 : 0)
+                checked: index === (page.editing ? (page.draft && page.draft.changed ? 2 : page.plan ? 1 : PluginStudio.session.updated ? 3 : 0) : page.installed ? 3 : page.draft ? 2 : page.plan ? 1 : 0)
                 enabled: false
                 opacity: 1
             }
@@ -83,6 +138,113 @@ PxPage {
     }
 
     PxGroup {
+        name: "improving"
+        id: editBanner
+        visible: page.editing
+        title: I18n.t("Доработка: ", "Improving: ") + (page.editPlugin ? I18n.label(page.editPlugin.name) : PluginStudio.target)
+        icon: "gear"
+        width: parent.width
+        PxText {
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: PluginStudio.target + (page.draft && page.draft.manifest && page.draft.manifest.version ? "  ·  v" + page.draft.manifest.version : "") + ((PluginStudio.session.kept || []).length ? I18n.t("  ·  без изменений останутся: ", "  ·  kept as they are: ") + PluginStudio.session.kept.join(", ") : "")
+            dim: true
+        }
+        PxText {
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: I18n.t("Опиши изменение — ИИ перепишет файлы, покажет разницу и проверит плагин в песочнице. Или правь файлы сам во встроенном редакторе ниже. «Обновить плагин» сохранит прошлую версию и перезагрузит плагин без перезапуска оболочки.", "Describe a change — AI rewrites the files, shows the difference and checks the plugin in a sandbox. Or edit the files yourself in the built-in editor below. “Update plugin” keeps the previous version and reloads the plugin without restarting the shell.")
+        }
+        PxText {
+            visible: !!PluginStudio.session.updated
+            width: parent.width
+            wrapMode: Text.Wrap
+            color: Theme.ok
+            text: I18n.t("Плагин обновлён и перезагружен ♡ Можно дорабатывать дальше.", "Plugin updated and reloaded ♡ You can keep improving it.")
+        }
+        Flow {
+            width: parent.width
+            spacing: Theme.u * 3
+            PxButton {
+                text: I18n.t("Папка плагина", "Plugin folder")
+                icon: "folder"
+                onClicked: Shell.openPath(Config.pluginsDir + "/" + PluginStudio.target)
+            }
+            PxButton {
+                visible: !!page.editPlugin && !!page.editPlugin.settings && Plugins.isEnabled(page.editPlugin)
+                text: I18n.t("Его настройки", "Its settings")
+                icon: "gear"
+                onClicked: Shell.settingsGo(page, "plugin:" + PluginStudio.target)
+            }
+            PxButton {
+                visible: (PluginStudio.backups[PluginStudio.target] || 0) > 0
+                enabled: !PluginStudio.busy
+                text: page.rollbackConfirm ? I18n.t("Точно вернуть прошлую?", "Really restore?") : I18n.t("Вернуть прошлую версию (", "Restore previous version (") + (PluginStudio.backups[PluginStudio.target] || 0) + ")"
+                icon: "arrowLeft"
+                danger: page.rollbackConfirm
+                onClicked: {
+                    if (!page.rollbackConfirm) {
+                        page.rollbackConfirm = true;
+                        return;
+                    }
+                    page.rollbackConfirm = false;
+                    PluginStudio.rollback(PluginStudio.target);
+                }
+            }
+        }
+    }
+
+    PxGroup {
+        name: "improve-another-plugin"
+        id: editPick
+        // a sub-page while a conversation is open (`shown` then, PxGroup), a plain group before
+        readonly property bool any: page.userPlugins.length > 0 && !(page.editing && page.userPlugins.length === 1)
+        visible: any
+        shown: any
+        title: page.editing ? I18n.t("Доработать другой плагин", "Improve another plugin") : I18n.t("Доработать готовый плагин", "Improve an installed plugin")
+        icon: "plug"
+        width: parent.width
+        advanced: page.editing || page.messages.length > 0
+        PxText {
+            width: parent.width
+            wrapMode: Text.Wrap
+            dim: true
+            text: I18n.t("Твои плагины из ~/.config/angelos/plugins. Встроенные не меняются — их можно скопировать как свои через «Новый плагин».", "Your plugins from ~/.config/angelos/plugins. Bundled ones stay as they are.")
+        }
+        Repeater {
+            model: page.userPlugins
+            Row {
+                id: pickRow
+                required property var modelData
+                width: parent.width
+                spacing: Theme.u * 4
+                PxIcon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: pickRow.modelData.icon || "plug"
+                }
+                PxText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - Theme.u * 16 - pickBtn.width - Theme.u * 8
+                    elide: Text.ElideRight
+                    text: I18n.label(pickRow.modelData.name) + "  v" + (pickRow.modelData.version || "0") + ((PluginStudio.backups[pickRow.modelData.id] || 0) ? I18n.t("  · версий в запасе: ", "  · saved versions: ") + PluginStudio.backups[pickRow.modelData.id] : "")
+                }
+                PxButton {
+                    id: pickBtn
+                    anchors.verticalCenter: parent.verticalCenter
+                    compact: true
+                    enabled: !PluginStudio.busy
+                    checked: page.editing && PluginStudio.target === pickRow.modelData.id
+                    text: page.pendingEdit === pickRow.modelData.id ? I18n.t("Закрыть текущий диалог?", "Drop the current conversation?") : page.editing && PluginStudio.target === pickRow.modelData.id ? I18n.t("Открыт", "Open") : I18n.t("Доработать", "Improve")
+                    icon: "sparkle"
+                    danger: page.pendingEdit === pickRow.modelData.id
+                    onClicked: page.improve(pickRow.modelData.id)
+                }
+            }
+        }
+    }
+
+    PxGroup {
+        name: "ai-connection"
         title: I18n.t("Подключение ИИ", "AI connection")
         icon: "sparkle"
         width: parent.width
@@ -306,7 +468,8 @@ PxPage {
     }
 
     PxGroup {
-        title: I18n.t("Твоя идея", "Your idea")
+        name: "what-change"
+        title: page.editing ? I18n.t("Что изменить", "What to change") : I18n.t("Твоя идея", "Your idea")
         icon: "heart"
         width: parent.width
         visible: !page.installed
@@ -317,21 +480,38 @@ PxPage {
             width: parent.width
             implicitHeight: Theme.u * 65
             readOnly: PluginStudio.busy
-            placeholder: page.plan ? I18n.t("Ответь на вопросы или напиши, что изменить в плане…", "Answer the questions or describe changes to the plan…") : I18n.t("Например: хочу виджет на рабочем столе, который показывает, сколько осталось токенов в Codex.", "For example: I want a desktop widget showing how many Codex tokens I have left.")
+            placeholder: page.plan ? I18n.t("Ответь на вопросы или напиши, что изменить в плане…", "Answer the questions or describe changes to the plan…") : page.editing ? I18n.t("Например: добавь в настройки выбор цвета, сделай виджет поменьше, показывай проценты…", "For example: add a colour choice to the settings, make the widget smaller, show percentages…") : I18n.t("Например: хочу виджет на рабочем столе, который показывает, сколько осталось токенов в Codex.", "For example: I want a desktop widget showing how many Codex tokens I have left.")
         }
         Flow {
             width: parent.width
             spacing: Theme.u * 3
+            // a desktop widget that only knows heaven: the AI draws its hell (offered while the demon rules)
             PxButton {
-                text: page.plan ? I18n.t("Отправить уточнение", "Send clarification") : I18n.t("Обсудить идею", "Discuss idea")
+                visible: Angel.hellShown && page.editing && !page.plan && PluginStudio.needsHell(Plugins.byId(PluginStudio.target))
+                text: I18n.t("Сделать адскую версию", "Make the hell version")
+                icon: "fire"
+                accent: true
+                enabled: !PluginStudio.busy && PluginStudio.hasKey
+                onClicked: PluginStudio.makeHell()
+            }
+            PxButton {
+                visible: page.editing && !page.plan
+                text: I18n.t("Сразу переделать", "Change it now")
                 icon: "sparkle"
                 accent: true
+                enabled: !PluginStudio.busy && PluginStudio.hasKey && prompt.text.trim() !== ""
+                onClicked: PluginStudio.applyChange(prompt.text.trim())
+            }
+            PxButton {
+                text: page.plan ? I18n.t("Отправить уточнение", "Send clarification") : page.editing ? I18n.t("Сначала обсудить", "Discuss first") : I18n.t("Обсудить идею", "Discuss idea")
+                icon: page.editing && !page.plan ? "" : "sparkle"
+                accent: !page.editing || !!page.plan
                 enabled: !PluginStudio.busy && PluginStudio.hasKey && prompt.text.trim() !== ""
                 onClicked: page.submit()
             }
             PxButton {
                 text: I18n.t("Пример: счётчик", "Example: counter")
-                visible: !page.plan && prompt.text === ""
+                visible: !page.plan && !page.editing && prompt.text === ""
                 enabled: !PluginStudio.busy
                 onClicked: PluginStudio.composer = I18n.t("Хочу виджет-счётчик на рабочем столе: кнопка увеличивает число, а в настройках можно сбросить его. Сохраняй число между перезапусками.", "I want a desktop counter widget: a button increments the number, and settings can reset it. Keep the count between restarts.")
             }
@@ -342,7 +522,9 @@ PxPage {
             }
         }
         PxText {
-            visible: PluginStudio.busy && PluginStudio.action === "plan"
+            visible: PluginStudio.busy && (PluginStudio.action === "plan" || (page.editing && !page.plan && PluginStudio.action === "generate"))
+            width: parent.width
+            wrapMode: Text.Wrap
             text: PluginStudio.statusText
             color: Theme.accent
         }
@@ -364,9 +546,10 @@ PxPage {
     }
 
     PxGroup {
+        name: "what-will-change"
         id: planGroup
         visible: !!page.plan
-        title: I18n.t("Как будет работать", "How it will work")
+        title: page.editing ? I18n.t("Что изменится", "What will change") : I18n.t("Как будет работать", "How it will work")
         icon: "layers"
         width: parent.width
         PxText {
@@ -471,8 +654,8 @@ PxPage {
             }
         }
         PxButton {
-            visible: !page.draft && !page.installed
-            text: I18n.t("План подходит — создать плагин", "Approve plan — generate plugin")
+            visible: page.editing ? !!page.plan : !page.draft && !page.installed
+            text: page.editing ? I18n.t("План подходит — переделать", "Approve plan — apply changes") : I18n.t("План подходит — создать плагин", "Approve plan — generate plugin")
             icon: "sparkle"
             accent: true
             enabled: !PluginStudio.busy && PluginStudio.hasKey && page.questions.length === 0 && prompt.text.trim() === ""
@@ -488,18 +671,21 @@ PxPage {
     }
 
     PxGroup {
+        name: "changes-files"
         id: resultGroup
         visible: !!page.draft
-        title: I18n.t("Результат", "Result")
+        title: page.editing ? I18n.t("Изменения и файлы", "Changes and files") : I18n.t("Результат", "Result")
         icon: "package"
         width: parent.width
         PxText {
+            visible: text !== ""
             width: parent.width
             wrapMode: Text.Wrap
             textFormat: Text.PlainText
-            text: page.draft ? page.draft.summary : ""
+            text: page.draft ? page.draft.summary || "" : ""
         }
         PxText {
+            visible: text !== ""
             width: parent.width
             wrapMode: Text.Wrap
             textFormat: Text.PlainText
@@ -515,18 +701,161 @@ PxPage {
                 ? I18n.t("Нужно исправить:\n", "Needs fixing:\n") + page.draft.errors.join("\n")
                 : (page.draft.check && page.draft.check.startsWith("runtime check:") ? I18n.t("Проверено: структура, синтаксис и загрузка в Quickshell (в песочнице). Посмотри код и поведение после установки.", "Checked: structure, syntax and loading in Quickshell (sandboxed). Review the code and behaviour after installing.") : I18n.t("Структура и синтаксис проверены", "Structure and syntax checked") + (page.draft.check ? " (" + page.draft.check + ")" : "") + ".")) : ""
         }
-        PxCombo {
+        // improving: what differs from the installed version
+        PxText {
+            visible: page.editing
             width: parent.width
-            model: page.files.map(f => ({label: f.path, value: f.path}))
-            currentValue: page.selectedFile
-            onActivated: value => page.selectedFile = value
+            wrapMode: Text.Wrap
+            font.bold: page.changesList.length > 0
+            text: page.changesList.length ? I18n.t("Изменено файлов: ", "Files changed: ") + page.changesList.length + I18n.t(" — нажми на файл, чтобы увидеть разницу", " — click one to see the difference") : I18n.t("Пока без изменений: это установленная версия.", "No changes yet: this is the installed version.")
+        }
+        Flow {
+            visible: page.editing && page.changesList.length > 0
+            width: parent.width
+            spacing: Theme.u * 2
+            Repeater {
+                model: page.changesList
+                PxButton {
+                    required property var modelData
+                    compact: true
+                    kind: "tiny"
+                    checked: page.selectedFile === modelData.path && page.codeView === "diff"
+                    text: ({"added": "+ ", "removed": "− ", "changed": "~ "})[modelData.status] + modelData.path + "  +" + modelData.added + " −" + modelData.removed
+                    onClicked: {
+                        page.selectedFile = modelData.path;
+                        page.codeView = "diff";
+                    }
+                }
+            }
+        }
+        Item {
+            width: parent.width
+            height: fileCombo.height
+            PxCombo {
+                id: fileCombo
+                width: parent.width - (viewSwitch.visible ? viewSwitch.width + Theme.u * 3 : 0)
+                model: page.files.map(f => ({label: f.path + (page.changesList.some(c => c.path === f.path) ? "  ✎" : ""), value: f.path}))
+                currentValue: page.selectedFile
+                onActivated: value => page.selectedFile = value
+            }
+            PxSegmented {
+                id: viewSwitch
+                visible: page.editing && !page.editingFile
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                model: [{label: I18n.t("Код", "Code"), value: "code"}, {label: I18n.t("Разница", "Diff"), value: "diff"}]
+                currentValue: page.codeView
+                onActivated: value => page.codeView = value
+            }
         }
         PxTextArea {
+            visible: !(page.editing && page.codeView === "diff" && !page.editingFile)
             width: parent.width
             implicitHeight: Theme.u * 125
-            readOnly: true
+            readOnly: !page.editingFile
             monospace: true
-            text: page.code
+            text: page.editingFile ? page.editBuffer : page.code
+            onEdited: if (page.editingFile)
+                page.editBuffer = text
+        }
+        PxBox {
+            visible: page.editing && page.codeView === "diff" && !page.editingFile
+            width: parent.width
+            height: Theme.u * 125
+            sunken: true
+            color: Theme.sunken
+            PxText {
+                visible: !page.changeOf
+                anchors.centerIn: parent
+                text: I18n.t("В этом файле изменений нет", "No changes in this file")
+                dim: true
+            }
+            ListView {
+                anchors.fill: parent
+                anchors.margins: Theme.u * 3
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                model: page.changeOf ? page.changeOf.diff.split("\n") : []
+                delegate: PxText {
+                    required property string modelData
+                    width: ListView.view ? ListView.view.width : 0
+                    kind: "mono"
+                    elide: Text.ElideRight
+                    textFormat: Text.PlainText
+                    text: modelData
+                    color: modelData.startsWith("+") ? Theme.ok : modelData.startsWith("-") ? Theme.danger : modelData.startsWith("@@") ? Theme.accent : Theme.textDim
+                }
+            }
+        }
+        // the built-in editor: the draft's files, checked again on every save
+        Flow {
+            visible: !page.installed
+            width: parent.width
+            spacing: Theme.u * 3
+            PxButton {
+                visible: !page.editingFile
+                enabled: !PluginStudio.busy && page.files.some(f => f.path === page.selectedFile)
+                text: I18n.t("Править вручную", "Edit by hand")
+                icon: "terminal"
+                onClicked: {
+                    page.editBuffer = page.code;
+                    page.editingFile = true;
+                }
+            }
+            PxButton {
+                visible: page.editingFile
+                enabled: !PluginStudio.busy && page.dirtyFile
+                accent: true
+                text: I18n.t("Сохранить и проверить", "Save and check")
+                icon: "check"
+                onClicked: PluginStudio.saveFile(page.selectedFile, page.editBuffer)
+            }
+            PxButton {
+                visible: page.editingFile
+                enabled: !PluginStudio.busy
+                text: I18n.t("Отменить правку", "Discard edit")
+                onClicked: page.editingFile = false
+            }
+            PxButton {
+                visible: !page.editingFile && page.selectedFile !== "manifest.json" && page.files.some(f => f.path === page.selectedFile)
+                enabled: !PluginStudio.busy
+                danger: page.deleteConfirm
+                text: page.deleteConfirm ? I18n.t("Точно удалить ", "Really delete ") + page.selectedFile + "?" : I18n.t("Удалить файл", "Delete file")
+                icon: "trash"
+                onClicked: {
+                    if (!page.deleteConfirm) {
+                        page.deleteConfirm = true;
+                        return;
+                    }
+                    page.deleteConfirm = false;
+                    PluginStudio.deleteFile(page.selectedFile);
+                }
+            }
+        }
+        Row {
+            visible: !page.installed && !page.editingFile
+            width: parent.width
+            spacing: Theme.u * 3
+            PxField {
+                id: newFile
+                width: Math.min(Theme.u * 110, parent.width - newFileBtn.width - Theme.u * 3)
+                placeholder: I18n.t("новый файл, напр. Helper.qml", "new file, e.g. Helper.qml")
+                onAccepted: newFileBtn.clicked()
+            }
+            PxButton {
+                id: newFileBtn
+                text: I18n.t("Добавить файл", "Add file")
+                icon: "plus"
+                enabled: !PluginStudio.busy && /^[A-Za-z0-9_-][A-Za-z0-9_.\/-]*\.(qml|js|json|py|sh|md|txt|svg)$/.test(newFile.text.trim()) && !page.files.some(f => f.path === newFile.text.trim())
+                onClicked: {
+                    const name = newFile.text.trim();
+                    const qml = name.endsWith(".qml") ? "import QtQuick\nimport qs.config\nimport qs.widgets\n\nItem {\n}\n" : "";
+                    if (PluginStudio.saveFile(name, qml)) {
+                        page.selectedFile = name;
+                        newFile.text = "";
+                    }
+                }
+            }
         }
         Flow {
             width: parent.width
@@ -545,7 +874,7 @@ PxPage {
                 onClicked: PluginStudio.send("review")
             }
             PxButton {
-                visible: !page.installed
+                visible: !page.installed && (!page.editing || (page.draft && page.draft.errors.length > 0))
                 text: page.draft && page.draft.errors.length ? I18n.t("Исправить с ИИ", "Repair with AI") : I18n.t("Пересоздать с ИИ", "Regenerate with AI")
                 enabled: !PluginStudio.busy && PluginStudio.hasKey && prompt.text.trim() === ""
                 onClicked: PluginStudio.send("generate")
@@ -555,26 +884,35 @@ PxPage {
             visible: !page.installed
             width: parent.width
             wrapMode: Text.Wrap
-            text: I18n.t("После установки код работает с правами твоего пользователя. До нажатия «Установить» он только один раз загружается для проверки в песочнице — без сети, домашней папки и сокетов.", "Installed code runs with your user permissions. Before you click Install it is only loaded once for checks, in a sandbox without network, home folder or sockets.")
+            text: page.editing ? I18n.t("Перед обновлением прошлая версия сохраняется в ~/.local/state/angelos/plugin-backups (последние 10), её можно вернуть одной кнопкой. Новый код работает с правами твоего пользователя; до обновления он только загружается для проверки в песочнице.", "Before updating, the previous version is saved to ~/.local/state/angelos/plugin-backups (last 10) and can be restored with one click. New code runs with your user permissions; before the update it is only loaded for checks in a sandbox.") : I18n.t("После установки код работает с правами твоего пользователя. До нажатия «Установить» он только один раз загружается для проверки в песочнице — без сети, домашней папки и сокетов.", "Installed code runs with your user permissions. Before you click Install it is only loaded once for checks, in a sandbox without network, home folder or sockets.")
             dim: true
         }
         PxToggle {
-            visible: !page.installed && !!page.draft && !!page.draft.manifest.desktopWidget
+            visible: !page.installed && !page.editing && !!page.draft && !!page.draft.manifest.desktopWidget
             text: I18n.t("Добавить виджет на текущий экран", "Add widget to the current screen")
             checked: page.addDesktop
             onToggled: value => page.addDesktop = value
         }
         PxButton {
-            visible: !page.installed
+            visible: !page.installed && !page.editing
             text: I18n.t("Установить", "Install")
             icon: "plus"
             accent: true
-            enabled: !PluginStudio.busy && !!page.draft && page.draft.errors.length === 0 && prompt.text.trim() === ""
+            enabled: !PluginStudio.busy && !!page.draft && page.draft.errors.length === 0 && prompt.text.trim() === "" && !page.editingFile
             onClicked: PluginStudio.install(page.addDesktop)
+        }
+        PxButton {
+            visible: page.editing
+            text: I18n.t("Обновить плагин", "Update plugin")
+            icon: "check"
+            accent: true
+            enabled: !PluginStudio.busy && !!page.draft && page.draft.changed && page.draft.errors.length === 0 && !page.editingFile
+            onClicked: PluginStudio.update()
         }
     }
 
     PxGroup {
+        name: "plugin-installed"
         id: installedGroup
         visible: page.installed
         title: I18n.t("Плагин установлен ♡", "Plugin installed ♡")
@@ -592,11 +930,17 @@ PxPage {
                 text: I18n.t("Настроить плагин", "Configure plugin")
                 icon: "gear"
                 enabled: !!Plugins.byId(PluginStudio.session.installed)
-                onClicked: Shell.openSettings("plugin:" + PluginStudio.session.installed)
+                onClicked: Shell.settingsGo(page, "plugin:" + PluginStudio.session.installed)
+            }
+            PxButton {
+                text: I18n.t("Доработать", "Improve it")
+                icon: "sparkle"
+                enabled: !PluginStudio.busy
+                onClicked: page.improve(PluginStudio.session.installed)
             }
             PxButton {
                 text: I18n.t("Все плагины", "All plugins")
-                onClicked: Shell.openSettings("plugins")
+                onClicked: Shell.settingsGo(page, "plugins")
             }
         }
     }
@@ -635,9 +979,9 @@ PxPage {
                 onClicked: PluginStudio.cancel()
             }
             PxButton {
-                visible: page.messages.length > 0 || page.installed
+                visible: page.messages.length > 0 || page.installed || page.editing
                 enabled: !PluginStudio.busy
-                text: page.resetConfirm ? I18n.t("Начать новый диалог?", "Start a new conversation?") : I18n.t("Новый плагин", "New plugin")
+                text: page.resetConfirm ? (page.editing ? I18n.t("Закончить доработку?", "Finish improving?") : I18n.t("Начать новый диалог?", "Start a new conversation?")) : page.editing ? I18n.t("Закончить доработку", "Finish improving") : I18n.t("Новый плагин", "New plugin")
                 onClicked: {
                     if (!page.resetConfirm) {
                         page.resetConfirm = true;

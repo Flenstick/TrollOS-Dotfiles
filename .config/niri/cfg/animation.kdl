@@ -3,11 +3,11 @@
         slowdown 1.2
 
         workspace-switch {
-            duration-ms 380
+            duration-ms 345
             curve "cubic-bezier" 0.22 1 0.36 1
         }
         window-open {
-            // TrollOS: было 280 — окна открывались медленно
+            // TrollOS: 140 instead of 280 — windows opened slowly
             duration-ms 140
             curve "ease-out-cubic"
         }

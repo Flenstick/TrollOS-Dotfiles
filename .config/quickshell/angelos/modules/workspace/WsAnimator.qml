@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.config
 import qs.widgets
+import "../../widgets/Icons.js" as Icons
 
 // Moves the "active" heart (or the active plate in icon mode) between workspace
 // cells with one of several animations. The host gives cell geometry through
@@ -25,6 +26,8 @@ Item {
     id: a
 
     property string style: "smart"
+    property string sprite: Config.workspaces.sprite || "heart"   // heart | star | cd (WsSprite)
+    property real speed: Config.workspaces.heartSpeed > 0 ? Config.workspaces.heartSpeed : 1   // ×: 2 = twice as fast
     property bool vertical: false
     property bool heart: true                // draw a heart runner
     property bool plate: false               // draw the active plate (icon mode)
@@ -80,14 +83,15 @@ Item {
             "glitch": [300, null, 0],
             "slide": [300, null, 0]
         }[mode];
-        main.duration = cfg[0];
+        const sp = Math.max(0.2, Math.min(4, speed));
+        main.duration = Math.round(cfg[0] / sp);
         if (cfg[1]) {
             main.easing.type = Easing.BezierSpline;
             main.easing.bezierCurve = cfg[1];
         } else {
             main.easing.type = Easing.Linear;
         }
-        impact.duration = cfg[2];
+        impact.duration = Math.round(cfg[2] / sp);
         t = 0;
         k = 0;
         main.restart();
@@ -274,10 +278,12 @@ Item {
     }
 
     // ---- the old heart deflating / floating away (beat, drop) ----
-    PxIcon {
+    WsSprite {
         visible: a.running && a.heart && (a.mode === "beat" || a.mode === "drop")
         readonly property real p: a.clamp01(a.t / 0.6)
-        name: "heart"
+        sprite: a.sprite
+        lit: true
+        playful: false
         pixel: a.pixel
         fill: a.accent
         x: a.c0.x - width / 2 + a.px * a.pixel * 8 * p * (a.mode === "drop" ? 1 : 0)
@@ -327,10 +333,12 @@ Item {
                 "d": 1
             }
         ] : []
-        PxIcon {
+        WsSprite {
             required property var modelData
-            name: "heart"
+            sprite: a.sprite
+            playful: false
             pixel: a.pixel
+            tone: modelData.c
             fill: modelData.c
             ink: modelData.c
             opacity: 0.55 * (1 - a.t)
@@ -340,10 +348,12 @@ Item {
     }
 
     // ---- the runner heart ----
-    PxIcon {
+    WsSprite {
         id: runnerHeart
         visible: a.running && a.heart
-        name: "heart"
+        sprite: a.sprite
+        lit: true
+        playful: false
         pixel: a.pixel
         fill: a.accent
         x: a.runner.x - width / 2
@@ -378,17 +388,25 @@ Item {
         }
     }
 
-    // heart bitmap cells, for the pixel style
+    // the sprite's bitmap cells, for the pixel style
     readonly property var heartCells: {
-        const rows = [".##...##.", "#wo#.#oo#", "#ooo#ooo#", "#ooooooo#", ".#ooooo#.", "..#ooo#..", "...#o#...", "....#...."];
+        const rows = Icons.get(sprite === "star" ? "sparkleStar" : sprite === "cd" ? "cd" : "heart");
+        const w = rows[0].length, h = rows.length;
+        const colors = {
+            "o": a.accent,
+            "x": Theme.accent2,
+            "y": Theme.accent3,
+            "w": "#ffffff"
+        };
         const cells = [];
-        for (let yy = 0; yy < rows.length; yy++)
+        for (let yy = 0; yy < h; yy++)
             for (let xx = 0; xx < rows[yy].length; xx++)
                 if (rows[yy][xx] !== ".")
                     cells.push({
-                        "x": xx - 4,
-                        "y": yy - 3.5,
-                        "ink": rows[yy][xx] === "#"
+                        "x": xx - (w - 1) / 2,
+                        "y": yy - (h - 1) / 2,
+                        "ink": rows[yy][xx] === "#",
+                        "c": colors[rows[yy][xx]] || a.accent
                     });
         return cells;
     }
@@ -438,7 +456,7 @@ Item {
                 "x": x,
                 "y": y,
                 "size": pixel,
-                "c": cell.ink ? Theme.edge : a.accent,
+                "c": cell.ink ? Theme.edge : cell.c,
                 "o": t < 0.95 ? 1 : 1 - (t - 0.95) / 0.05
             };
         }

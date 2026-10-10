@@ -1,0 +1,84 @@
+{
+  "id": "close-greed-1",
+  "title": {
+    "ru": "Жадность: знакомая",
+    "en": "Greed: acquainted"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"greed\" and closeness == 1",
+      "next": "ask",
+      "note": "the demon of greed and the player: closeness acquainted (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Колесо остановилось на вашем имени. Мне забрать выигрыш или оставить вам?",
+        "en": "The wheel stopped on your name. Shall I take the winnings or leave them to you?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Оставь себе",
+            "en": "Keep them"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "…Никто никогда не говорил мне «оставь себе».",
+              "en": "…No one has ever told me to keep it."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Отдай мне",
+            "en": "Give them to me"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Ваше. Как и положено.",
+              "en": "Yours. As it should be."
+            }
+          },
+          "next": "end",
+          "set": {
+            "greed": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Значит, поровну.",
+              "en": "Halves, then."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

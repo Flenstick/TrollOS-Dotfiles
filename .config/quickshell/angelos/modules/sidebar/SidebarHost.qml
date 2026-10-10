@@ -158,7 +158,7 @@ Scope {
                     id: slide
                     target: panelWin
                     property: "slideAt"
-                    duration: Theme.normal
+                    duration: Motion.ms(Theme.normal)
                     easing.type: Easing.OutCubic
                     onFinished: if (!panelWin.open)
                         panelWin.shown = false

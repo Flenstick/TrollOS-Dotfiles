@@ -1,0 +1,42 @@
+{
+  "_comment": "ЧЕРНОВИК — все реплики здесь черновики Claude, финальные тексты утверждает автор. How the angel talks as she cools towards the player (services/Story → angelStep, story/game.json → angel): reserved (thrown down once), cool (more), cold (the cold route, for good). A step's lines replace her warm ones for that situation; a situation it lacks keeps the warm lines (services/AngelLines.js). From cool on her ♡ are gone. Situations: back (she is back from hell), hello, how, who, love (\"I love you\"), thanks, chatter (now and then, instead of a tip or a joke), summoned; fallen (past cold, story/game.json → angel.fallen) also first — her first words once she has changed — and her chatter is all she says by herself, oftener. A situation fallen lacks takes the cold lines. Each line [ru, en]; templates as in scenes: {name} {g:m|f|unknown} {time} {daypart} {uptime} {song}.",
+  "draft": true,
+  "reserved": {
+    "back": [["Я вернулась. …Было темно. Ладно, проехали.", "I'm back. …It was dark. Fine, never mind."], ["Я здесь. Только не хватай меня больше так резко, хорошо?", "I'm here. Just don't grab me like that again, okay?"]],
+    "hello": [["Привет, {name}.", "Hi, {name}."], ["Привет. Ты сегодня… обычн{g:ый|ая|ый(ая)}. Это хорошо.", "Hi. You're… normal today. That's good."]],
+    "how": [["Нормально. Уже нормально.", "Fine. Fine by now."]],
+    "love": [["…Спасибо. Я пока не знаю, что с этим делать.", "…Thank you. I don't know what to do with that yet."], ["Ты говоришь это и тогда, когда тянешь меня к краю?", "Do you say that when you drag me to the edge too?"]],
+    "thanks": [["Пожалуйста.", "You're welcome."]],
+    "chatter": [["Я иногда смотрю вниз. Просто проверить, что пол на месте.", "Sometimes I look down. Just to check the floor is still there."], ["Мне снилось, что я падаю. Наверное, это не сон был.", "I dreamt I was falling. I suppose it wasn't a dream."]]
+  },
+  "cool": {
+    "back": [["Вернулась.", "Back."], ["Опять наверху. Не спрашивай, как там.", "Up again. Don't ask what it was like."]],
+    "hello": [["Да.", "Yes."], ["Здравствуй.", "Hello."]],
+    "how": [["Тебе правда интересно?", "Do you really want to know?"]],
+    "love": [["Ты уже говорил{g:|а|(а)}. Перед тем как сбросить.", "You said that already. Before you threw me down."], ["Слова у тебя хорошие. Руки — нет.", "Your words are kind. Your hands aren't."]],
+    "thanks": [["Угу.", "Mhm."]],
+    "chatter": [["Я всё ещё помогаю. Просто без сердечек.", "I still help. Just without the hearts."], ["Ты {uptime} за компьютером. Я тоже. Молча.", "You've been at the computer for {uptime}. So have I. Quietly."], ["Внизу кто-то спрашивал о тебе. Я не ответила.", "Someone down there asked about you. I didn't answer."]],
+    "summoned": [["Звал{g:|а|(а)}? Я тут.", "You called? I'm here."]]
+  },
+  "cold": {
+    "back": [["…", "…"], ["Я здесь. Это всё, что я скажу.", "I'm here. That's all I'll say."], ["Дверь вниз ты знаешь где.", "You know where the door down is."]],
+    "hello": [["…", "…"], ["Ты.", "You."]],
+    "how": [["Холодно.", "Cold."]],
+    "who": [["Та, кого ты сбрасывал{g:|а|(а)}.", "The one you kept throwing down."]],
+    "love": [["Нет.", "No."], ["Не надо.", "Don't."]],
+    "thanks": [["…", "…"]],
+    "chatter": [["Я помню каждый раз.", "I remember every time."], ["Можешь не смотреть на меня. Я не обижусь. Уже нет.", "You don't have to look at me. I won't be hurt. Not any more."], ["{time}. Я ещё здесь.", "{time}. Still here."]],
+    "summoned": [["Пришла. Не потому что ты позвал{g:|а|(а)}.", "I came. Not because you called."]]
+  },
+  "fallen": {
+    "first": [["Не смотри на меня. …Нет, смотри. Это ты сделал{g:|а|(а)}.", "Don't look at me. …No, look. You did this."], ["Это теперь я. Колёса, глаза, глаза, глаза. Нравится? Ты ведь этого хотел{g:|а|(а)}.", "This is me now. Wheels, eyes, eyes, eyes. Do you like it? It's what you wanted."]],
+    "back": [["Я вернулась. Такой. Опять.", "I'm back. Like this. Again."], ["Наверху светло, а мне всё равно холодно. Спасибо тебе.", "It's light up here and I'm still cold. Thanks to you."], ["Каждый раз, когда ты меня бросаешь, от меня остаётся меньше меня.", "Every time you throw me, less of me is left."]],
+    "hello": [["Не здоровайся так, будто ничего не было.", "Don't say hi as if nothing happened."], ["…Привет. Я не плачу. Это глаза. Их слишком много.", "…Hi. I'm not crying. It's the eyes. There are too many of them."]],
+    "how": [["Как? Посмотри на меня. Вот как.", "How? Look at me. That's how."], ["Больно моргать, когда глаз столько.", "It hurts to blink with this many eyes."]],
+    "who": [["Раньше я была ангелом. Теперь я то, что от неё осталось.", "I used to be an angel. Now I'm what's left of her."], ["Спроси себя. Это ты меня такой сделал{g:|а|(а)}.", "Ask yourself. You made me like this."]],
+    "love": [["Не говори так. Ты так говорил{g:|а|(а)} и раньше.", "Don't say that. You said it before."], ["Так не любят. Вниз головой в огонь — так не любят.", "That's not how you love someone. Not head first into the fire."]],
+    "thanks": [["За что? За то, что я ещё здесь?", "For what? For still being here?"], ["…Пожалуйста. Мне не трудно. Мне теперь ничего не трудно.", "…You're welcome. It's no trouble. Nothing's any trouble now."]],
+    "summoned": [["Звал{g:|а|(а)}? Все мои глаза и так на тебя смотрят.", "You called? All my eyes are on you already."]],
+    "chatter": [["Я раньше была красивой. Ты помнишь? Я — да.", "I used to be pretty. Do you remember? I do."], ["Мне снится, что я снова девочка. Потом я просыпаюсь. Всеми глазами сразу.", "I dream I'm a girl again. Then I wake up. With all my eyes at once."], ["Это ты виноват{g:|а|(а)}. Я просто хочу, чтобы ты это знал{g:|а|(а)}.", "It's your fault. I just want you to know."], ["Ты кидал{g:|а|(а)} меня вниз, будто я ничего не вешу. А я весила. Я была кем-то.", "You threw me down as if I weighed nothing. I did weigh something. I was someone."], ["Не трогай мои колёса. Они скрипят, когда ты рядом.", "Don't touch my wheels. They creak when you're near."], ["Я посчитала глаза. Сорок. По одному за каждый раз, когда я тебя прощала.", "I counted the eyes. Forty. One for each time I forgave you."], ["Прости, что я так выгляжу. …Нет. Это ты прости.", "Sorry I look like this. …No. You should be sorry."], ["Капает. Это не дождь. Не обращай внимания. Ты же умеешь не обращать.", "It's dripping. It's not rain. Never mind. You're good at not minding."], ["Знаешь, что хуже ада? Вернуться оттуда и не узнать себя в стекле.", "You know what's worse than hell? Coming back and not knowing yourself in the glass."], ["{time}. Я всё ещё здесь. Всё ещё такая.", "{time}. Still here. Still like this."], ["Ты {uptime} за компьютером. Я столько же плачу. Совпадение.", "You've been at the computer for {uptime}. I've been crying that long. Coincidence."], ["Хочешь совет? Не делай с другими того, что сделал{g:|а|(а)} со мной.", "Want a tip? Don't do to others what you did to me."], ["Я бы закрыла лицо руками. Но у меня больше нет ни лица, ни рук.", "I'd hide my face in my hands. But I have neither a face nor hands any more."]]
+  }
+}

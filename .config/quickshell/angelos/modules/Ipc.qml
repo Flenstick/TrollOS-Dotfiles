@@ -3,30 +3,76 @@ import Quickshell
 import Quickshell.Io
 import qs.config
 import qs.services
+import qs.modules.mac
 
 // `qs -c angelos ipc call angelos <fn> [args]` — the `angelos` CLI wraps this.
 IpcHandler {
     target: "angelos"
 
+    // While the first-run wizard holds the desktop (Shell.setupLocked) the shell's hotkeys —
+    // niri's binds call these — and the other ways in wait until it is done or skipped.
     function settings(page: string): void {
+        if (Shell.setupLocked)
+            return;
         Shell.toggleSettings(page);
     }
     function showLyrics(): void {
+        if (Shell.setupLocked)
+            return;
         Config.lyrics.enabled = true;
         Config.lyrics.screens = [];
         Lyrics.visibleToggle = true;
     }
+    // the setup wizard again, as a window that holds nothing (the first run opens by itself)
     function setup(): void {
         Shell.setupOpen = true;
+    }
+    // the first run's intro alone, as everyone sees it once after an update brings a new one
+    function intro(): void {
+        Shell.introRequested();
     }
     // open the wizard on a given step (0 = welcome)
     function setupStep(step: int): void {
         Shell.setupOpen = true;
         Shell.setupStepRequested(step);
     }
+    // the way out of the first-run wizard, also when its window is broken: `angelos setup
+    // skip` (scripts/setup-cli.py) leaves ~/.config/angelos/setup-skipped first, then asks here
+    function setupSkip(): void {
+        Shell.setupSkipRequested();
+    }
     // Start menu on a screen (default: focused); what a Meta tap does
     function startMenu(screen: string): void {
+        if (Shell.setupLocked)
+            return;
         Shell.toggleStart(screen);
+    }
+    // the owner check: GitHub's answer for the dotfiles repo (services/Owner)
+    function owner(): string {
+        return (Owner.check || "not asked") + (Owner.login ? " " + Owner.login : "") + (Owner.enabled ? " · owner features on" : " · owner features off");
+    }
+    // the lens at the pointer: in | out | close | toggle | refresh (services/Lens)
+    function lens(cmd: string): void {
+        Lens.cmd(cmd, "");
+    }
+    // …on a given screen (tests, the dev stand)
+    function lensOn(cmd: string, screen: string): void {
+        Lens.cmd(cmd, screen);
+    }
+    // show where the pointer is, as if the mouse were shaken (a niri bind can call it)
+    function findCursor(): void {
+        CursorShake.demo();
+    }
+    // open Start with its search filled in: `angelos startText "2+2"` (classic Start: the launcher)
+    function startText(text: string): void {
+        if (Shell.setupLocked)
+            return;
+        if (Config.bar.startStyle === "classic" || !Config.bar.startStyle) {
+            launcherText(text);
+            return;
+        }
+        Shell.startPrefill = text;
+        Shell.openStart("");
     }
     // switch workspaces through angelOS: a number, up, down or prev
     function ws(target: string): void {
@@ -45,6 +91,330 @@ IpcHandler {
         Niri.workspaceActivated(Niri.workspaces.find(w => w.id === 9000 + idx), false);
         return "ok";
     }
+    // stream mode: on | off | auto (follow OBS) | toggle | status
+    function stream(mode: string): string {
+        if (["on", "off", "auto", "toggle"].includes(mode))
+            StreamMode.set(mode);
+        else if (mode !== "status" && mode !== "")
+            return "on | off | auto | toggle | status";
+        return JSON.stringify({
+            "active": StreamMode.active,
+            "manual": Config.stream.manual,
+            "auto": Config.stream.auto,
+            "obs": StreamMode.obsUp ? (StreamMode.obsLive ? "live" : "up") : (StreamMode.obsAuth ? "password" : "down")
+        });
+    }
+    // stay awake (services/Awake): on | off | toggle | status — by hand; stream mode and
+    // full-screen windows switch it by themselves (Settings → Lock → Stay awake)
+    function awake(mode: string): string {
+        if (["on", "off", "toggle"].includes(mode))
+            Awake.set(mode);
+        else if (mode !== "status" && mode !== "")
+            return "on | off | toggle | status";
+        return JSON.stringify({
+            "active": Awake.active,
+            "manual": Awake.manual,
+            "reason": Awake.reason,
+            "fullscreen": Awake.fullscreenWindow ? Awake.fullscreenWindow.app_id || "" : ""
+        });
+    }
+    // the angel on stream (services/StreamAngel): on | off | toggle | drop (her menu's
+    // "stop being a streamer": off, and her menu offers it back) | test (show her now,
+    // without a stream; again hides her) | view (Mod+Alt+A: on the bar ⇄ hidden) |
+    // screen | obs (on your screen too, or only in her window for OBS) | status
+    function streamer(mode: string): string {
+        if (["on", "off", "toggle", "drop", "test", "view", "screen", "obs"].includes(mode))
+            StreamAngel.set(mode);
+        else if (mode !== "status" && mode !== "")
+            return "on | off | toggle | drop | test | view | screen | obs | status";
+        return JSON.stringify({
+            "enabled": StreamAngel.enabled,
+            "shown": StreamAngel.shown,
+            "preview": StreamAngel.preview,
+            "obs": StreamAngel.obsUp ? (StreamAngel.obsLive ? "live" : "up") : "down",
+            "mic": StreamAngel.using,
+            "level": StreamAngel.level,
+            "talking": StreamAngel.talking,
+            "view": StreamAngel.view,
+            "cast": StreamAngel.castOpen ? (Niri.castWindowId >= 0 ? "window " + Niri.castWindowId : "opening") : "closed",
+            "error": StreamAngel.error
+        });
+    }
+    // the game (services/Story): `angelos game off` — out of the game at once (also
+    // Mod+Ctrl+Shift+Escape), on, calm on|off (no flashes, shaking or sudden loud sounds),
+    // status, reset (the save starts over); developer mode (Settings → System) or the dev
+    // stand: circle <1–9|id>, scene <id>, sin <name> [+1|-1|N], outcome stars|pact|limbo, try
+    function game(line: string): string {
+        const a = String(line || "").trim().split(/\s+/);
+        switch (a[0]) {
+        case "off":
+            return Story.setEnabled(false);
+        case "on":
+            return Story.setEnabled(true);
+        case "calm":
+            // older: the calm mode is Motion "calm" now (Settings → Appearance → Motion)
+            Motion.set(a[1] === "off" ? "full" : "calm");
+            return "calm " + (Motion.calm ? "on" : "off") + " (motion " + Motion.level + ")";
+        case "reset":
+            return Story.reset();
+        case "":
+        case "status":
+            return Story.status();
+        }
+        if (!Shell.dev && !Config.developer.enabled)
+            return "off | on | calm on|off | status | reset" + " (circle, scene, sin, outcome, try: developer mode — Settings → System → For developers)";
+        switch (a[0]) {
+        case "circle":
+            return Story.jump(a[1] || "");
+        case "scene":
+            return Novel.startScene(a[1] || "") ? "ok" : "scenes: " + Object.keys(Novel.scenes).sort().join(" ");
+        case "sin":
+            {
+                const set = {};
+                // "N" sets it, "+N" / "-N" moves it (a plain number stays a number in the save)
+                set[a[1] || "limbo"] = /^\d+(\.\d+)?$/.test(a[2] || "") ? Number(a[2]) : a[2] || "+1";
+                Story.applySet(set);
+                return JSON.stringify(Story.vars);
+            }
+        case "outcome":
+            return Story.inHell ? (Story.outcome(a[1] || "stars") ? "ok" : "no") : "not in hell";
+        case "try":
+            return Story.attempt(true);
+        case "ambient":
+            if (!Story.inHell)
+                return "not in hell";
+            HellAmbient.now();
+            return "ok";
+        }
+        return "off | on | calm on|off | status | reset | circle <1–9|id> | scene <id> | sin <name> [+1] | outcome stars|pact|limbo | try | ambient";
+    }
+    // the achievements (services/Achievements): `angelos ach` status | list | events | check |
+    // validate; the owner or developer mode: grant <id|all> | revoke <id|all> | toast <id>
+    function ach(line: string): string {
+        const a = String(line || "").trim().split(/\s+/);
+        switch (a[0]) {
+        case "":
+        case "status":
+            return Achievements.status();
+        case "list":
+            return Achievements.listText();
+        case "events":
+            return Achievements.eventIds.map(e => e + " — " + Achievements.eventLabel(e)).join("\n") + "\n\ncond: " + Achievements.condVars.join(" ") + " + the game's (docs/STORY.md), count(\"event\") kinds(\"event\") got(\"id\")";
+        case "check":
+            return Story.enabled ? "earned now: " + Achievements.check() : "the game is off: no achievements";
+        case "streak":
+            return a[1] ? a[1] + ": " + Achievements.streak(a[1], Number(a[2]) || 10) + " in a row (≤" + (Number(a[2]) || 10) + " s apart)" : "streak <event> [seconds]";
+        case "validate":
+            {
+                const bad = Achievements.problems(Achievements.doc);
+                return Achievements.loadError ? "story/achievements.json: " + Achievements.loadError : bad.length ? bad.join("\n") : "ok (" + Achievements.own.length + ")";
+            }
+        }
+        if (!Owner.enabled && !Shell.dev && !Config.developer.enabled)
+            return "status | list | events | check | validate | streak (grant, revoke, toast, note, reset: the owner or developer mode)";
+        if (!Story.enabled && a[0] !== "revoke")
+            return "the game is off: no achievements";
+        const ids = a[1] === "all" ? Achievements.list.map(x => x.id) : [a[1] || ""];
+        switch (a[0]) {
+        case "grant":
+            return ids.filter(id => Achievements.grant(id, a[1] === "all")).length + " granted";
+        case "revoke":
+            return ids.filter(id => Achievements.revoke(id)).length + " revoked";
+        case "toast":
+            {
+                const x = Achievements.find(a[1] || "") || Achievements.list[0];
+                if (!x)
+                    return "no achievements";
+                // `toast <id> hell` | `heaven`: that card's look whatever the realm
+                Achievements.announce(x, a[2] === "hell" ? true : a[2] === "heaven" ? false : null);
+                return "ok";
+            }
+        case "note":
+            // an event as if it happened: note <event> [key|-] [times]
+            return Achievements.simulate(a[1] || "", a[2] && a[2] !== "-" ? a[2] : "", Number(a[3]) || 1) ? "noted " + a[1] + " → earned now: " + Achievements.check() : "note <event> [key|-] [times] (the game must be on)";
+        case "reset":
+            // reset: everything earned, counted and read in the diary; reset counts: only the counters
+            return a[1] === "counts" ? (Achievements.resetCounts() ? "counters reset" : "no save") : Achievements.resetAll() ? "achievements, counters and the diary's marks reset" : "no save";
+        }
+        return "status | list | events | check | validate | streak <event> [s] | grant <id|all> | revoke <id|all> | toast <id> [hell|heaven] | note <event> [key|-] [n] | reset [counts]";
+    }
+    // the Angel's diary (services/Diary): `angelos diary` open [page] | close | list | validate |
+    // read-reset | preview on|off (the owner or developer mode: every page written)
+    function diary(line: string): string {
+        const a = String(line || "").trim().split(/\s+/);
+        switch (a[0]) {
+        case "":
+        case "open":
+            return Diary.open(a[1] || "") ? "ok" : "the diary is locked: its key is not had (" + Diary.thingId + ")";
+        case "close":
+            Diary.close();
+            return "ok";
+        case "list":
+            return Diary.listText();
+        case "watch-status":
+        case "status":
+            return "trust " + Diary.trust + " / " + Diary.trustStart + ", caught " + Diary.caughtTimes + (Diary.hidden ? ", hidden" : "") + (Angel.away ? ", she is away" : Diary.watching ? ", she is watching" : "");
+        case "watch":
+            return JSON.stringify({
+                "watching": Diary.watching,
+                "away": Angel.away,
+                "backIn": Angel.away ? Math.round((Angel.awayUntil - Date.now()) / 1000) + " s" : "",
+                "nextWalk": Diary.walks ? "planned" : "no walks (" + (Diary.owned ? "hell, limbo or the game off" : "no key") + ")",
+                "trust": Diary.trust + " / " + Diary.trustStart,
+                "caught": Diary.caughtTimes,
+                "hidden": Diary.hidden
+            }, null, 1);
+        case "validate":
+            {
+                const bad = Diary.problems(Diary.doc);
+                return Diary.loadError ? "story/diary.json: " + Diary.loadError : bad.length ? bad.join("\n") : "ok (" + Diary.pages.length + " pages)";
+            }
+        }
+        if (!Owner.enabled && !Shell.dev && !Config.developer.enabled)
+            return "open [page] | close | list | validate | watch (read-reset, preview, away, back, trust: the owner or developer mode)";
+        switch (a[0]) {
+        case "read-reset":
+            Diary.resetRead();
+            return "the diary's read marks reset";
+        case "preview":
+            Diary.preview = a[1] !== "off";
+            return "preview " + (Diary.preview ? "on: every page written" : "off");
+        case "away":
+            // she goes now for N minutes (default: one of the rules')
+            return Diary.leave(Number(a[1]) || Diary.awayMinutes()) ? "she is leaving" : "she can't leave now (the demon, the game off, already away)";
+        case "back":
+            Angel.awayUntil = 0;
+            return "she is back";
+        case "trust":
+            if (a[1] === "reset") {
+                Diary.resetTrust();
+                return "trust " + Diary.trust + ", not caught, the diary not hidden";
+            }
+            return "trust " + Diary.trust + " / " + Diary.trustStart + ", caught " + Diary.caughtTimes + (Diary.hidden ? ", hidden in Settings" : "");
+        }
+        return "open [page] | close | list | validate | watch | read-reset | preview on|off | away [min] | back | trust [reset]";
+    }
+    // the game's debug panel: the author's only (services/GameDebug → owner/debug/GameDebugCore,
+    // which knows the commands); anyone else gets "owner only"
+    function debug(line: string): string {
+        return GameDebug.command(line);
+    }
+    // the corner helper: `angelos helper "tip | joke | hint | ask <text> | plea | talk | gift | stay | status"`
+    // (owner: angel — the demon leaves at once; dev or owner: prank, ascend, fx,
+    // hell, throw; dev only: drag)
+    // the novel (services/Novel, ~/AngelOs-Nov): start [chapter] | reset | reload | status |
+    // question | drop | resume | click | next | choose N | open | fold | edit
+    function novel(line: string): string {
+        const a = String(line || "").trim().split(/\s+/);
+        switch (a[0]) {
+        case "start":
+            return Novel.startChapter(a[1] || Object.keys(Novel.stories).sort()[0] || "");
+        case "reset":
+            return Novel.reset();
+        case "reload":
+            Novel.reload();
+            return "ok";
+        case "question":
+            Novel.forceQuestion();
+            return "ok";
+        case "drop":
+            Novel.forceDrop();
+            return "ok";
+        case "resume":
+            Novel.resumed();
+            return "ok";
+        case "click":
+            return Novel.click() ? "ok" : "nothing waits for a click";
+        case "next":
+            Novel.advance();
+            return "ok";
+        case "choose":
+            Novel.choose((parseInt(a[1]) || 1) - 1);
+            return "ok";
+        case "edit":
+            Novel.edit();
+            return "ok";
+        case "open":
+            // unfold the paper on the desk (what a click on it does)
+            if (!Novel.paper)
+                return "no paper";
+            Novel.noteOpen = true;
+            return "ok";
+        case "fold":
+            Novel.noteRead();
+            return "ok";
+        }
+        return Novel.status();
+    }
+    function helper(line: string): string {
+        const cmd = String(line).trim().split(/\s+/)[0];
+        const arg = String(line).trim().slice(cmd.length).trim();
+        const debug = Shell.dev || Owner.enabled;
+        if (cmd === "angel")
+            return Angel.ownerAngel() ? "ok" : !Owner.enabled ? "owner only" : Angel.demon ? "not now" : "she is an angel already";
+        if (cmd === "summon")
+            return Angel.summon();
+        // heaven ↔ hell at once, once the angel has come back three times (or for the owner)
+        if (cmd === "portal")
+            return Angel.portal() ? "ok" : Angel.transition ? "busy" : "closed: " + Angel.returns + "/" + Angel.returnsNeeded + " returns";
+        if (cmd === "tip")
+            Angel.tip();
+        else if (cmd === "joke")
+            Angel.joke();
+        else if (cmd === "hint")
+            Angel.hint();
+        else if (cmd === "ask")
+            Angel.answer(arg);
+        else if (cmd === "plea")
+            Angel.plea();
+        // the demon of a circle: a word, a gift her sin loves, staying (Story → closeness)
+        else if (cmd === "talk" || cmd === "gift" || cmd === "stay")
+            Angel.demonDo(cmd);
+        else if (cmd === "menu")
+            Angel.openMenu(arg || "main");
+        else if (debug && cmd === "prank")
+            return Angel.prank() ? "ok" : "not now";
+        else if (debug && cmd === "ascend")
+            Angel.getOut("stars");
+        // the angel goes to hell only by being thrown down (AngelHelper); dev: pretend
+        else if (debug && cmd === "hell")
+            Angel.toHell();
+        else if (debug && cmd === "throw")
+            Angel.released(true, -40, 30);
+        // dev: a real drag on her by dx, dy pixels over ms (TestEvent): "drag 0 90 300"
+        else if (Shell.dev && cmd === "drag") {
+            const a = arg.split(/\s+/).map(Number);
+            Angel.devDrag(a[0] || 0, a[1] || 0, a[2] || 300);
+        }
+        else if (debug && cmd === "fx")
+            Angel.effect();
+        else if (debug && cmd === "hellwall")
+            return Angel.newHell() ? "ok" : "not now (angel, off, or your own picture)";
+        // the widgets burn over to the other side and back: "realm [hell|heaven]"
+        else if (debug && cmd === "realm")
+            return "burning to " + DesktopWidgets.burnPreview(arg);
+        else if (cmd !== "status")
+            return "summon | portal | tip | joke | hint | ask <text> | plea | talk | gift | stay | menu [main|ask] | status" + (Owner.enabled ? " | angel" : "");
+        return JSON.stringify({
+            "character": Story.player.character,
+            "shown": Angel.shown,
+            "screen": Angel.screenName,
+            "transition": Angel.transition,
+            "realm": Theme.realm + (DesktopWidgets.burning ? " → " + DesktopWidgets.burnTo : ""),
+            "cursor": Cursors.active,
+            "circle": Story.circle,
+            "returns": Angel.returns + "/" + Angel.returnsNeeded + (Angel.portalOpen ? " (portal open)" : ""),
+            "pranks": (Story.player.pranks || []).map(p => p.id + (p.undone ? " (undone)" : "")),
+            "text": Angel.talking ? Angel.text : ""
+        });
+    }
+    // dev only: run a shell command the way the shell starts apps (Shell.sh)
+    function devExec(cmd: string): string {
+        if (!Shell.dev)
+            return "dev only";
+        Shell.sh(cmd);
+        return Shell.scopes ? "ok (own scope)" : "ok";
+    }
     // the heart animation on every bar, without switching workspaces (0-based cells)
     function heartDemo(from: int, to: int): void {
         Shell.heartDemo(from, to);
@@ -56,27 +426,36 @@ IpcHandler {
         Config.workspaces.heartAnim = style;
         return "ok";
     }
-    // classic | win11 | fullscreen
+    // classic | win11 | fullscreen | xmb | windose | wii | spotlight
     function startStyle(style: string): string {
-        if (!["classic", "win11", "fullscreen"].includes(style))
-            return "styles: classic, win11, fullscreen";
+        const styles = ["classic", "win11", "fullscreen", "xmb", "windose", "wii", "spotlight"];
+        if (!styles.includes(style))
+            return "styles: " + styles.join(", ");
         Config.bar.startStyle = style;
         return "ok";
     }
     function launcher(): void {
+        if (Shell.setupLocked)
+            return;
         Shell.launcherOpen = !Shell.launcherOpen;
     }
     function launcherWith(text: string): void {
+        if (Shell.setupLocked)
+            return;
         Shell.launcherPrefill = text;
         Shell.launcherOpen = true;
     }
     function session(): void {
+        if (Shell.setupLocked)
+            return;
         Shell.sessionOpen = !Shell.sessionOpen;
     }
     function clipboard(): void {
+        if (Shell.setupLocked)
+            return;
         Shell.clipboardOpen = !Shell.clipboardOpen;
     }
-    // Mod+G overlay: notes, pictures, GIFs, videos; pinned ones stay on screen
+    // TrollOS: the Mod+G overlay: notes, pictures, GIFs, videos; pinned ones stay on screen
     function overlay(): void {
         Overlay.toggle();
     }
@@ -87,17 +466,76 @@ IpcHandler {
         Overlay.addNote(what);
         return "ok";
     }
-    // toggle a desktop widget: angelos widget clock DP-1 (types: clock sysmon cava nowplaying plugin:<id>)
+    // the eyedropper: a click anywhere, the colour's hex into the clipboard (services/ColorPicker)
+    function pickColor(): void {
+        ColorPicker.pick();
+    }
+    // toggle a desktop widget: angelos widget clock DP-1 (types: clock sysmon music picture note disks plugin:<id>)
     function widget(type: string, screen: string): string {
         if (!DesktopWidgets.typeInfo(type))
             return "unknown widget: " + type + " (" + DesktopWidgets.types.map(t => t.type).join(", ") + ")";
-        DesktopWidgets.toggle(type, screen || (Shell.focusedScreen ? Shell.focusedScreen.name : ""));
+        DesktopWidgets.toggle(type, screen || Shell.primaryName);
         return "ok";
     }
     function widgetEdit(): void {
         DesktopWidgets.editMode = !DesktopWidgets.editMode;
     }
-    // replays a left click at (x, y) of a desktop widget, as its proxy would
+    // a desktop widget as it is seen (its face in the backdrop), saved to a file
+    function widgetShot(uid: string, path: string): string {
+        const f = DesktopWidgets.faces[uid];
+        if (!f)
+            return "no widget " + uid + "; have: " + Object.keys(DesktopWidgets.faces).join(", ");
+        return f.grabToImage(r => r.saveToFile(path)) ? "ok (saving " + path + ")" : "grab failed";
+    }
+    // the open Settings as they are drawn (also under other windows), saved to a file
+    function settingsShot(path: string): string {
+        const v = Shell.settingsView;
+        if (!v)
+            return "Settings are closed";
+        const f = v.Window.window ? v.Window.window.activeFocusItem : null;
+        return (v.grabToImage(r => r.saveToFile(path)) ? "ok (saving " + path + ")" : "grab failed") + "; focus: " + (f ? (f.objectName || String(f)) + (f.parent ? " in " + (f.parent.objectName || String(f.parent)) : "") : "none");
+    }
+    // a desktop widget's two copies (DesktopWidgetHost face/input), for diagnostics
+    function widgetState(uid: string): string {
+        const h = DesktopWidgets.hosts[uid], f = DesktopWidgets.faces[uid];
+        if (!h && !f)
+            return "no widget " + uid + "; have: " + Object.keys(DesktopWidgets.hosts).join(", ");
+        const scr = h ? h.screenName : f.screenName;
+        return JSON.stringify({
+            "screen": scr,
+            "interactive": h ? h.interactive : null,
+            "hovered": h ? h.engaged && !h.dragging && !DesktopWidgets.editMode : null,
+            "dragging": h ? h.dragging : null,
+            "inputShown": h ? h.shown : null,
+            "inputOpacity": h ? h.opacity : null,
+            "faceOpacity": f ? f.opacity : null,
+            "steppedAside": DesktopWidgets.steppedAside(scr),
+            "overview": Niri.overviewOpen,
+            "asideLeftMs": Math.max(0, (DesktopWidgets.asideUntil[scr] || 0) - Date.now()),
+            "at": h ? [Math.round(h.x), Math.round(h.y)] : null
+        });
+    }
+    // dev: where the shell last saw the pointer (Pointer: desk and taskbar report it)
+    function pointer(): string {
+        return JSON.stringify({
+            "screen": Pointer.screen,
+            "x": Math.round(Pointer.x),
+            "y": Math.round(Pointer.y),
+            "over": Pointer.over,
+            "source": Pointer.source
+        });
+    }
+    // dev: drags a desktop widget by its title bar by dx, dy over ms
+    function widgetDrag(uid: string, dx: int, dy: int, ms: int): string {
+        if (!Shell.dev)
+            return "dev only";
+        const h = DesktopWidgets.hosts[uid];
+        if (!h)
+            return "no widget " + uid;
+        h.devDrag(dx, dy, ms || 600);
+        return "ok";
+    }
+    // replays a left click at (x, y) of a desktop widget
     function widgetClick(uid: string, x: int, y: int): string {
         const h = DesktopWidgets.hosts[uid];
         if (!h)
@@ -123,14 +561,269 @@ IpcHandler {
     }
     // the configured system monitor, floating (Settings → System → Task Manager)
     function taskManager(): void {
+        if (Shell.setupLocked)
+            return;
         DesktopActions.launchMonitor();
     }
-    // TrollOS: today's screen time and the top apps
-    function screentime(): string {
-        return ScreenTime.status();
+    // heaven's chest: the day's free one, else one for 160 ✦ ("ten": ten for 1600 ✦)
+    function chest(n: string): string {
+        if (Shell.setupLocked)
+            return "the setup wizard is open";
+        const ok = n === "demo" ? Chests.demo(1) : n === "demo10" ? Chests.demo(10) : n === "ten" ? Chests.openTen() : Chests.openOne();
+        return ok ? "opened" : "no chest: " + HeavenStars.stars + " ✦";
+    }
+    // Wellbeing (services/Wellbeing): `angelos wellbeing` (status) | water | unwater |
+    // test eyes|move|water|limit (the reminder now) | clear (the history gone)
+    function wellbeing(cmd: string): string {
+        const [c, arg] = String(cmd || "").trim().split(/\s+/);
+        if (c === "water") {
+            Wellbeing.drink();
+            return "water " + Wellbeing.waterToday + "/" + Config.wellbeing.waterGoal;
+        }
+        if (c === "unwater") {
+            Wellbeing.undrink();
+            return "water " + Wellbeing.waterToday + "/" + Config.wellbeing.waterGoal;
+        }
+        if (c === "test") {
+            const k = ["eyes", "move", "water", "limit"].includes(arg) ? arg : "water";
+            Wellbeing.remind(k, true);
+            return "reminded: " + k;
+        }
+        if (c === "clear") {
+            Wellbeing.clear();
+            return "history cleared";
+        }
+        return Wellbeing.status();
     }
     function settingsPage(page: string): void {
+        if (Shell.setupLocked)
+            return;
         Shell.openSettings(page);
+    }
+    // one more Settings window: `angelos settingsNew sound` (no page: the main window's page)
+    function settingsNew(page: string): string {
+        if (Shell.setupLocked)
+            return "the setup wizard holds the desktop (angelos setup skip)";
+        if (!Shell.newSettingsWindow(page || Shell.settingsPage))
+            return "no more than " + Shell.settingsMoreMax + " more windows";
+        return "windows: " + (Shell.settingsMore.count + (Shell.settingsOpen ? 1 : 0));
+    }
+    // what's new in Settings (services/SettingsNews): `angelos settingsNews` (what is starred) |
+    // seen (all of it read) | forget <file/group[/Russian label]> (starred again)
+    function settingsNews(cmd: string): string {
+        const c = String(cmd || "").trim();
+        if (c === "seen") {
+            SettingsNews.seeAll();
+            return "all seen";
+        }
+        if (c.startsWith("forget ")) {
+            SettingsNews.forget(c.slice(7).trim());
+            return "forgot " + c.slice(7).trim();
+        }
+        const n = SettingsNews.news;
+        return JSON.stringify({
+            "count": n.count,
+            "pages": Object.keys(n.pages),
+            "underMore": Object.keys(n.more)
+        });
+    }
+    // how Settings lay the pages out: Windows 11, or System Settings under Golden Gate (no choice)
+    function settingsView(view: string): string {
+        return GoldenGate.on ? "mac" : "win11";
+    }
+    // what Settings wear: `angelos settingsSkin windose` (no argument: which one)
+    function settingsSkin(skin: string): string {
+        const skins = ["classic", "windose", "stream", "goldengate"];
+        const s = String(skin || "").trim().toLowerCase();
+        if (s === "")
+            return Config.settingsUi.skin + "  (" + skins.join(" | ") + ")";
+        if (!skins.includes(s))
+            return "unknown skin " + s + ": " + skins.join(" | ");
+        Config.settingsUi.skin = s;
+        Config.settingsUi.skinChosen = true;
+        return "ok";
+    }
+    // the Golden Gate menu bar from the keyboard (macOS: Control-F2): the menu `index` of the
+    // focused screen's bar opens with its first item selected (0 = angelOS's, 1 = the app's,
+    // -1: the app's); ←/→, ↑/↓, Enter and Esc from there
+    function macMenu(index: int): string {
+        if (Shell.setupLocked || !GoldenGate.on)
+            return "the Golden Gate skin is off";
+        const scr = Shell.focusedScreen ? Shell.focusedScreen.name : "";
+        const i = index < 0 ? 1 : index;
+        const xs = MacMenus.titleX[scr] || [];
+        MacMenus.open(scr, i, xs[i] || 0, true);
+        return MacMenus.isOpen ? "ok" : "no menu " + i;
+    }
+    // ⌘Q of the Golden Gate skin's Mac shortcuts: the frontmost app quits — its own Quit when it
+    // has one (by D-Bus), else every window of it closes through niri (the app may still ask)
+    function macQuit(): string {
+        if (Shell.setupLocked || !GoldenGate.on)
+            return "the Golden Gate skin is off";
+        // ⌘Q while ⌘Tab is up (⌘ still held): the app picked there quits, the switcher stays
+        const picked = AltTab.pickedApp;
+        if (picked) {
+            for (const w of picked.windows)
+                Niri.closeWindow(w.id);
+            const rest = AltTab.items.filter(a => a !== picked);
+            if (!rest.length)
+                AltTab.cancel();
+            else {
+                AltTab.items = rest;
+                AltTab.index = Math.min(AltTab.index, rest.length - 1);
+            }
+            return "ok";
+        }
+        if (!AppMenu.window)
+            return "nothing to quit";
+        const app = AppMenu.menus.length ? AppMenu.menus[0].items.find(it => /^(app|s):quit$/.test(it.id)) : null;
+        AppMenu.trigger(app || AppMenu.item("app:quit", "", {
+            "kind": "quit"
+        }));
+        return "ok";
+    }
+    // ⌘M of the Golden Gate skin's Mac shortcuts: the frontmost window goes to the Dock
+    // (services/Minimize); with a window id: that one. "restore <id>" brings one back.
+    function macMinimize(): string {
+        if (!GoldenGate.on || !AppMenu.window)
+            return "nothing to minimize";
+        Minimize.request(AppMenu.window.id, "keys");
+        return "ok";
+    }
+    // ⌘H of the Golden Gate skin's Mac keys: the frontmost app hides (all its windows go,
+    // services/Minimize.hide; its Dock icon or ⌘Tab brings them back) — while ⌘Tab is up, the
+    // app picked there
+    function macHide(): string {
+        if (Shell.setupLocked || !GoldenGate.on)
+            return "the Golden Gate skin is off";
+        const picked = AltTab.pickedApp;
+        const w = picked ? picked.windows.find(x => !Minimize.isMinimized(x)) : AppMenu.window;
+        if (!w)
+            return "nothing to hide";
+        Minimize.hide(w.id);
+        if (picked)
+            AltTab.cancel();
+        return "ok";
+    }
+    // ⇧⌘5: the screenshot menu on the focused screen, above the Dock (MacMenus.openShot)
+    function macShotMenu(): string {
+        const scr = Shell.focusedScreen;
+        if (Shell.setupLocked || !GoldenGate.on || !scr)
+            return "the Golden Gate skin is off";
+        MacMenus.openShot(scr.name, scr.width / 2, scr.height - (GoldenGate.dockEdge === "bottom" ? Minimize.dockZone[scr.name] || 0 : 0) - GoldenGate.px(12));
+        return MacMenus.isOpen ? "ok" : "no menu";
+    }
+    function macHidden(): string {
+        return JSON.stringify(Minimize.hiddenWindows.map(w => ({
+                    "id": w.id,
+                    "app_id": w.app_id,
+                    "title": w.title
+                })));
+    }
+    function macMinimized(): string {
+        return JSON.stringify(Minimize.windows.map(w => ({
+                    "id": w.id,
+                    "app_id": w.app_id,
+                    "title": w.title,
+                    "shot": Minimize.shots[w.id] || ""
+                })));
+    }
+    function macRestore(id: string): string {
+        Minimize.restore(parseInt(id));
+        return "ok";
+    }
+    // Settings → Appearance → "Reset the theme's settings to the defaults" (GoldenGate.themeKeys);
+    // "Undo" in Settings brings them back. Returns how many changed
+    function macResetTheme(): string {
+        Config.flush();
+        return String(GoldenGate.resetTheme());
+    }
+    // a left click on the Dock's app `id` (its entry id or app id) on the focused screen, as the
+    // Dock's own click does it (tests)
+    function macDockOpen(id: string): string {
+        if (!GoldenGate.on)
+            return "the Golden Gate skin is off";
+        const it = MacDockModel.apps.find(a => a.id === id);
+        if (!it)
+            return "no app " + id;
+        MacDockModel.open(it, Niri.focusedOutput);
+        return it.name;
+    }
+    // what the menu bar shows now, as JSON (the report's table, tests): the app, where its menus
+    // come from, the titles and their items
+    function macMenuState(): string {
+        return JSON.stringify({
+            "app": AppMenu.appId,
+            "name": AppMenu.appName,
+            "source": AppMenu.source,
+            "ambiguous": !!AppMenu.report.ambiguous,
+            "registrar": AppMenu.registrar,
+            "pid": AppMenu.pid,
+            "reported": [AppMenu.report.pid, AppMenu.report.source],
+            "menus": AppMenu.menus.map(m => ({
+                        "title": m.title,
+                        "items": m.items.map(it => it.type === "separator" ? "—" : (it.label || "") + (it.type === "submenu" ? " ›" : "") + (it.enabled === false ? " (off)" : "") + (it.act ? " [" + it.act.kind + "]" : ""))
+                    }))
+        });
+    }
+    // Control Center (cc) or Notification Center (nc) on the focused screen, open or closed
+    function macPanel(kind: string): string {
+        if (!GoldenGate.on)
+            return "the Golden Gate skin is off";
+        const scr = Shell.focusedScreen;
+        GoldenGate.togglePanel(kind, scr ? scr.name : "");
+        return GoldenGate.panel === kind ? "open" : "closed";
+    }
+    // the Dock menu of its item `index` (0 = the first app), as a right click would open it
+    function macDockMenu(index: int): string {
+        if (!GoldenGate.on)
+            return "the Golden Gate skin is off";
+        const it = MacDockModel.apps[index];
+        const scr = Shell.focusedScreen;
+        if (!it || !scr)
+            return "no item " + index;
+        MacMenus.openDock(scr.name, it, scr.width / 2, scr.height - GoldenGate.px(Config.mac.dockSize) - GoldenGate.px(30));
+        return it.name;
+    }
+    // the desktop's menu (a right click on the wallpaper) in the middle of the focused screen
+    function macDeskMenu(): string {
+        const scr = Shell.focusedScreen;
+        if (!GoldenGate.on || !scr)
+            return "the Golden Gate skin is off";
+        MacMenus.openDesktop(scr.name, scr.width / 2, scr.height / 3);
+        return MacMenus.menu ? MacMenus.menu.items.filter(it => it.label).map(it => it.label).join(", ") : "no menu";
+    }
+    // a status item's menu on the focused screen: wifi | bluetooth | sound | input
+    function macStatus(kind: string): string {
+        if (!GoldenGate.on)
+            return "the Golden Gate skin is off";
+        const scr = Shell.focusedScreen;
+        MacMenus.openStatus(scr ? scr.name : "", kind, scr ? scr.width - GoldenGate.px(120) : 0);
+        return MacMenus.isOpen ? "ok" : "no menu " + kind;
+    }
+    // a key on the open Settings window, for tests and scripts (ANGELOS_DEV only):
+    // `angelos settingsKey down` — what the view's navigation does with it
+    function settingsKey(key: string): string {
+        if (!Shell.dev)
+            return "dev only";
+        const v = Shell.settingsView;
+        if (!v)
+            return "settings not open";
+        const keys = {
+            "up": Qt.Key_Up,
+            "down": Qt.Key_Down,
+            "left": Qt.Key_Left,
+            "right": Qt.Key_Right,
+            "enter": Qt.Key_Return,
+            "home": Qt.Key_Home,
+            "end": Qt.Key_End,
+            "escape": Qt.Key_Escape,
+            "backspace": Qt.Key_Backspace
+        };
+        const k = keys[String(key).toLowerCase()];
+        if (k === undefined)
+            return "keys: " + Object.keys(keys).join(" ");
+        return v.navKeyForTest(k) ? "ok" : "not handled";
     }
     // settings search: `angelos searchSettings "прозрачность панели"` → the best matches
     function searchSettings(text: string): string {
@@ -141,11 +834,14 @@ IpcHandler {
                         "title": r.title,
                         "where": r.crumb,
                         "page": r.page,
+                        "related": r.related,
                         "score": Math.round(r.score * 100) / 100
                     }))
         });
     }
     function settingsQuery(text: string): void {
+        if (Shell.setupLocked)
+            return;
         Shell.openSettings();
         Qt.callLater(() => {
             if (Shell.settingsView)
@@ -154,6 +850,8 @@ IpcHandler {
     }
     // open settings at the best match: `angelos openSetting blur`
     function openSetting(text: string): string {
+        if (Shell.setupLocked)
+            return "the setup wizard holds the desktop (angelos setup skip)";
         Shell.openSettings();
         const r = SettingsSearch.search(text, 1)[0];
         if (!r)
@@ -165,12 +863,16 @@ IpcHandler {
         return r.title + (r.crumb ? " · " + r.crumb : "");
     }
     function launcherText(text: string): void {
+        if (Shell.setupLocked)
+            return;
         if (!Shell.launcherOpen)
             Shell.launcherOpen = true;
         Shell.launcherText = text;
     }
     // open the right-click desktop menu (x, y in screen pixels); sub: "" | view | new | open | more
     function desktopMenu(screen: string, x: int, y: int, sub: string): string {
+        if (Shell.setupLocked)
+            return "the setup wizard holds the desktop (angelos setup skip)";
         const m = Shell.desktopMenus[screen || (Shell.focusedScreen ? Shell.focusedScreen.name : "")];
         if (!m)
             return "no desktop on " + screen;
@@ -191,13 +893,23 @@ IpcHandler {
         Tour.stop();
     }
     function tour(): void {
+        if (Shell.setupLocked)
+            return;
         Tour.start();
     }
     function lock(): void {
+        if (Shell.setupLocked)
+            return;
         Shell.lock();
+    }
+    // the boot screen now, like Settings → Y2K → "Show it now"
+    function bootScreen(): void {
+        Shell.bootOpen = true;
     }
     // show the lock screen without locking (Esc or any password closes it)
     function lockPreview(): void {
+        if (Shell.setupLocked)
+            return;
         Shell.lockPreview = !Shell.lockPreview;
     }
     // preview only: "" shows the wrong-password reaction, any text the unlock
@@ -207,13 +919,17 @@ IpcHandler {
     }
     // experimental sidebar (Settings → Bar → Sidebar)
     function sidebar(): string {
+        if (Shell.setupLocked)
+            return "the setup wizard holds the desktop (angelos setup skip)";
         if (!Sidebar.enabled)
-            return "sidebar is off (Settings → Bar → Sidebar)";
+            return "sidebar is off (Settings → Taskbar → Sidebar)";
         Sidebar.toggle();
         return Sidebar.open ? "open" : "closed";
     }
     // screensaver: animated ASCII art until any input
     function idle(): void {
+        if (Shell.setupLocked)
+            return;
         Idle.toggle();
     }
     // look the current song up again, skipping the caches
@@ -221,13 +937,23 @@ IpcHandler {
         Lyrics.refetch();
     }
     function lyrics(): void {
+        if (Shell.setupLocked)
+            return;
         Config.lyrics.enabled = !Config.lyrics.enabled;
     }
     function theme(mode: string): void {
+        if (Shell.setupLocked)
+            return;
         Config.appearance.mode = mode === "toggle" ? (Theme.dark ? "light" : "dark") : mode;
     }
     function flavor(name: string): void {
         Config.appearance.flavor = name;
+    }
+    // how much moves: `angelos motion full|calm|off` (no argument: the level now)
+    function motion(level: string): string {
+        if (!level || level === "status")
+            return Motion.level;
+        return Motion.set(level);
     }
     function wallpaper(path: string): void {
         if (path === "random")
@@ -245,13 +971,37 @@ IpcHandler {
             Wallpapers.setForOutput(screen, path);
         return "ok";
     }
+    // half-alive wallpapers: `angelos liveWall status|on|off|analyze` (what the focused screen's
+    // picture has; analyze looks at it again)
+    function liveWall(cmd: string): string {
+        const scr = Shell.focusedScreen ? Shell.focusedScreen.name : (Shell.screens[0] ? Shell.screens[0].name : "");
+        const ws = Niri.activeWorkspace(scr);
+        const path = Wallpapers.resolve(scr, ws ? ws.idx : 1);
+        if (cmd === "on" || cmd === "off")
+            Config.wallpaper.live = cmd === "on";
+        else if (cmd === "analyze")
+            LiveWalls.reanalyze(path);
+        else if (cmd.startsWith("reload ")) {
+            // a picture's scene changed (the scene editor, owner/scene-editor): looked at again
+            // wherever it is shown
+            const p = cmd.slice(7).trim();
+            if (LiveWalls.info(p) || LiveWalls.busy === p)
+                LiveWalls.reanalyze(p);
+            return "ok " + p;
+        }
+        else if (["glint", "pebble", "gust", "eye", "rings"].includes(cmd))
+            LiveWalls.poke(["glint", "pebble", "gust", "eye", "rings"].indexOf(cmd) + 1);
+        else if (cmd && cmd !== "status")
+            return "usage: liveWall status|on|off|analyze|reload <path>|glint|pebble|gust|eye|rings";
+        return (Config.wallpaper.live ? "on" : "off") + "  " + path + "\n" + LiveWalls.describe(path) + "\n" + JSON.stringify(LiveWalls.effective(path));
+    }
     function bar(style: string): void {
         Config.bar.style = style;
     }
-    // Windows 11 copy options: winSet settingsSkin true | gradient false | icons angelos | align left …
+    // TrollOS: Windows 11 copy options: winSet gradient false | icons angelos | align left …
     function winSet(key: string, value: string): string {
         if (!(key in Config.win))
-            return "keys: accent align search taskView lyrics recommended gradient icons settingsSkin snip offered";
+            return "keys: accent align search taskView lyrics recommended gradient icons snip offered";
         let v = value;
         try {
             v = JSON.parse(value);
@@ -259,11 +1009,45 @@ IpcHandler {
         Config.win[key] = v;
         return "ok";
     }
-    // whole-desktop layout (Settings → Раскладки): default | macos | win11 | compact | ubuntu | classic | chromeos | elementary | cinnamon
+    // TrollOS: whole-desktop layout (Settings → Раскладки): default | macos | win11 | compact | ubuntu | classic | chromeos | elementary | cinnamon
     function layout(id: string): string {
         if (!id)
             return DesktopLayouts.current;
         return DesktopLayouts.apply(id) ? "ok" : "layouts: " + DesktopLayouts.ids.join(", ");
+    }
+    // laptops: the brightness keys (cfg/angelos-laptop.kdl): up | down | 0…100
+    function brightness(cmd: string): string {
+        if (!Backlight.available)
+            return "no backlight";
+        if (cmd === "up")
+            Backlight.up();
+        else if (cmd === "down")
+            Backlight.down();
+        else if (/^\d+$/.test(cmd))
+            Backlight.set(parseInt(cmd) / 100);
+        return Math.round(Backlight.level * 100) + "%";
+    }
+    // the keyboard's light: up | down | cycle | 0…max
+    function kbdLight(cmd: string): string {
+        if (!Backlight.kbdAvailable)
+            return "no keyboard light";
+        if (cmd === "up")
+            Backlight.setKbd(Backlight.kbd + 1);
+        else if (cmd === "down")
+            Backlight.setKbd(Backlight.kbd - 1);
+        else if (cmd === "cycle" || cmd === "")
+            Backlight.kbdCycle();
+        else if (/^\d+$/.test(cmd))
+            Backlight.setKbd(parseInt(cmd));
+        return Backlight.kbd + "/" + Backlight.kbdMax;
+    }
+    // the rest of the laptop: `angelos laptop help` (services/Laptop.ipc)
+    function laptop(line: string): string {
+        return Laptop.ipc(line);
+    }
+    // the cobwebs on windows: `angelos cobweb help` (services/Cobweb.ipc)
+    function cobweb(line: string): string {
+        return Cobweb.ipc(line);
     }
     function volumeUp(): void {
         Audio.step(0.05);
@@ -296,6 +1080,16 @@ IpcHandler {
     function dotfiles(action: string): string {
         if (!Owner.enabled || !Owner.jobs)
             return "owner features are not available";
+        // status: what the Dotfiles tab shows — job state, the GitHub check, the log's tail
+        if (action === "status")
+            return JSON.stringify({
+                "state": Owner.jobs.state,
+                "checking": Owner.jobs.checking,
+                "ci": [Owner.jobs.ciStatus, Owner.jobs.ciConclusion, Owner.jobs.ciSha, Owner.jobs.ciUrl].join(" ").trim(),
+                // the private admin repo against the public one (owner/admin-sync.sh status)
+                "admin": Owner.jobs.adminStatus || {},
+                "log": Owner.jobs.log.slice(-40)
+            });
         Shell.openSettings("dotfiles");
         if (action === "pull")
             Owner.jobs.update();
@@ -303,7 +1097,69 @@ IpcHandler {
             Owner.jobs.publish(false);
         else if (action === "check")
             Owner.jobs.publish(true);
+        else if (action === "admin")
+            Owner.jobs.publishAdmin();
         return "ok";
+    }
+    // Settings → Updates: check | update | prompt (the restart question an update ends with) | later |
+    // restart | status | log N (the log lines from number N on: {"next": …, "lines": […]}).
+    // `angelos updates check|update` follows these until the run ends (scripts/updates-cli.py)
+    function updates(cmd: string): string {
+        const a = String(cmd || "").trim().split(/\s+/);
+        if (a[0] === "check") {
+            if (Updates.busy)
+                return "busy " + Updates.state;
+            if (!Updates.repo)
+                return "no repository";
+            Updates.check();
+            return "checking";
+        }
+        if (a[0] === "update") {
+            if (Updates.busy)
+                return "busy " + Updates.state;
+            if (!Updates.repo)
+                return "no repository";
+            Updates.update();
+            return "updating " + Updates.repo;
+        }
+        if (a[0] === "log") {
+            const from = Math.max(0, parseInt(a[1]) || 0);
+            const first = Updates.logTotal - Updates.log.length;       // older lines were dropped
+            return JSON.stringify({
+                "next": Updates.logTotal,
+                "lines": Updates.log.slice(Math.max(0, from - first))
+            });
+        }
+        if (a[0] === "restart") {
+            Updates.restartShell();
+            return "ok";
+        }
+        if (cmd === "prompt") {
+            Updates.askRestart = true;
+            return "ok";
+        }
+        if (cmd === "later") {
+            Updates.restartLater();
+            return "ok";
+        }
+        return JSON.stringify({
+            "state": Updates.state,
+            "behind": Updates.behind,
+            "ahead": Updates.ahead,
+            "dirty": Updates.dirty,
+            "trusted": Updates.trusted,
+            "error": Updates.error,
+            "needsRestart": Updates.needsRestart,
+            "repo": Updates.repo,
+            "lastRun": Updates.lastRun,
+            "lastStatus": Updates.lastStatus,
+            "stage": Updates.failedStage,
+            "failure": Updates.failure ? Updates.failureText(Updates.failedStage, Updates.failure) : "",
+            "next": Updates.failure ? Updates.nextStep(Updates.failedStage) : "",
+            "backup": Updates.backupDir,
+            "landed": Updates.landed,
+            "incoming": Updates.incoming.length
+        });
     }
     // used by ~/.local/bin/polkit-agent-guard to hand the session slot back to angelOS
     function polkitRegister(): void {
@@ -316,7 +1172,7 @@ IpcHandler {
     function reload(): void {
         Quickshell.reload(true);
     }
-    // soft | dash | dissolve | heart | ender | instant
+    // an id of WorkspaceAnim.styles: soft | dash | spring | snap | zoom | card | wipe | fade | dissolve | realm | glitch | crt | instant
     function switchFx(style: string): string {
         if (!WorkspaceAnim.styles.some(x => x.id === style))
             return "styles: " + WorkspaceAnim.styles.map(x => x.id).join(", ");
@@ -335,6 +1191,26 @@ IpcHandler {
         const ws = Niri.activeWorkspace(output || Niri.focusedOutput);
         if (ws)
             Niri.workspaceActivated(ws, false);
+    }
+    // the newest card's reply, for tests (ANGELOS_DEV only): `angelos notifReply open` puts its
+    // field up, `angelos notifReply close` takes it down, anything else is sent as typed there
+    function notifReply(text: string): string {
+        if (!Shell.dev)
+            return "dev only";
+        const n = Notifs.popups[Notifs.popups.length - 1];
+        if (!n || (!n.hasInlineReply && text !== "window"))
+            return "no card to reply to";
+        if (text === "open")
+            Notifs.replyTo = n;
+        else if (text === "close")
+            Notifs.replyTo = null;
+        else if (text === "window") {
+            const w = Notifs.appWindow(n);
+            return w ? w.app_id + " · " + w.title : "no window";
+        }
+        else
+            Notifs.reply(n, text);
+        return "ok";
     }
     function testNotify(): void {
         if (!Shell.dev) {

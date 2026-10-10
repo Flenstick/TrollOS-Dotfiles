@@ -1,0 +1,100 @@
+{
+  "id": "angel-cold",
+  "title": {
+    "ru": "Холодный рут: ангел",
+    "en": "The cold route: the angel"
+  },
+  "draft": true,
+  "with": "angel",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "cold",
+      "next": "back",
+      "note": "the first return after the angel turned cold for good (story/game.json → angel: the cold route)"
+    },
+    "back": {
+      "type": "say",
+      "who": "angel",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Я вернулась. Опять.",
+        "en": "I'm back. Again."
+      },
+      "next": "count"
+    },
+    "count": {
+      "type": "say",
+      "who": "angel",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Знаешь, сколько раз ты меня туда отправлял{g:|а|(а)}? Я считала. Больше не буду.",
+        "en": "Do you know how many times you sent me down there? I counted. I won't any more."
+      },
+      "next": "ask"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "angel",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Я останусь. Помогать буду. Но как раньше — уже не будет.",
+        "en": "I'll stay. I'll help. But it won't be like before."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Прости",
+            "en": "I'm sorry"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "angel",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Я слышу. Это ничего не меняет.",
+              "en": "I hear you. It doesn't change anything."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Это просто игра",
+            "en": "It's just a game"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "angel",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Для тебя — да.",
+              "en": "For you, yes."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "angel",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Вот и я помолчу.",
+              "en": "Then I'll be quiet too."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "id": "close-wrath-2",
+  "title": {
+    "ru": "Гнев: близкая",
+    "en": "Wrath: close"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"wrath\" and closeness == 2",
+      "next": "ask",
+      "note": "the demon of wrath and the player: closeness close (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Ударь воду. Сильно. Или не бей. Выбери.",
+        "en": "Strike the water. Hard. Or don't. Choose."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Не буду",
+            "en": "I won't"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Вода тебя полюбила.",
+              "en": "The water has come to love you."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Ударю",
+            "en": "I will"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Видишь круги? Это всё ты.",
+              "en": "See the rings? That's all you."
+            }
+          },
+          "next": "end",
+          "set": {
+            "wrath": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Мудрее любой проповеди.",
+              "en": "Wiser than any sermon."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

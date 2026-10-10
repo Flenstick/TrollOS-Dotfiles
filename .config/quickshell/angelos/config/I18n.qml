@@ -5,6 +5,15 @@ import qs.config
 
 Singleton {
     readonly property bool english: Config.appearance.language === "en"
+    // dates and times in the interface language (the bar clock, the calendar…)
+    readonly property var locale: Qt.locale(english ? "en_US" : "ru_RU")
+    // Bar → Clock format: "24" | "12" (AM/PM) | "auto" (12 h in English, 24 h in Russian)
+    readonly property bool clock12: Config.bar.clockFormat === "12" || (Config.bar.clockFormat === "auto" && english)
+    function time(date, seconds) {
+        if (!clock12)
+            return Qt.formatTime(date, seconds ? "HH:mm:ss" : "HH:mm");
+        return locale.toString(date, seconds ? "h:mm:ss AP" : "h:mm AP");
+    }
     readonly property var labels: {
         "Вид": "Appearance",
         "Внешний вид": "Appearance",
@@ -242,7 +251,7 @@ Singleton {
         "Бэкапы": "Backups",
         "Перезапустить оболочку": "Restart shell",
         "Котик": "Cat",
-        "котик.exe": "cat.exe",
+        "котик": "cat",
         "спит… zzz": "Sleeping… zzz",
         "гуляет ♡": "Walking ♡",
         "БЕЖИТ!!": "RUNNING!!",
@@ -350,7 +359,6 @@ Singleton {
         "неправильный пароль ✕": "Incorrect password ✕",
         "ошибка PAM: ": "PAM error: ",
         "ну пожааалуйста, вспомни пароль…": "Try your password again…",
-        "вход.exe": "login.exe",
         "Выполнить…": "Run…",
         "Программа… ": "Application… ",
         "> команда": "> command",
@@ -362,8 +370,6 @@ Singleton {
         "Сон": "Sleep",
         "Выйти": "Log out",
         "Рестарт": "Restart",
-        "звук.exe": "audio.exe",
-        "календарь.exe": "calendar.exe",
         "◂ назад": "◂ Back",
         "пн": "Mon",
         "вт": "Tue",
@@ -462,9 +468,9 @@ Singleton {
         "уведомление": "notification",
         "Пункты ПКМ-меню рабочего стола: терминал, файлы, случайные обои, скриншот, тема. Пример декларативного меню.": "Desktop menu shortcuts for apps, wallpaper and screenshots.",
         "Окошко статов в духе NGO на рабочем столе: «стресс» = загрузка CPU, «тьма» = занятая память, «любовь» = аптайм. Плюс сердечко на панели. Пример виджетов, сервиса и страницы настроек.": "Pixel heart indicators for stream activity.",
-        "Тёплый экран вечером через wlsunset (6600K днём → 3900K ночью, как было в Noctalia).": "Reduce blue light on a schedule using wlsunset.",
+        "Тёплый экран вечером (6600K днём → 3900K ночью): свои гамма-таблицы angelOS, вместе с яркостью мониторов из Настроек → Экран.": "A warmer screen in the evening (6600K by day, 3900K at night): angelOS's own gamma tables, together with the monitor brightness in Settings → Display.",
         "Поиск в интернете и любимые сайты прямо из лаунчера: «web запрос» или просто набери название сайта.": "Search the web and open favorite sites from the launcher.",
-        "Пиксельный котик на панели: спит, гуляет или бежит — в зависимости от загрузки процессора. Клик — котик покрупнее.": "An animated pixel cat. Its pace follows CPU usage.",
+        "Пиксельный котик на панели: спит, гуляет или бежит — в зависимости от загрузки процессора. В аду — щенок-цербер. Клик — котик покрупнее.": "An animated pixel cat. Its pace follows CPU usage; in hell it is a puppy Cerberus.",
         "Замер скорости интернета со спидометром и историей. Кнопка на панели, работает через speedtest-cli.": "Measure download, upload and latency, with recent results.",
         "Спутник Claude Code: «пульс» состояния сессий на панели, дышащая сфера на столе, «claude …» в лаунчере (запуск в терминале, «? вопрос» — быстрый ответ), MCP-мост к рабочему столу.": "Claude Code sessions, usage limits, quick questions and a desktop companion."
     }
@@ -476,5 +482,13 @@ Singleton {
     }
     function t(ru, en) {
         return english ? en : ru;
+    }
+    // "calendar" → "calendar.exe" (or .sh / .bin): the ending picked in Settings → Appearance
+    // for every angelOS window, widget and caption (C3). A name that ends in one already
+    // gets the picked one instead ("cat.exe" → "cat.sh").
+    readonly property var suffixes: ["exe", "sh", "bin"]
+    readonly property string suffix: suffixes.includes(Config.desktop.titleSuffix) ? Config.desktop.titleSuffix : "exe"
+    function exe(name) {
+        return String(name || "").replace(/\.(exe|sh|bin)$/i, "") + "." + suffix;
     }
 }

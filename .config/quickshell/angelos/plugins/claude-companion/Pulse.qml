@@ -31,6 +31,18 @@ Singleton {
             "idle": I18n.t("отдыхает", "Resting"),
             "none": I18n.t("нет сессий", "No sessions")
         })
+    // hell (Theme.hell, the demon's realm): the same states, plainer and colder — what it
+    // does must still be clear at a glance
+    readonly property var hellWords: ({
+            "needs_attention": I18n.t("ждёт тебя", "Waiting for you"),
+            "error": I18n.t("ошибка", "Error"),
+            "tool_start": I18n.t("работает", "Working"),
+            "turn_start": I18n.t("думает", "Thinking"),
+            "text": I18n.t("пишет", "Writing"),
+            "turn_end": I18n.t("готово", "Done"),
+            "idle": I18n.t("тлеет", "Smouldering"),
+            "none": I18n.t("ни души", "No souls")
+        })
     readonly property var resting: ["idle", "turn_end", "error"]
 
     property var sessions: ({})     // from hooks: sid -> {state, model, in, out, cc, cr, at}
@@ -85,6 +97,13 @@ Singleton {
     property bool asking: false
     readonly property string runtimeDir: (Quickshell.env("XDG_RUNTIME_DIR") || Quickshell.env("HOME") + "/.cache/angelos") + "/claude-companion"
 
+    function wordFor(hell) {
+        return (hell ? hellWords[state] : words[state]) || state;
+    }
+    function hellColorFor(s, theme) {
+        // the circle's text roles only (readable on its plates); the one accent when it wants you
+        return s === "needs_attention" || s === "error" ? theme.hellAccent : s === "idle" || s === "none" ? theme.hellTextDim : theme.hellText;
+    }
     function colorFor(s, theme) {
         return s === "needs_attention" || s === "error" ? theme.danger : s === "tool_start" ? theme.accent3 : s === "turn_start" || s === "text" ? theme.accent : s === "turn_end" ? theme.ok : s === "idle" ? theme.accent4 : theme.textDim;
     }

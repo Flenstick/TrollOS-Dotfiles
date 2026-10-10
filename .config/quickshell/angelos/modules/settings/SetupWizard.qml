@@ -1,4 +1,5 @@
 pragma ComponentBehavior: Bound
+
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
@@ -6,490 +7,325 @@ import qs.config
 import qs.services
 import qs.widgets
 
-FloatingWindow {
+// The setup wizard, like macOS's Setup Assistant: one question a screen, big and centred,
+// "Back" and "Continue", calm transitions (SetupAssistant.qml, the course in SetupFlow.qml).
+// Only what one can't start without; everything else lives in Settings.
+//
+// Always full screen: it covers every screen (layer shell, overlay), takes the keyboard and
+// holds the desktop (Shell.setupLocked: no Start, launcher, Settings, menus or shell hotkeys)
+// and niri's own keys too (a shortcut inhibitor: Mod+T, Mod+Q, workspaces… wait; only the
+// binds marked allow-inhibiting=false — media keys, Mod+Escape — still go to niri).
+// The first run has no way out on screen: the questions to the end. The way out for when it
+// is broken: `angelos setup skip` from a text console, and when the questions themselves
+// fail to load, the screens are let go at once. Opened again from Settings or `angelos
+// setup` it is the same full screen, with "Close" and Esc.
+// The first run's intro also plays alone (Shell.introOpen: once after an update, `angelos intro`):
+// the same covers over a still of the desktop, no questions.
+Scope {
     id: root
-    title: Shell.appTitle + " · " + I18n.t("Добро пожаловать", "Welcome")
-    visible: Shell.setupOpen
-    color: "transparent"
-    implicitWidth: 920
-    implicitHeight: 720
-    minimumSize: Qt.size(720, 500)
-    property int step: 0
-    Connections {
-        target: Shell
-        function onSetupStepRequested(step) {
-            root.step = Math.max(0, Math.min(root.last, step));
-        }
+
+    SetupFlow {
+        id: flow
     }
-    property bool offered: false
-    // only what is really needed on day one; everything else lives in Settings
-    readonly property var stepList: [
-        {
-            "label": I18n.t("Привет", "Welcome"),
-            "kind": "welcome"
-        },
-        {
-            "label": I18n.t("Хоткеи", "Shortcuts"),
-            "kind": "shortcuts"
-        },
-        {
-            "label": I18n.t("Мониторы", "Monitors"),
-            "kind": "page",
-            "page": "pages/MonitorPage.qml"
-        },
-        {
-            "label": I18n.t("Ввод", "Input"),
-            "kind": "page",
-            "page": "pages/KeyboardPage.qml"
-        },
-        {
-            "label": I18n.t("Тема", "Theme"),
-            "kind": "page",
-            "page": "pages/AppearancePage.qml"
-        },
-        {
-            "label": I18n.t("Шрифты", "Fonts"),
-            "kind": "fonts"
-        },
-        {
-            "label": I18n.t("Панель", "Bar"),
-            "kind": "bar"
-        },
-        {
-            "label": I18n.t("Окна", "Windows"),
-            "kind": "page",
-            "page": "pages/WindowsPage.qml"
-        },
-        {
-            "label": I18n.t("Рабочий стол", "Desktop"),
-            "kind": "desktop"
-        },
-        {
-            "label": I18n.t("Приложения", "Apps"),
-            "kind": "page",
-            "page": "pages/DefaultsPage.qml"
-        },
-        {
-            "label": I18n.t("Готово", "Finish"),
-            "kind": "finish"
-        }
-    ]
-    readonly property var steps: stepList.map(s => s.label)
-    readonly property var cur: stepList[step] || stepList[0]
-    readonly property int last: stepList.length - 1
-    property bool tipsAfter: true
-    function finishSetup() {
-        Config.setup.complete = true;
-        Shell.setupOpen = false;
-        if (tipsAfter)
-            tipsTimer.start();
+    // the first run's intro: its sounds and its clock (the screens draw it)
+    SetupIntro {
+        id: introCtl
     }
-    Timer {
-        id: tipsTimer
-        interval: 700
-        onTriggered: Tour.start()
-    }
-    onClosed: Shell.setupOpen = false
-    onVisibleChanged: if (!visible)
-        Shell.setupOpen = false
-    Timer {
-        interval: 1200
-        running: Config.ready && !Config.setup.complete && !root.offered && !Shell.dev
-        onTriggered: {
-            root.offered = true;
-            Shell.setupOpen = true;
-        }
-    }
-    BackgroundEffect.blurRegion: Config.appearance.blur ? setupBlur : null
-    Region {
-        id: setupBlur
-        item: setupFrame
-    }
-    PxWindow {
-        id: setupFrame
-        anchors.fill: parent
-        anchors.rightMargin: Theme.u * 2
-        anchors.bottomMargin: Theme.u * 2
-        title: "angelOS · " + root.steps[root.step]
-        icon: "heart"
-        onCloseClicked: Shell.setupOpen = false
-        onTitlePressed: root.startSystemMove()
-        Column {
-            id: header
-            width: parent.width
-            spacing: Theme.u * 4
-            Row {
-                spacing: Theme.u * 6
-                Repeater {
-                    model: root.steps
-                    PxButton {
-                        required property string modelData
-                        required property int index
-                        compact: true
-                        text: (index + 1) + ""
-                        checked: root.step === index
-                        onClicked: root.step = index
+
+    // ---- every screen covered, the questions on one of them ----
+    Variants {
+        model: Shell.setupLocked ? Shell.screens : []
+
+        PanelWindow {
+            id: cover
+
+            required property var modelData
+            readonly property bool hosting: modelData === flow.host
+            Component.onCompleted: Shell.setupCovers++
+            Component.onDestruction: Shell.setupCovers--
+
+            screen: modelData
+            anchors {
+                top: true
+                bottom: true
+                left: true
+                right: true
+            }
+            exclusionMode: ExclusionMode.Ignore
+            color: Theme.desk
+            WlrLayershell.namespace: "angelos-setup"
+            WlrLayershell.layer: WlrLayer.Overlay
+            // takes input: the wizard holds the desktop until it is done (or closed, opened again);
+            // the keys go to the questions (dev runs sit next to a live session: on demand)
+            WlrLayershell.keyboardFocus: hosting ? (Shell.dev ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive) : WlrKeyboardFocus.None
+
+            // niri's own keys wait too (Mod+T would open a terminal nobody sees under the
+            // cover). Mod+Escape (toggle-keyboard-shortcuts-inhibit) switches the inhibitor
+            // off; it is asked for again at once — a frozen shell can't, so there Mod+Escape
+            // still gives niri back (dev runs sit next to a live session: never)
+            ShortcutInhibitor {
+                id: inhibitor
+                property bool seen: false
+                property bool rearming: false
+                window: cover
+                enabled: cover.hosting && !Shell.dev && !rearming
+                onActiveChanged: {
+                    if (active)
+                        seen = true;
+                    else if (seen && enabled)
+                        rearm();
+                }
+                onCancelled: rearm()
+                function rearm() {
+                    seen = false;
+                    rearming = true;
+                    rearmTimer.restart();
+                }
+            }
+            Timer {
+                id: rearmTimer
+                interval: 300
+                onTriggered: inhibitor.rearming = false
+            }
+
+            // what the screen shows (the first run's intro draws it through its waking up: SetupWake)
+            Item {
+                id: scene
+                anchors.fill: parent
+
+                // a calm ground: the theme's desk fading into its accent, a few hearts drifting up
+                Rectangle {
+                    anchors.fill: parent
+                    visible: !still.shown
+                    gradient: Gradient {
+                        GradientStop {
+                            position: 0
+                            color: Theme.desk
+                        }
+                        GradientStop {
+                            position: 1
+                            color: Theme.mix(Theme.desk, Theme.accent, Theme.dark ? 0.14 : 0.1)
+                        }
                     }
                 }
-            }
-            Rectangle {
-                width: parent.width
-                height: Theme.u
-                color: Theme.menuBorder
-            }
-        }
-        Loader {
-            anchors.top: header.bottom
-            anchors.topMargin: Theme.u * 4
-            anchors.bottom: footer.top
-            anchors.bottomMargin: Theme.u * 5
-            anchors.left: parent.left
-            anchors.right: parent.right
-            sourceComponent: ({
-                    "welcome": welcome,
-                    "shortcuts": shortcuts,
-                    "finish": finish,
-                    "bar": barStep,
-                    "fonts": fontsStep,
-                    "desktop": desktopStep
-                })[root.cur.kind] || settingsStep
-        }
-        Row {
-            id: footer
-            anchors.bottom: parent.bottom
-            spacing: Theme.u * 5
-            PxButton {
-                text: I18n.t("Назад", "Back")
-                enabled: root.step > 0
-                onClicked: root.step--
-            }
-            PxButton {
-                text: root.step === root.last ? I18n.t("Начать работу", "Start using angelOS") : I18n.t("Далее", "Next")
-                accent: true
-                onClicked: {
-                    if (root.step < root.last)
-                        root.step++;
-                    else
-                        root.finishSetup();
+                FloatingHearts {
+                    id: hearts
+                    anchors.fill: parent
+                    count: 12
+                    maxOpacity: 0.22
+                    // gliding, frame by frame with the screen (render thread)
+                    glide: true
+                    running: !Motion.still && !still.shown
+                    visible: !still.shown
                 }
-            }
-            PxButton {
-                text: I18n.t("Настроить позже", "Set up later")
-                onClicked: {
-                    Config.setup.complete = true;
-                    Shell.setupOpen = false;
+                // the intro alone: the desktop as it was (grim, just before), woken up at the cut
+                Image {
+                    id: still
+                    readonly property bool shown: introCtl.alone && status === Image.Ready
+                    anchors.fill: parent
+                    visible: shown
+                    source: introCtl.alone ? introCtl.shotUrl(cover.modelData.name) : ""
+                    cache: false
+                    asynchronous: true
+                    smooth: false
                 }
-            }
-        }
-    }
-    Component {
-        id: settingsStep
-        Loader {
-            source: root.cur.page || "pages/AppearancePage.qml"
-        }
-    }
-    Component {
-        id: welcome
-        PxPage {
-            heading: I18n.t("Твой angelOS", "Your angelOS")
-            subtitle: I18n.t("Настрой оболочку под себя. Основная тема останется доступной, а мастер можно снова открыть в настройках внешнего вида.", "Make the shell your own. The original theme stays available, and you can reopen this wizard in Appearance settings.")
-            SettingRow {
-                label: "Язык / Language"
-                PxCombo {
-                    model: [
-                        {
-                            label: "Русский",
-                            value: "ru"
-                        },
-                        {
-                            label: "English",
-                            value: "en"
-                        }
-                    ]
-                    currentValue: Config.appearance.language
-                    onActivated: v => Config.appearance.language = v
+
+                // the intro alone: dimmed behind its question, and on into the minute
+                Rectangle {
+                    anchors.fill: parent
+                    color: "#000000"
+                    opacity: introCtl.alone ? introCtl.askDim * (introCtl.phase === "reveal" ? 1 - introCtl.reveal : introCtl.askIn) : 0
+                    visible: opacity > 0
                 }
-            }
-            PxText {
-                width: parent.width
-                wrapMode: Text.Wrap
-                text: I18n.t("Панель и рабочий стол запускаются на всех подключённых экранах. Параметры мониторов и ввода меняются только по твоему действию.", "The bar and desktop run on every connected display. Monitor and input settings change only when you edit them.")
-            }
-        }
-    }
-    Component {
-        id: shortcuts
-        PxPage {
-            heading: I18n.t("Основные хоткеи", "Essential shortcuts")
-            subtitle: I18n.t("Mod — клавиша Super / Windows. Полный список для текущего конфига: Mod+Shift+Escape.", "Mod is the Super / Windows key. Show your configuration's shortcut list with Mod+Shift+Escape.")
-            Repeater {
-                model: [["Mod+Space", I18n.t("Запуск приложений", "Launch applications")], ["Mod+S", I18n.t("Настройки", "Settings")], ["Mod+V", I18n.t("История буфера обмена", "Clipboard history")], ["Mod+Alt+L", I18n.t("Блокировка", "Lock screen")], ["Mod+Alt+Y", I18n.t("Показать или скрыть Lyrics", "Toggle lyrics")], ["Mod+Alt+T", I18n.t("Светлая / тёмная тема", "Light / dark theme")], ["Mod+Shift+Q", I18n.t("Меню питания", "Power menu")]]
-                SettingRow {
-                    required property var modelData
-                    label: modelData[0]
+
+                // the questions (their own file: when it fails, the screens are let go)
+                Loader {
+                    id: questions
+                    anchors.fill: parent
+                    active: cover.hosting && Shell.setupOpen
+                    source: "SetupAssistant.qml"
+                    onLoaded: {
+                        item.held = Qt.binding(() => introCtl.active);
+                        item.wizard = flow;
+                        item.screenName = cover.modelData.name;
+                        flow.assistant = item;
+                    }
+                    onStatusChanged: if (status === Loader.Error) {
+                        console.warn("setup wizard: the questions did not load — the desktop is let go");
+                        flow.close();
+                    }
+                }
+
+                // another screen: where the questions are, and a way to bring them here
+                Column {
+                    visible: !cover.hosting && Shell.setupOpen
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - Theme.u * 24, Theme.u * 200)
+                    spacing: Theme.u * 8
+                    AngelLogo {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        pixel: Theme.u * 2
+                        fontSize: Theme.sizeHuge
+                    }
                     PxText {
-                        text: modelData[1]
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                        kind: "title"
+                        text: I18n.t("Настройка идёт на экране ", "Setting up on screen ") + (flow.host ? flow.host.name : "")
+                    }
+                    PxButton {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        icon: "monitor"
+                        text: I18n.t("Продолжить на этом экране", "Continue on this screen")
+                        onClicked: flow.hostName = cover.modelData.name
                     }
                 }
-            }
-        }
-    }
-    Component {
-        id: finish
-        PxPage {
-            heading: I18n.t("Всё готово ♡", "You're ready ♡")
-            PxCheck {
-                text: I18n.t("Показать подсказки по интерфейсу после мастера", "Show interface tips after the wizard")
-                checked: root.tipsAfter
-                onToggled: c => root.tipsAfter = c
-            }
-            subtitle: I18n.t("Изменения уже сохранены. Настройки всегда доступны из меню angelOS или по Mod+S.", "Your changes are saved. Open Settings from the angelOS menu or press Mod+S at any time.")
-            PxText {
-                text: I18n.t("Тема: ", "Theme: ") + Theme.flavors[Config.appearance.flavor].name
-            }
-            PxText {
-                text: I18n.t("Экраны: ", "Displays: ") + Shell.screens.map(s => s.name).join(", ")
-            }
-            PxText {
-                width: parent.width
-                wrapMode: Text.Wrap
-                text: I18n.t("Для геометрии мониторов нажми «Сохранить в конфиг» на шаге «Мониторы», если менял её.", "If you changed monitor geometry, use Save to config on the Monitors step to keep it after login.")
-            }
-        }
-    }
 
-    Component {
-        id: fontsStep
-        PxPage {
-            heading: I18n.t("Пиксельные шрифты", "Pixel fonts")
-            subtitle: I18n.t("Выбери набор шрифтов. Недостающие скачаются с GitHub / Google Fonts (с проверкой SHA-256). Потом можно поменять в Настройки → Шрифты.", "Pick a font set. Missing fonts are downloaded from GitHub / Google Fonts and verified by SHA-256. Change it later in Settings → Fonts.")
-            Component.onCompleted: Fonts.refresh()
-            Repeater {
-                model: Fonts.presets
-                PxBox {
-                    id: preset
-                    required property var modelData
-                    readonly property bool ready: modelData.needs.every(id => Fonts.installed(id))
-                    readonly property bool current: Config.appearance.fontTitle === modelData.fonts[0] && Config.appearance.fontBody === modelData.fonts[1] && Config.appearance.fontMono === modelData.fonts[2]
-                    width: parent.width
-                    height: presetCol.implicitHeight + Theme.u * 10
-                    color: current ? Theme.mix(Theme.face, Theme.accent, 0.18) : presetMouse.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.08) : Theme.face
-                    Column {
-                        id: presetCol
-                        x: Theme.u * 5
-                        y: Theme.u * 5
-                        width: parent.width - Theme.u * 10
-                        spacing: Theme.u * 2
-                        Row {
-                            spacing: Theme.u * 4
-                            PxIcon {
-                                name: preset.current ? "check" : "heart"
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            PxText {
-                                text: preset.modelData.label + (preset.ready ? "" : I18n.t("  · скачается при выборе", "  · downloads when picked"))
-                                font.bold: true
-                            }
-                        }
-                        Repeater {
-                            model: [[0, 18, I18n.t("Заголовок ♡ angelOS", "Title ♡ angelOS")], [1, 13, I18n.t("Обычный текст: привет, мир!", "Body text: hello, world!")], [2, 13, "mono: 0123 ~/.config"]]
-                            Text {
-                                required property var modelData
-                                readonly property string family: preset.modelData.fonts[modelData[0]] || [Theme.defaultTitleFont, Theme.defaultBodyFont, Theme.defaultMonoFont][modelData[0]]
-                                visible: preset.ready
-                                text: modelData[2]
-                                color: Theme.text
-                                font.family: family
-                                font.pixelSize: Theme.crisp(modelData[1], family) * Theme.fs
-                                renderType: Text.NativeRendering
-                            }
-                        }
-                        PxText {
-                            visible: !preset.ready
-                            text: preset.modelData.fonts.filter((f, i, a) => f && a.indexOf(f) === i).join(" · ")
-                            dim: true
-                        }
-                    }
-                    MouseArea {
-                        id: presetMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        enabled: !Fonts.busy
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Fonts.applyPreset(preset.modelData)
-                    }
+                // opened again (from Settings, `angelos setup`): "Close" and Esc, on every screen.
+                // The first run has none — only `angelos setup skip` from a text console
+                PxButton {
+                    visible: Shell.setupOpen && !Shell.setupFirstRun
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.margins: Theme.u * 8
+                    compact: true
+                    flat: true
+                    icon: "close"
+                    text: I18n.t("Закрыть", "Close")
+                    onClicked: flow.close()
+                }
+                PxText {
+                    visible: Shell.setupFirstRun
+                    anchors.left: parent.left
+                    anchors.bottom: parent.bottom
+                    anchors.margins: Theme.u * 6
+                    kind: "tiny"
+                    dim: true
+                    opacity: 0.7
+                    text: I18n.t("Мастер не отвечает? Ctrl+Alt+F3, войди и набери: angelos setup skip", "Wizard stuck? Ctrl+Alt+F3, log in and type: angelos setup skip")
+                }
+
+                // the first run's minute before the questions (SetupIntro), over all of it
+                SetupIntroScreen {
+                    anchors.fill: parent
+                    intro: introCtl
+                    hosting: cover.hosting
+                    here: cover.modelData
+                    host: flow.host
                 }
             }
-            PxText {
-                visible: Fonts.busy || Fonts.error !== ""
-                width: parent.width
-                wrapMode: Text.Wrap
-                color: Fonts.error ? Theme.danger : Theme.accent
-                text: Fonts.error || I18n.t("Скачиваю шрифт…", "Downloading font…")
+            SetupWake {
+                anchors.fill: parent
+                intro: introCtl
+                source: scene
             }
-        }
-    }
-    Component {
-        id: barStep
-        PxPage {
-            heading: I18n.t("Панель", "The bar")
-            subtitle: I18n.t("Как выглядит панель. Раскладку элементов потом можно перетаскивать в Настройки → Панель.", "How the bar looks. Rearrange its items later in Settings → Bar.")
-            PxGroup {
-                title: I18n.t("Вид", "Look")
-                icon: "window"
-                width: parent.width
-                SettingRow {
-                    label: I18n.t("Стиль", "Style")
-                    PxSegmented {
-                        model: [
-                            {
-                                "label": I18n.t("Таскбар", "Taskbar"),
-                                "value": "taskbar"
-                            },
-                            {
-                                "label": I18n.t("Полоса", "Strip"),
-                                "value": "top"
-                            },
-                            {
-                                "label": I18n.t("Остров", "Island"),
-                                "value": "island"
-                            }
-                        ]
-                        currentValue: Config.bar.style
-                        onActivated: v => Config.bar.style = v
+
+            // the intro alone asks first: «Обновление скачано — продолжить?». Either answer goes on;
+            // «Нет» says «Да» for ten frames first
+            PxBox {
+                id: ask
+                visible: cover.hosting && introCtl.asking
+                opacity: introCtl.askIn
+                anchors.centerIn: parent
+                width: Math.min(parent.width - Theme.u * 24, Theme.u * 170)
+                height: askBody.implicitHeight + askBar.height + Theme.u * 16
+                color: Theme.face
+                shadow: true
+                Rectangle {
+                    id: askBar
+                    x: ask.inset
+                    y: ask.inset
+                    width: ask.width - ask.inset * 2
+                    height: askBarText.implicitHeight + Theme.u * 4
+                    color: Theme.accent
+                    PxText {
+                        id: askBarText
+                        x: Theme.u * 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        font.bold: true
+                        color: Theme.dark ? Theme.desk : "#ffffff"
+                        text: I18n.t("angelOS — обновление", "angelOS — update")
                     }
                 }
-                SettingRow {
-                    label: I18n.t("Воркспейсы", "Workspaces")
-                    PxSegmented {
-                        model: [
-                            {
-                                "label": I18n.t("Сердечки", "Hearts"),
-                                "value": "hearts",
-                                "icon": "heart"
-                            },
-                            {
-                                "label": I18n.t("Иконки", "Icons"),
-                                "value": "icons",
-                                "icon": "window"
-                            },
-                            {
-                                "label": I18n.t("Оба", "Both"),
-                                "value": "both"
-                            }
-                        ]
-                        currentValue: Config.bar.workspaceStyle
-                        onActivated: v => Config.bar.workspaceStyle = v
-                    }
-                }
-                SettingRow {
-                    label: I18n.t("Подписи окон", "Window titles")
-                    PxToggle {
-                        checked: Config.bar.taskLabels
-                        onToggled: c => Config.bar.taskLabels = c
-                    }
-                }
-                SettingRow {
-                    label: I18n.t("Иконки трея под тему", "Tray icons in theme colors")
-                    PxSegmented {
-                        model: [
-                            {
-                                "label": I18n.t("Как есть", "As is"),
-                                "value": "off"
-                            },
-                            {
-                                "label": I18n.t("Моно", "Mono"),
-                                "value": "mono"
-                            },
-                            {
-                                "label": I18n.t("Акцент", "Accent"),
-                                "value": "accent"
-                            }
-                        ]
-                        currentValue: Config.bar.trayTint
-                        onActivated: v => Config.bar.trayTint = v
-                    }
-                }
-                SettingRow {
-                    label: I18n.t("Лирика в центре панели", "Lyrics in the middle of the bar")
-                    PxToggle {
-                        checked: Config.lyrics.enabled
-                        onToggled: c => Config.lyrics.enabled = c
-                    }
-                }
-            }
-            PxGroup {
-                title: I18n.t("Логотип", "Logo")
-                icon: "heart"
-                width: parent.width
-                Row {
+                Column {
+                    id: askBody
+                    x: Theme.u * 8
+                    y: askBar.y + askBar.height + Theme.u * 6
+                    width: ask.width - Theme.u * 16
                     spacing: Theme.u * 6
-                    Repeater {
-                        model: ["classic", "angel"]
+                    PxText {
+                        kind: "title"
+                        text: I18n.t("Обновление скачано", "The update is downloaded")
+                    }
+                    PxText {
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        text: I18n.t("Вы хотите продолжить?", "Do you want to continue?")
+                    }
+                    Row {
+                        anchors.right: parent.right
+                        spacing: Theme.u * 4
                         PxButton {
-                            required property string modelData
-                            width: logoPreview.implicitWidth + Theme.u * 12
-                            height: Theme.u * 23
-                            checked: (Config.bar.logoStyle === "angel" ? "angel" : "classic") === modelData
-                            onClicked: Config.bar.logoStyle = modelData
-                            AngelLogo {
-                                id: logoPreview
-                                anchors.centerIn: parent
-                                variant: parent.modelData
+                            accent: true
+                            text: I18n.t("Да", "Yes")
+                            onClicked: introCtl.answer()
+                        }
+                        PxButton {
+                            id: no
+                            property bool lying: false
+                            text: lying ? I18n.t("Да", "Yes") : I18n.t("Нет", "No")
+                            onClicked: if (!lying) {
+                                lying = true;
+                                frames.n = 0;
+                                frames.start();
+                            }
+                            // ten frames of this screen, then «Нет» again — and on all the same
+                            FrameAnimation {
+                                id: frames
+                                property int n: 0
+                                onTriggered: if (++n >= 10) {
+                                    stop();
+                                    no.lying = false;
+                                    introCtl.answer();
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-    }
-    Component {
-        id: desktopStep
-        PxPage {
-            heading: I18n.t("Рабочий стол", "Desktop")
-            subtitle: I18n.t("Виджеты на обоях — таскаются за заголовок, добавляются и убираются через ПКМ → Вид.", "Widgets on the wallpaper — drag them by the title, add or remove via right-click → View.")
-            PxGroup {
-                title: I18n.t("Виджеты на ", "Widgets on ") + (Shell.focusedScreen ? Shell.focusedScreen.name : "")
-                icon: "layers"
-                width: parent.width
-                Repeater {
-                    model: DesktopWidgets.types
-                    PxCheck {
-                        required property var modelData
-                        text: modelData.label
-                        checked: DesktopWidgets.has(modelData.type, Shell.focusedScreen ? Shell.focusedScreen.name : "")
-                        onToggled: DesktopWidgets.toggle(modelData.type, Shell.focusedScreen ? Shell.focusedScreen.name : "")
-                    }
-                }
+            Shortcut {
+                sequences: ["Return", "Enter"]
+                enabled: cover.hosting && introCtl.asking
+                onActivated: introCtl.answer()
             }
-            PxGroup {
-                title: I18n.t("Голосовой ввод", "Voice typing")
-                icon: "mic"
-                width: parent.width
-                SettingRow {
-                    label: I18n.t("Индикатор VoxType", "VoxType indicator")
-                    PxSegmented {
-                        model: [
-                            {
-                                "label": "angelOS",
-                                "value": "angelos"
-                            },
-                            {
-                                "label": I18n.t("Старый", "Classic"),
-                                "value": "classic"
-                            },
-                            {
-                                "label": I18n.t("Нет", "Off"),
-                                "value": "off"
-                            }
-                        ]
-                        currentValue: Config.voxtype.indicator
-                        onActivated: v => Config.voxtype.indicator = v
-                    }
-                }
-            }
-        }
-    }
 
-    RightClickGuard {}
+            // the intro's way out: space five times
+            Shortcut {
+                sequence: "Space"
+                enabled: cover.hosting && introCtl.phase === "run"
+                onActivated: introCtl.press()
+            }
+            Shortcut {
+                sequence: "Escape"
+                enabled: cover.hosting && Shell.setupOpen && !Shell.setupFirstRun
+                onActivated: flow.close()
+            }
+            Shortcut {
+                sequence: "Escape"
+                enabled: cover.hosting && introCtl.alone
+                onActivated: introCtl.skip()
+            }
+            RightClickGuard {}
+            // no pointer at all while the intro plays (alone: until the desktop is back)
+            MouseArea {
+                anchors.fill: parent
+                visible: introCtl.active
+                hoverEnabled: true
+                acceptedButtons: Qt.AllButtons
+                cursorShape: Qt.BlankCursor
+                onWheel: wheel => wheel.accepted = true
+            }
+        }
+    }
 }

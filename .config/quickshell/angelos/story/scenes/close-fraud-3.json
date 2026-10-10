@@ -1,0 +1,84 @@
+{
+  "id": "close-fraud-3",
+  "title": {
+    "ru": "Обман: своя",
+    "en": "Fraud: your own"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"fraud\" and closeness == 3",
+      "next": "ask",
+      "note": "the demon of fraud and the player: closeness own (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Это последняя маска. Снять?",
+        "en": "This is the last mask. Shall I take it off?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Сними",
+            "en": "Take it off"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Вот. Это я. Всё.",
+              "en": "There. This is me. That's all."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Оставь",
+            "en": "Leave it"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Ты не готов{g:|а|(а)}. Понимаю.",
+              "en": "You're not ready. I understand."
+            }
+          },
+          "next": "end",
+          "set": {
+            "fraud": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Сниму, когда ты не будешь смотреть.",
+              "en": "I'll take it off when you're not looking."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

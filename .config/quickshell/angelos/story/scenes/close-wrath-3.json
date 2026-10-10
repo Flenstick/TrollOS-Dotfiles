@@ -1,0 +1,84 @@
+{
+  "id": "close-wrath-3",
+  "title": {
+    "ru": "Гнев: своя",
+    "en": "Wrath: your own"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "close",
+      "cond": "circle == \"wrath\" and closeness == 3",
+      "next": "ask",
+      "note": "the demon of wrath and the player: closeness own (story/game.json → closeness)"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Я могу поднять Стикс и унести тебя на тот берег. Хочешь?",
+        "en": "I can raise the Styx and carry you to the far shore. Do you want that?"
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Останусь здесь, с тобой",
+            "en": "I'll stay here, with you"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Тогда вода расступится.",
+              "en": "Then the water will part."
+            }
+          },
+          "next": "end"
+        },
+        {
+          "text": {
+            "ru": "Неси",
+            "en": "Carry me"
+          },
+          "tone": "negative",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Как скажешь. Только не забудь меня.",
+              "en": "As you say. Just don't forget me."
+            }
+          },
+          "next": "end",
+          "set": {
+            "wrath": "+1"
+          }
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Вода подождёт твоего ответа.",
+              "en": "The water will wait for your answer."
+            }
+          },
+          "next": "end"
+        }
+      ]
+    },
+    "end": {
+      "type": "end"
+    }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "id": "trial-greed",
+  "title": {
+    "ru": "Испытание: Жадность",
+    "en": "Trial: Greed"
+  },
+  "draft": true,
+  "with": "demon",
+  "start": "in",
+  "nodes": {
+    "in": {
+      "type": "event",
+      "trigger": "trial",
+      "cond": "circle == \"greed\"",
+      "next": "pactCheck",
+      "note": "a try to get out of this circle (Ask → Seek the way out, the wheel's plea)"
+    },
+    "pactCheck": {
+      "type": "if",
+      "cond": "attempts >= pactAfter and not pact",
+      "then": "toPact",
+      "else": "ask"
+    },
+    "toPact": {
+      "type": "scene",
+      "to": "pact"
+    },
+    "ask": {
+      "type": "choice",
+      "who": "demon",
+      "sprite": "neutral",
+      "text": {
+        "ru": "Колесо остановилось на тебе. Крутанёшь ещё раз — может, выпадет выход.",
+        "en": "The wheel stopped on you. Spin it once more — maybe it lands on the way out."
+      },
+      "choices": [
+        {
+          "text": {
+            "ru": "Оставить как есть",
+            "en": "Leave it"
+          },
+          "tone": "positive",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Отпустил{g:|а|(а)}. Золото стало легче. Ниже.",
+              "en": "You let go. The gold got lighter. Further down."
+            }
+          },
+          "next": "down"
+        },
+        {
+          "text": {
+            "ru": "Крутить ещё",
+            "en": "Spin again"
+          },
+          "tone": "negative",
+          "set": {
+            "greed": "+1"
+          },
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Крутится. Всегда крутится. Ничего не выпадает.",
+              "en": "It spins. It always spins. Nothing lands."
+            }
+          },
+          "next": "stay"
+        },
+        {
+          "text": {
+            "ru": "Промолчать",
+            "en": "Say nothing"
+          },
+          "tone": "silent",
+          "reply": {
+            "who": "demon",
+            "sprite": "neutral",
+            "text": {
+              "ru": "Камень тоже молчит. Камень тяжёлый.",
+              "en": "Stone is silent too. Stone is heavy."
+            }
+          },
+          "next": "stay"
+        }
+      ],
+      "shuffle": true
+    },
+    "stay": {
+      "type": "circle",
+      "to": "stay"
+    },
+    "down": {
+      "type": "circle",
+      "to": "deeper"
+    }
+  }
+}

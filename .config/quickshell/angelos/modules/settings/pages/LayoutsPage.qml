@@ -11,8 +11,8 @@ import qs.modules.settings
 PxPage {
     id: page
 
-    heading: I18n.t("Раскладка рабочего стола", "Desktop layout")
-    subtitle: I18n.t("Как будет выглядеть стол: где панель, «Пуск» и док. «Как сейчас» — твоя раскладка, она запоминается при первом переключении, и к ней всегда можно вернуться.", "How the desktop looks: where the bar, Start and the dock sit. “Current” is your own layout — it is saved the first time you switch, so you can always come back.")
+    heading: I18n.t("Раскладки", "Layouts")
+    subtitle: I18n.t("Как будет выглядеть система: где панель, «Пуск» и док. «Как сейчас» — твоя раскладка, она запоминается при первом переключении, и к ней всегда можно вернуться.", "How the desktop looks: where the bar, Start and the dock sit. “Current” is your own layout — it is saved the first time you switch, so you can always come back.")
 
     // each card gets its own desk colour, like Zorin's gallery
     readonly property var tints: ({

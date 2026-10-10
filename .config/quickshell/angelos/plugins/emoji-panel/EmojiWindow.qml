@@ -10,6 +10,7 @@ import qs.widgets
 // Окно панели: поиск, вкладки, категории, сетка. Печатаешь — ищет,
 // стрелки — выбор, Enter — вставить, Tab — следующая вкладка, Esc — закрыть.
 PanelWindow {
+    // takes input: a click outside the panel closes it, like Windows' Win + .
     id: win
 
     property var host

@@ -3,9 +3,10 @@
   "name": "Котик",
   "version": "1.0.0",
   "author": "angelOS (идея: DotNetRob/cat, MIT)",
-  "description": "Пиксельный котик на панели: спит, гуляет или бежит — в зависимости от загрузки процессора. Клик — котик покрупнее.",
+  "description": "Пиксельный котик на панели: спит, гуляет или бежит — в зависимости от загрузки процессора. В аду — щенок-цербер. Клик — котик покрупнее.",
   "icon": "heart",
   "enabledByDefault": true,
+  "themes": ["pixel", "mac"],
   "barWidget": "BarWidget.qml",
   "settings": "Settings.qml"
 }

@@ -1,121 +1,243 @@
 import QtQuick
 import qs.config
 import qs.services
+import "MacIcons.js" as MacIcons
 
-// Settings block (TrollOS): a raised pixel box with a hard shadow and a small
-// accent caption inside — macOS-style grouping in the system's own look.
-// `advanced` groups fold into a "▸ Дополнительно" header in the simple settings
-// view (Settings → Эксперт off); clicking the header unfolds them.
+// A group of settings. Classic: like macOS's System Settings — a caption above a raised
+// pixel card that holds the rows (SettingRow draws the hairlines between them); Windose
+// and Stream: their own boxes.
+// `advanced` groups are sub-pages (the macOS "Title ›"): on their page they are not shown,
+// the page lists them as links at its top (PxPage) and opens one on its own
+// (the window's settingsSub = its title); then the other groups of the page step aside. An
+// advanced group that is only there sometimes says so with `shown`, not `visible`.
 Item {
     id: root
 
     property string title: ""
+    // the group's key in the settings tree (modules/settings/tree.json: "page/name"): pages are
+    // put together from groups by it, the search and old links find it by it
+    property string name: ""
     property string icon: ""
+    readonly property string settingsSkin: Theme.settingsSkinFor(root.parent)
+    // Settings in the Windows 11 look: a caption over a container whose rows are cards of
+    // their own (SettingRow); a sub-page (`advanced`) is a card that unfolds in place
+    readonly property bool fluent: Theme.fluentFor(root.parent)
+    // the Golden Gate skin's System Settings: the rows in one rounded box, a shade off the page
+    readonly property bool mac: settingsSkin === "goldengate"
+    property bool unfolded: false
+    readonly property bool folded: fluent && advanced && !unfolded && openSub !== title
     property int spacing: Theme.u * 5
     property bool advanced: false
-    property bool open: false
-    readonly property bool folded: advanced && !open && !Config.settingsUi.expert
+    property bool shown: true
     default property alias content: col.data
-    // Windows 11 Settings: a plain section title over stacked cards (SettingRow draws its card)
-    readonly property bool fluent: WinExtras.fluentSettings && !!Window.window && Window.window === Shell.fluentWindow
+    // new since you last looked (services/SettingsNews), looked up when the news change
+    readonly property bool isNew: {
+        if (!SettingsNews.news.count || !name)
+            return false;
+        for (let p = root.parent; p; p = p.parent)
+            if (p.srcName !== undefined)
+                return SettingsNews.groupNew(p.srcName, name);
+        return false;
+    }
 
+    // the page this is on (PxPage: focusGroup), if any
+    readonly property var page: {
+        for (let p = root.parent; p; p = p.parent)
+            if (p.focusGroup !== undefined)
+                return p;
+        return null;
+    }
+    readonly property string openSub: page ? page.focusGroup : ""
+    // a part of a page put together from groups shows only the groups it was given
+    readonly property bool leftOut: !!page && !!page.wants && !page.wants(root)
+    // a sub-page that isn't the one open, or another group while a sub-page is open
+    readonly property bool steppedAside: leftOut || (!fluent && !!page && (openSub !== "" ? title !== openSub : advanced))
+    // a group's own `visible: …` (a page's) or this one comes back after stepping aside — a
+    // binding, never a value: the value read then is the item's effective visibility, false
+    // while the page is hidden for a moment (moved into another dress's frame), and the group
+    // would stay hidden for good
+    visible: root.shown
+    Binding {
+        target: root
+        property: "visible"
+        value: root.shown && !root.steppedAside
+        when: root.steppedAside || (root.advanced && root.openSub === root.title)
+        restoreMode: Binding.RestoreBinding
+    }
+
+    readonly property bool classic: settingsSkin === "classic" && !fluent
+    readonly property int b: Math.max(1, Theme.u / 2)
     implicitWidth: col.implicitWidth + Theme.pad * 2
-    readonly property bool hasHead: title !== "" || icon !== ""
-    readonly property int headGap: hasHead && !folded ? Theme.u * 4 : 0
-    implicitHeight: fluent ? (folded ? fhead.height : fhead.height + 8 + col.implicitHeight) : Theme.pad * 2 + (hasHead ? head.height : 0) + headGap + (folded ? 0 : col.implicitHeight)
+    implicitHeight: fluent ? (advanced ? fold.y + fold.height + (folded ? 0 : col.implicitHeight + Theme.u * 4) : container.y + col.implicitHeight + Theme.u * 6) : classic ? card.y + col.implicitHeight + Theme.pad * 2 : col.y + col.implicitHeight + Theme.pad
 
-    PxBox {
-        visible: !root.fluent
-        anchors.fill: parent
-        color: Qt.alpha(Theme.face, Config.appearance.blur ? 0.9 : 1)
-        shadow: Config.appearance.shadows
-    }
-
-    Row {
-        id: fhead
+    // ---- Windows 11: the container under the caption, or the card that unfolds ----
+    Rectangle {
+        id: container
         visible: root.fluent
-        height: root.fluent ? (root.title !== "" ? 28 : 0) : 0
-        spacing: 6
-        Text {
-            visible: root.advanced && !Config.settingsUi.expert
+        y: root.advanced ? fold.y : head.height + Theme.u * 2
+        width: root.width
+        height: root.height - y
+        radius: root.mac ? Theme.u * 5 : 0
+        color: root.mac ? (Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.035)) : Theme.mix(Theme.face, Theme.sunken, Theme.dark ? 0.45 : 0.3)
+        border.width: root.mac ? 0 : Math.max(1, Theme.u / 2)
+        border.color: Qt.alpha(Theme.lo, Theme.dark ? 0.85 : 0.45)
+    }
+    Rectangle {
+        id: fold
+        visible: root.fluent && root.advanced
+        width: root.width
+        height: Math.max(Theme.fit(22), foldText.implicitHeight + Theme.u * 8)
+        radius: root.mac ? Theme.u * 5 : 0
+        color: root.mac ? (foldMouse.containsMouse ? (Theme.dark ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(0, 0, 0, 0.06)) : (Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.035))) : foldMouse.containsMouse ? Theme.mix(Theme.faceAlt, Theme.accent, 0.12) : Theme.mix(Theme.face, Theme.faceAlt, 0.55)
+        border.width: root.mac ? 0 : Math.max(1, Theme.u / 2)
+        border.color: Qt.alpha(Theme.lo, Theme.dark ? 0.9 : 0.5)
+        SettingsTile {
+            id: foldTile
+            x: Theme.u * 5
             anchors.verticalCenter: parent.verticalCenter
-            text: root.folded ? "›" : "⌄"
-            color: WinStyle.text
-            font.family: WinStyle.font
-            font.pixelSize: 14
+            icon: root.icon || "gear"
+            tint: Theme.mix(Theme.accent, Theme.face, 0.25)
+            opacity: root.mac ? 0 : 1
         }
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.title
-            color: WinStyle.text
-            font.family: WinStyle.font
-            font.pixelSize: 14
-            font.weight: Font.DemiBold
-            renderType: Text.NativeRendering
+        // …a Mac's coloured icon square instead
+        Rectangle {
+            visible: root.mac
+            anchors.centerIn: foldTile
+            width: GoldenGate.px(24)
+            height: width
+            radius: GoldenGate.px(6)
+            color: Theme.accent
+            MacIcon {
+                anchors.centerIn: parent
+                name: MacIcons.fromPixel(root.icon || "gear") || "settings"
+                size: parent.width * 0.66
+                stroke: 2
+                color: "#ffffff"
+            }
         }
-        Text {
-            visible: root.folded
+        Column {
+            id: foldText
+            anchors.left: foldTile.right
+            anchors.leftMargin: Theme.u * 5
+            anchors.right: foldArrow.left
+            anchors.rightMargin: Theme.u * 4
             anchors.verticalCenter: parent.verticalCenter
-            text: I18n.t("· дополнительно", "· advanced")
-            color: WinStyle.text2
-            font.family: WinStyle.font
-            font.pixelSize: 12
+            PxText {
+                width: parent.width
+                text: root.title
+                elide: Text.ElideRight
+            }
+            // what is inside: the first few rows' names
+            PxText {
+                visible: text !== ""
+                width: parent.width
+                text: root.summary
+                kind: "tiny"
+                dim: true
+                elide: Text.ElideRight
+            }
+        }
+        PxText {
+            id: foldArrow
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.u * 5
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.mac ? (root.folded ? "›" : "⌄") : root.folded ? "▾" : "▴"
+            kind: "title"
+            dim: true
+        }
+        MouseArea {
+            id: foldMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                const open = root.folded;
+                root.unfolded = open;
+                if (!open && root.openSub === root.title)
+                    Shell.settingsNavFor(root).settingsSub = "";
+            }
         }
     }
-    MouseArea {
-        visible: root.fluent && root.advanced && !Config.settingsUi.expert
-        width: fhead.width
-        height: fhead.height
-        cursorShape: Qt.PointingHandCursor
-        onClicked: root.open = !root.open
+    // the names of the rows inside a folded card
+    readonly property string summary: {
+        if (!fluent || !advanced)
+            return "";
+        const names = [];
+        for (const c of col.children)
+            if (c.label !== undefined && c.hint !== undefined && c.label && names.length < 4)
+                names.push(c.label);
+        return names.join(", ");
     }
+
+    // ---- Windose / Stream ----
+    Rectangle {
+        visible: !root.classic && !root.fluent
+        anchors.fill: parent
+        radius: root.settingsSkin === "stream" ? Theme.u * 3 : 0
+        color: root.settingsSkin === "stream" ? Theme.streamPanel : Theme.windosePaper
+        border.width: Math.max(1, Theme.u / 2)
+        border.color: root.settingsSkin === "stream" ? Theme.mix(Theme.streamLive, Theme.streamPanel, 0.38) : Theme.windoseLine
+    }
+    Rectangle {
+        visible: !root.classic && !root.fluent
+        x: Theme.u
+        y: Theme.u
+        width: root.width - Theme.u * 2
+        height: head.height + Theme.u * 4
+        radius: root.settingsSkin === "stream" ? Theme.u * 2 : 0
+        color: root.settingsSkin === "stream" ? Theme.mix(Theme.streamPanel, Theme.streamLive, 0.14) : Theme.mix(Theme.windosePaper, Theme.windoseRose, 0.22)
+    }
+
+    // ---- classic: the card under the caption ----
+    PxBox {
+        id: card
+        visible: root.classic
+        y: head.height + Theme.u * 2
+        width: root.width
+        height: root.height - y
+        color: Theme.mix(Theme.face, Theme.faceAlt, 0.35)
+    }
+
     Row {
         id: head
-        visible: !root.fluent && root.hasHead
-        x: Theme.pad
-        y: Theme.pad
+        // open as a sub-page, its title is the page's heading already (the folding card says it)
+        visible: root.openSub !== root.title && !(root.fluent && root.advanced) && root.title !== ""
+        height: visible ? implicitHeight : 0
+        x: root.classic ? Theme.u * 2 : Theme.u * 6
+        y: root.classic ? 0 : Theme.u * 3
         spacing: Theme.u * 3
+        leftPadding: root.classic ? 0 : Theme.u * 2
+        rightPadding: Theme.u * 2
+        // the Golden Gate skin: no icon by a group's caption, as in System Settings
         PxIcon {
-            visible: root.icon !== ""
+            visible: root.icon !== "" && !root.mac
             name: root.icon || "heart"
             anchors.verticalCenter: parent.verticalCenter
+            pixel: root.classic ? Math.max(1, Theme.u - 1) : Theme.u
+            ink: root.settingsSkin === "stream" ? Theme.streamLive : root.settingsSkin === "windose" ? Theme.windoseRose : Theme.textDim
         }
         PxText {
-            visible: root.advanced && !Config.settingsUi.expert
-            text: root.folded ? "▸" : "▾"
-            color: Theme.dark ? Theme.accent : Theme.edge
+            text: root.title
+            kind: root.classic || root.fluent ? "body" : "title"
+            color: root.settingsSkin === "stream" ? Theme.streamText : root.settingsSkin === "windose" ? Theme.windoseInk : Theme.textDim
+            font.bold: true
             anchors.verticalCenter: parent.verticalCenter
         }
-        PxText {
-            text: root.title.toUpperCase()
-            color: Theme.dark ? Theme.accent : Theme.edge
-            font.letterSpacing: Theme.u / 2
+        // a group new since you last looked (services/SettingsNews)
+        NewStar {
+            visible: root.isNew
             anchors.verticalCenter: parent.verticalCenter
         }
-        PxText {
-            visible: root.folded
-            text: I18n.t("· дополнительно", "· advanced")
-            kind: "tiny"
-            dim: true
-            anchors.verticalCenter: parent.verticalCenter
-        }
-    }
-    MouseArea {
-        visible: !root.fluent && root.advanced && !Config.settingsUi.expert
-        x: head.x
-        y: head.y
-        width: head.width
-        height: head.height
-        cursorShape: Qt.PointingHandCursor
-        onClicked: root.open = !root.open
     }
 
     Column {
         id: col
+        readonly property bool fixedWidth: true // PxToggle wraps its label to fit
         visible: !root.folded
-        x: root.fluent ? 0 : Theme.pad
-        y: root.fluent ? fhead.height + 8 : Theme.pad + (root.hasHead ? head.height : 0) + root.headGap
-        width: root.width - (root.fluent ? 0 : Theme.pad * 2)
-        spacing: root.fluent ? 4 : root.spacing
+        x: root.fluent ? Theme.u * 3 : Theme.pad
+        y: root.fluent ? (root.advanced ? fold.y + fold.height + Theme.u * 3 : container.y + Theme.u * 3) : root.classic ? card.y + Theme.pad : head.y + head.height + Theme.u * 4
+        width: root.width - (root.fluent ? Theme.u * 6 : Theme.pad * 2)
+        spacing: root.fluent ? Theme.u * 2 : root.spacing
     }
 }
