@@ -5,9 +5,14 @@
 #   dotfiles-update.sh --check REPO           fetch; print BRANCH/UPSTREAM/BEHIND/AHEAD/DIRTY/REMOTE and IN <commit> lines
 #   dotfiles-update.sh --clone DEST [URL]     first-time download of the official repository
 #   dotfiles-update.sh REPO                   git pull --ff-only, snapshot configs, run the installer non-interactively
+#   dotfiles-update.sh --last                 print the latest update snapshot: SNAPSHOT <dir> / FROM / TO / WHEN
+#   dotfiles-update.sh --rollback [REPO]      put the configs of the latest snapshot back, the repository too
 #
-# Nothing is updated without a click. The installer keeps replaced files as
-# *.bak.<date>; the current keyboard layouts are passed through so they survive.
+# Nothing is updated without a click. TrollOS: the installer runs in smart-update
+# mode (UPDATE_FROM): only files the update changed are touched, the user's own
+# edits are merged three-way, a failed merge keeps the user's file and puts the
+# new one next to it as *.trollos-new (listed as CONFLICT lines). The current
+# keyboard layouts are passed through so they survive.
 set -Eeuo pipefail
 say() { printf '» %s\n' "$*"; }
 # TrollOS: updates come from the TrollOS fork, not from upstream angelOS
@@ -42,7 +47,58 @@ find_repo() {
   return 1
 }
 
+SNAPS="$STATE/backups"
+last_snapshot() {
+  local d
+  for d in $(ls -1d "$SNAPS"/*-update 2>/dev/null | sort -r); do
+    [[ -f "$d/.from" ]] && { printf '%s\n' "$d"; return 0; }
+  done
+  return 1
+}
+
 case "${1:-}" in
+  --last)
+    d="$(last_snapshot)" || exit 1
+    echo "SNAPSHOT $d"
+    echo "FROM $(cat "$d/.from")"
+    echo "TO $(cat "$d/.to" 2>/dev/null || echo ?)"
+    echo "WHEN $(basename "$d" | cut -c1-15)"
+    [[ -f "$d/.rolled-back" ]] && echo "ROLLEDBACK 1"
+    exit 0 ;;
+  --rollback)
+    d="$(last_snapshot)" || { say "нет снимка обновления — откатывать нечего"; exit 2; }
+    [[ -f "$d/.rolled-back" ]] && { say "это обновление уже откачено"; exit 2; }
+    say "откат к снимку $(basename "$d")"
+    # what is there now goes into its own snapshot, so the rollback can be undone by hand
+    keep="$SNAPS/$(date +%Y%m%d-%H%M%S)-before-rollback"
+    mkdir -p "$keep"
+    for x in "$d"/.config/* "$d"/.config/quickshell/angelos "$d"/.local/bin/*; do
+      [[ -e "$x" ]] || continue
+      rel="${x#"$d/"}"
+      [[ "$rel" == .config/quickshell ]] && continue
+      [[ -e "$HOME/$rel" ]] && { mkdir -p "$keep/$(dirname "$rel")"; cp -a "$HOME/$rel" "$keep/$rel"; }
+    done
+    say "текущие конфиги сохранены в $keep"
+    for x in "$d/.config" "$d/.local"; do
+      [[ -d "$x" ]] && cp -a "$x" "$HOME/"
+    done
+    # the new versions the update left next to the user's files
+    if [[ -f "$d/.conflicts" ]]; then
+      while IFS= read -r f; do rm -f -- "$f.trollos-new"; done <"$d/.conflicts"
+    fi
+    # files the update added to the shell are dropped, so it is exactly the old version
+    if [[ -d "$d/.config/quickshell/angelos" ]]; then
+      (cd "$HOME/.config/quickshell/angelos" && find . -type f ! -path '*/__pycache__/*' | while read -r f; do
+        [[ -e "$d/.config/quickshell/angelos/$f" ]] || { mkdir -p "$keep/.config/quickshell/angelos/$(dirname "$f")"; mv "$f" "$keep/.config/quickshell/angelos/$f"; }
+      done)
+    fi
+    REPO="${2:-$(find_repo || true)}"
+    if [[ -n "$REPO" ]] && is_repo "$REPO" && [[ -z "$(git -C "$REPO" status --porcelain)" ]]; then
+      git -C "$REPO" reset -q --hard "$(cat "$d/.from")" && say "репозиторий: $(git -C "$REPO" log -1 --format='%h %s')"
+    fi
+    touch "$d/.rolled-back"
+    say "откат готов ♡ — перезапусти оболочку"
+    exit 0 ;;
   --find)
     find_repo || exit 1
     exit 0 ;;
@@ -86,20 +142,35 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 3
 fi
 
+FROM="$(git rev-parse HEAD)"
 say "git pull ($(git rev-parse --abbrev-ref HEAD))"
 git pull --ff-only 2>&1
+TO="$(git rev-parse HEAD)"
+if [[ "$FROM" == "$TO" ]]; then
+  say "новых изменений нет ♡"
+  exit 0
+fi
 
 # snapshot the configs into a fresh folder before the installer touches them
-B="$STATE/backups/$(date +%Y%m%d-%H%M%S)-update"
+B="$SNAPS/$(date +%Y%m%d-%H%M%S)-update"
 mkdir -p "$B"
 for d in .config/niri .config/quickshell/angelos .config/angelos .config/kitty .config/foot .config/alacritty \
-         .config/gtk-3.0 .config/gtk-4.0 .config/fish .local/bin; do
+         .config/gtk-3.0 .config/gtk-4.0 .config/fish; do
   if [[ -e "$HOME/$d" ]]; then
     mkdir -p "$B/$(dirname "$d")"
-    cp -rn "$HOME/$d" "$B/$d"
+    cp -a "$HOME/$d" "$B/$d"
   fi
 done
+# ~/.local/bin holds big programs too: only the scripts the dotfiles ship
+mkdir -p "$B/.local/bin"
+for f in .local/bin/*; do
+  [[ -e "$HOME/$f" ]] && cp -a "$HOME/$f" "$B/$f"
+done
+printf '%s\n' "$FROM" >"$B/.from"
+printf '%s\n' "$TO" >"$B/.to"
 say "снимок конфигов: $B"
+# keep the five latest update snapshots
+ls -1d "$SNAPS"/*-update 2>/dev/null | sort -r | tail -n +6 | while read -r old; do rm -rf -- "$old"; done
 
 # keep the keyboard as it is now
 input="$CONF/niri/cfg/input.kdl"
@@ -112,9 +183,12 @@ if [[ -f "$input" ]]; then
 fi
 
 say "запускаю установщик (без пакетов, SDDM и служб)"
-env DOTFILES_MODE=full DESKTOP_SHELL=angelos SKIP_PACKAGES=1 INSTALL_SDDM=0 INSTALL_VOXTYPE=0 \
+env UPDATE_FROM="$FROM" CONFLICT_LIST="$B/.conflicts" DOTFILES_MODE=full DESKTOP_SHELL=angelos SKIP_PACKAGES=1 INSTALL_SDDM=0 INSTALL_VOXTYPE=0 \
     DOWNLOAD_VOXTYPE_MODEL=0 INSTALL_WALLPAPERS=0 INSTALL_FLATPAK=0 ENABLE_SERVICES=0 "${kb_env[@]}" \
     bash ./install.sh </dev/null 2>&1
+if [[ -s "$B/.conflicts" ]]; then
+  while IFS= read -r f; do say "CONFLICT $f"; done <"$B/.conflicts"
+fi
 
 if [[ -f "$CONF/angelos/active" ]]; then
   say "angelOS активен — перепроверяю интеграцию с niri"

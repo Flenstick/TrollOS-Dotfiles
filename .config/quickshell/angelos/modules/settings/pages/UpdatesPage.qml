@@ -11,10 +11,11 @@ PxPage {
     id: page
 
     heading: I18n.t("Обновления", "Updates")
-    subtitle: I18n.t("angelOS обновляется из репозитория dotfiles, из которого его установили: git pull и установщик без пакетов. Перед этим снимок конфигов, заменённые файлы остаются как *.bak.", "angelOS updates from the dotfiles repository it was installed from: git pull and the installer without packages. A snapshot of your configs is taken first; replaced files stay as *.bak.")
+    subtitle: I18n.t("TrollOS обновляется из репозитория, из которого его установили. Меняются только файлы, которые изменились в обновлении; твои правки сливаются с новой версией, а если не получилось — твой файл остаётся, новая версия ложится рядом (*.trollos-new). Перед обновлением снимок конфигов — обновление можно откатить.", "TrollOS updates from the repository it was installed from. Only files the update changed are touched; your edits are merged with the new version, and when that fails your file stays and the new one is put next to it (*.trollos-new). Your configs are snapshotted first, so an update can be rolled back.")
 
     Component.onCompleted: {
         Updates.find();
+        Updates.readLast();
         if (Updates.repo && Updates.state === "idle")
             Updates.check();
     }
@@ -96,10 +97,27 @@ PxPage {
                 onClicked: Updates.update()
             }
             PxButton {
+                visible: Updates.canRollback
+                icon: "arrowLeft"
+                enabled: !Updates.busy
+                text: Updates.state === "rollingback" ? I18n.t("откатываю…", "rolling back…") : I18n.t("Откатить обновление", "Roll back the update")
+                onClicked: Updates.rollback()
+            }
+            PxButton {
                 visible: Updates.state === "done"
                 icon: "power"
                 text: I18n.t("Перезапустить оболочку", "Restart the shell")
                 onClicked: Updates.restartShell()
+            }
+        }
+        SettingRow {
+            visible: Updates.canRollback
+            label: I18n.t("Последнее обновление", "Last update")
+            hint: I18n.t("откат вернёт конфиги из снимка, а то, что сейчас, сохранит отдельно", "rolling back puts the snapshot's configs back and keeps the current ones aside")
+            PxText {
+                width: parent.width
+                wrapMode: Text.Wrap
+                text: Updates.last ? Updates.last.when.replace(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d).*/, "$3.$2.$1 $4:$5") + "  ·  " + Updates.last.from + " → " + Updates.last.to : ""
             }
         }
         SettingRow {
@@ -108,6 +126,28 @@ PxPage {
             PxToggle {
                 checked: Config.updates.autoCheck
                 onToggled: c => Config.updates.autoCheck = c
+            }
+        }
+    }
+
+    PxGroup {
+        visible: Updates.conflicts.length > 0
+        title: I18n.t("Твои правки сохранены", "Your edits were kept")
+        icon: "warn"
+        width: parent.width
+        PxText {
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: I18n.t("В этих файлах и ты, и обновление поменяли одни и те же строки. Оставлен твой вариант, новый лежит рядом с окончанием .trollos-new — сравни и перенеси, что нужно.", "You and the update changed the same lines in these files. Yours stayed; the new one is next to it ending in .trollos-new — compare and take what you need.")
+        }
+        Repeater {
+            model: Updates.conflicts
+            PxText {
+                required property string modelData
+                width: parent.width
+                kind: "mono"
+                elide: Text.ElideMiddle
+                text: "✧ " + modelData.replace(Config.home, "~")
             }
         }
     }

@@ -1,0 +1,17 @@
+# What scripts/trollos/publish.sh takes from the author's system besides the
+# shell itself (~/.config/quickshell/angelos). One entry per line.
+#   plugin <id>   ~/.config/angelos/plugins/<id> → .config/quickshell/angelos/plugins/<id>
+#   bin <name>    ~/.local/bin/<name>            → .local/bin/<name>
+# Plugins not listed here (pentagram, sigil-wallpaper, torture-room, …) stay private.
+
+plugin caffeine
+plugin power-mode
+plugin emoji-panel
+plugin close-confirm
+plugin dynamic-island
+plugin friend-runner
+plugin panel-shooter
+
+bin angelos-shot
+bin angelos-snip
+bin niri-game-mode

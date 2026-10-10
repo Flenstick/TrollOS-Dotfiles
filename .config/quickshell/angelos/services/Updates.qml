@@ -15,7 +15,7 @@ Singleton {
     readonly property string managedDir: Config.home + "/.local/share/angelos/dotfiles"
     property string found: ""                     // repository found on disk
     readonly property string repo: Config.expand(Config.updates.repo) || found
-    property string state: "idle"                 // idle | checking | updating | cloning | done | failed
+    property string state: "idle"                 // idle | checking | updating | cloning | rollingback | done | failed
     property var log: []
     property var incoming: []
     property int behind: 0
@@ -25,7 +25,13 @@ Singleton {
     property string remote: ""
     property bool trusted: true
     property string error: ""
-    readonly property bool busy: state === "checking" || state === "updating" || state === "cloning"
+    readonly property bool busy: state === "checking" || state === "updating" || state === "cloning" || state === "rollingback"
+    // TrollOS: files where the user's edits and the update could not be merged
+    // (the user's file stays, the new version is next to it as *.trollos-new)
+    property var conflicts: []
+    // the latest update snapshot, for «Откатить»: {dir, from, to, when, rolledBack}
+    property var last: null
+    readonly property bool canRollback: !!last && !last.rolledBack
     readonly property bool available: behind > 0
 
     function find() {
@@ -44,6 +50,7 @@ Singleton {
         if (busy || !repo)
             return;
         state = "updating";
+        conflicts = [];
         log = ["» " + repo];
         runner.command = ["bash", script, repo];
         runner.running = true;
@@ -56,6 +63,19 @@ Singleton {
         runner.command = ["bash", script, "--clone", managedDir];
         runner.running = true;
     }
+    function rollback() {
+        if (busy || !canRollback)
+            return;
+        state = "rollingback";
+        conflicts = [];
+        log = [];
+        runner.command = ["bash", script, "--rollback"].concat(repo ? [repo] : []);
+        runner.running = true;
+    }
+    function readLast() {
+        if (!lastReader.running)
+            lastReader.running = true;
+    }
     function restartShell() {
         Quickshell.execDetached([Quickshell.shellDir + "/bin/angelos", "restart"]);
     }
@@ -66,6 +86,28 @@ Singleton {
         command: ["bash", root.script, "--find"]
         stdout: StdioCollector {
             onStreamFinished: root.found = text.trim()
+        }
+    }
+    Process {
+        id: lastReader
+        running: true
+        command: ["bash", root.script, "--last"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const o = {};
+                for (const l of text.split("\n")) {
+                    const i = l.indexOf(" ");
+                    if (i > 0)
+                        o[l.slice(0, i)] = l.slice(i + 1);
+                }
+                root.last = o.SNAPSHOT ? {
+                    "dir": o.SNAPSHOT,
+                    "from": (o.FROM || "").slice(0, 7),
+                    "to": (o.TO || "").slice(0, 7),
+                    "when": o.WHEN || "",
+                    "rolledBack": o.ROLLEDBACK === "1"
+                } : null;
+            }
         }
     }
     Process {
@@ -109,7 +151,12 @@ Singleton {
     Process {
         id: runner
         stdout: SplitParser {
-            onRead: line => root.log = root.log.concat([line]).slice(-500)
+            onRead: line => {
+                root.log = root.log.concat([line]).slice(-500);
+                const m = /^» CONFLICT (.+)$/.exec(line);
+                if (m)
+                    root.conflicts = root.conflicts.concat([m[1]]);
+            }
         }
         stderr: SplitParser {
             onRead: line => root.log = root.log.concat([line]).slice(-500)
@@ -125,6 +172,7 @@ Singleton {
                     Cursors.apply(Config.cursor.theme, Config.cursor.size);
             }
             root.find();
+            root.readLast();
             Qt.callLater(root.check);
         }
     }
@@ -138,7 +186,7 @@ Singleton {
         if (head === notifiedFor)
             return;
         notifiedFor = head;
-        Quickshell.execDetached(["notify-send", "-a", "angelOS", "-i", "system-software-update", I18n.t("Доступно обновление angelOS", "An angelOS update is available"), I18n.t("Новых изменений: ", "New changes: ") + behind + I18n.t(". Настройки → Обновления.", ". Settings → Updates.")]);
+        Quickshell.execDetached(["notify-send", "-a", "TrollOS", "-i", "system-software-update", I18n.t("Доступно обновление TrollOS", "A TrollOS update is available"), I18n.t("Новых изменений: ", "New changes: ") + behind + I18n.t(". Настройки → Обновления.", ". Settings → Updates.")]);
     }
     Timer {
         interval: 90 * 1000

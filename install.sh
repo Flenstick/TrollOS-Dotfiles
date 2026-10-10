@@ -480,7 +480,18 @@ install_voxtype_model() {
 
 # ── Config files ─────────────────────────────────────────────────────────────
 
-N_INSTALLED=0 N_UNCHANGED=0 N_KEPT=0
+N_INSTALLED=0 N_UNCHANGED=0 N_KEPT=0 N_MERGED=0 N_CONFLICT=0 N_REMOVED=0
+
+# TrollOS smart update: UPDATE_FROM=<commit the system was on> (set by
+# scripts/dotfiles-update.sh). Only files the update changed are touched, and a
+# file the user edited is merged three-way (their version, the old one, the new
+# one) instead of being replaced; when the merge fails their file stays and the
+# new version is put next to it as *.trollos-new.
+UPDATE_FROM="${UPDATE_FROM:-}"
+if [[ -n "$UPDATE_FROM" ]] && ! git -C "$ROOT" cat-file -e "$UPDATE_FROM^{commit}" 2>/dev/null; then
+  UPDATE_FROM=""
+fi
+CONFLICT_LIST="${CONFLICT_LIST:-}"
 
 sed_escape() { printf '%s' "$1" | sed -e 's/[\/&|\\]/\\&/g'; }
 
@@ -519,6 +530,65 @@ keep_existing() {
   return 1
 }
 
+# The repository's version of $1 (repo path) at commit $2, rendered into $3.
+render_old() {
+  local rel="$1" commit="$2" out="$3" raw
+  raw="$(mktemp)"; TMP_FILES+=("$raw")
+  git -C "$ROOT" show "$commit:$rel" >"$raw" 2>/dev/null || return 1
+  chmod --reference="$ROOT/$rel" "$raw" 2>/dev/null || true
+  render "$raw" "$out"
+}
+
+# Smart update of an existing file; returns 1 when the plain install should run.
+update_file() {
+  local src="$1" dst="$2" new="$3" srel="${1#"$ROOT/"}" old merged
+  # not part of this update: whatever the user has stays
+  if git -C "$ROOT" diff --quiet "$UPDATE_FROM" HEAD -- "$srel" 2>/dev/null; then
+    N_KEPT=$((N_KEPT + 1)); return 0
+  fi
+  old="$(mktemp)"; TMP_FILES+=("$old")
+  render_old "$srel" "$UPDATE_FROM" "$old" || return 1   # new in this update
+  # (no *.bak in update mode: scripts/dotfiles-update.sh snapshotted everything)
+  if cmp -s -- "$old" "$dst"; then                       # untouched by the user
+    cp -p -- "$new" "$dst"
+    chmod --reference="$src" "$dst"
+    N_INSTALLED=$((N_INSTALLED + 1))
+    return 0
+  fi
+  merged="$(mktemp)"; TMP_FILES+=("$merged")
+  if grep -Iq . "$dst" && grep -Iq . "$new" && cp -- "$dst" "$merged" \
+     && git merge-file -q "$merged" "$old" "$new" 2>/dev/null; then
+    cmp -s -- "$merged" "$dst" && { N_UNCHANGED=$((N_UNCHANGED + 1)); return 0; }
+    cp -- "$merged" "$dst"
+    chmod --reference="$src" "$dst"
+    N_MERGED=$((N_MERGED + 1))
+    say "$(_ 'merged with your edits' 'слито с твоими правками'): ${dst/#$HOME_DIR/\~}"
+    return 0
+  fi
+  cp -p -- "$new" "$dst.trollos-new"
+  N_CONFLICT=$((N_CONFLICT + 1))
+  say "$(_ 'kept your file, the new version is next to it' 'оставлен твой файл, новая версия рядом'): ${dst/#$HOME_DIR/\~}.trollos-new"
+  [[ -n "$CONFLICT_LIST" ]] && printf '%s\n' "$dst" >>"$CONFLICT_LIST"
+  return 0
+}
+
+# Files the update deleted from the repository go away too, but only when the
+# user never edited them (otherwise they are left alone).
+remove_deleted() {
+  [[ -n "$UPDATE_FROM" ]] || return 0
+  local rel dest old
+  while IFS= read -r rel; do
+    [[ "$rel" == .config/* || "$rel" == .local/bin/* ]] || continue
+    dest="$(destination "$rel")"
+    [[ -n "$dest" && -f "$HOME_DIR/$dest" && ! -e "$ROOT/$dest" ]] || continue
+    old="$(mktemp)"; TMP_FILES+=("$old")
+    render_old "$rel" "$UPDATE_FROM" "$old" || continue
+    cmp -s -- "$old" "$HOME_DIR/$dest" || continue
+    rm -f -- "$HOME_DIR/$dest"
+    N_REMOVED=$((N_REMOVED + 1))
+  done < <(git -C "$ROOT" diff --name-only --diff-filter=D "$UPDATE_FROM" HEAD 2>/dev/null)
+}
+
 install_file() {
   local src="$1" rel="$2" dst="$HOME_DIR/$2" tmp
   if keep_existing "$rel" && [[ -e "$dst" ]]; then
@@ -528,6 +598,9 @@ install_file() {
   render "$src" "$tmp"
   if [[ -e "$dst" ]] && cmp -s -- "$tmp" "$dst"; then
     N_UNCHANGED=$((N_UNCHANGED + 1)); return 0
+  fi
+  if [[ -n "$UPDATE_FROM" && -f "$dst" ]] && update_file "$src" "$dst" "$tmp"; then
+    return 0
   fi
   mkdir -p -- "$(dirname -- "$dst")"
   backup "$dst"
@@ -576,6 +649,7 @@ install_configs() {
     dest="$(destination "$rel")"
     [[ -n "$dest" ]] && install_file "$src" "$dest"
   done < <(find "$ROOT/.config" "$ROOT/.local/bin" -type f -print0 | sort -z)
+  remove_deleted
 
   # The light variants also answer to the regular command names.
   if [[ "$MODE" == tech ]]; then
@@ -814,6 +888,10 @@ summary() {
   fi
   say "$(_ "Files: $N_INSTALLED installed, $N_UNCHANGED unchanged, $N_KEPT kept" \
            "Файлы: $N_INSTALLED установлено, $N_UNCHANGED без изменений, $N_KEPT сохранено")"
+  if [[ -n "$UPDATE_FROM" ]]; then
+    say "$(_ "Update: $N_MERGED merged with your edits, $N_CONFLICT kept as yours (new version in *.trollos-new), $N_REMOVED removed" \
+             "Обновление: $N_MERGED слито с твоими правками, $N_CONFLICT оставлено твоими (новая версия в *.trollos-new), $N_REMOVED удалено")"
+  fi
   say "$(_ 'Keyboard' 'Клавиатура'): ${KB_LAYOUTS}${KB_OPTIONS:+  ($KB_OPTIONS)}"
   say "$(_ '  change later in' '  изменить позже в') ~/.config/niri/cfg/input.kdl"
   say "$(_ 'Monitors: run nwg-displays, or edit ~/.config/niri/monitor.kdl' \
