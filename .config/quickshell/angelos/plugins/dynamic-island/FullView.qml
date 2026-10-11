@@ -104,7 +104,28 @@ Column {
         spacing: root.u * 2
         visible: !!root.player && Lyrics.length > 0
 
+        // TrollOS: the progress as Android's wave while the track plays (Settings → Material You →
+        // «Волна у трека»; it works in any look), flat while paused
+        WavyLine {
+            visible: Theme.materialSkin && Config.material.wavy
+            width: parent.width
+            height: root.u * 9
+            progress: Math.min(1, root.pos / Math.max(1, Lyrics.length))
+            playing: Lyrics.playing
+            color: Theme.accent
+            track: Qt.alpha(Theme.text, 0.22)
+            MouseArea {
+                anchors.fill: parent
+                enabled: !!root.player && root.player.canSeek
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onClicked: m => {
+                    root.player.position = Lyrics.length * Math.max(0, Math.min(1, m.x / width));
+                    root.pos = root.player.position;
+                }
+            }
+        }
         PxBox {
+            visible: !(Theme.materialSkin && Config.material.wavy)
             width: parent.width
             height: root.u * 6
             sunken: true
@@ -216,7 +237,8 @@ Column {
     }
     Item {
         width: root.width - root.padding * 2
-        height: root.u * 15
+        // as tall as its buttons (Material's are taller than the pixel ones)
+        height: Math.max(root.u * 15, buttons.implicitHeight + root.u * 2)
 
         PhoneIcon {
             id: phoneIcon
@@ -225,6 +247,7 @@ Column {
             opacity: root.phone && root.phone.reachable ? 1 : 0.5
         }
         Column {
+            id: phoneLabels
             anchors.left: phoneIcon.right
             anchors.leftMargin: root.u * 4
             anchors.right: buttons.left
@@ -246,6 +269,9 @@ Column {
                 }
                 PxText {
                     kind: "tiny"
+                    // never under the buttons: it elides instead
+                    width: Math.min(implicitWidth, phoneLabels.width - x)
+                    elide: Text.ElideRight
                     color: !root.phone || !root.phone.reachable ? Theme.danger : Theme.textDim
                     text: !root.phone || root.phone.deviceId === "" ? "KDE Connect не видит телефон" : !root.phone.reachable ? "не на связи" : root.phone.battery >= 0 ? root.phone.battery + "%" + (root.phone.charging ? " · заряжается" : "") : "на связи"
                 }

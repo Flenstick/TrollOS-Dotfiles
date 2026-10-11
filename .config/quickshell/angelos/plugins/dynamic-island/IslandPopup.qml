@@ -48,6 +48,8 @@ PanelWindow {
     Region {
         id: blurRegion
         item: win.shown ? box : nothing
+        // TrollOS Material You: the blur rounded like the card
+        radius: Theme.materialSkin ? Math.min(box.height / 2, Theme.mdRadius("full")) * (1 - win.p) + Theme.mdRadius("xl") * win.p : 0
     }
 
     // ---- геометрия: откуда растём (строка на панели) и куда ----
@@ -164,8 +166,29 @@ PanelWindow {
         onPressed: win.host.close()
     }
 
+    // TrollOS: the «Material You» skin — the island grows from a pill into a rounded card, the
+    // controls inside are Material 3's (Theme.settingsSkinFor reads skinHost)
+    Item {
+        id: skinHost
+        anchors.fill: parent
+        readonly property string settingsSkin: Theme.materialSkin ? "material" : "classic"
+    }
+    Rectangle {
+        visible: Theme.materialSkin && win.shown
+        parent: skinHost
+        x: box.x
+        y: box.y
+        width: box.width
+        height: box.height
+        radius: Math.min(height / 2, Theme.mdRadius("full")) * (1 - win.p) + Theme.mdRadius("xl") * win.p
+        color: Theme.md.surfaceContainer
+        border.width: 1
+        border.color: Qt.alpha(Theme.md.outlineVariant, 0.55)
+    }
     PxBox {
         id: box
+        parent: skinHost
+        z: 1
         visible: win.shown
         readonly property real lerpW: win.fw + (win.atw - win.fw) * win.p
         readonly property real lerpH: win.fh + (win.ath - win.fh) * win.p
@@ -173,7 +196,7 @@ PanelWindow {
         y: Math.round(win.fy + (win.ty - win.fy) * win.p)
         width: Math.max(u * 4, Math.round(lerpW))
         height: Math.max(u * 4, Math.round(lerpH))
-        color: Theme.panel
+        color: Theme.materialSkin ? "transparent" : Theme.panel
         shadow: win.p > 0.6 && Config.appearance.shadows
         focus: win.mine
         Keys.onEscapePressed: win.host.close()
@@ -249,6 +272,4 @@ PanelWindow {
             }
         }
     }
-    // a right click into the window's corner can crash Qt (widgets/RightClickGuard)
-    RightClickGuard {}
 }
