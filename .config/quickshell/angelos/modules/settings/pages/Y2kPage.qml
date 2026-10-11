@@ -289,10 +289,10 @@ PxPage {
             width: parent.width - Theme.u * 6
             height: parent.height - lookLabel.height - Theme.u * 10
             SpriteRig {
-                visible: card.modelData.value === "chibi" || card.modelData.value === "glitch"
+                visible: card.modelData.value === "chibi" || card.modelData.value === "glitch" || (card.modelData.value === "lamb" && card.who === "angel")
                 anchors.centerIn: parent
                 who: card.who
-                variant: card.modelData.value === "glitch" ? "glitch" : ""
+                variant: card.modelData.value === "glitch" || card.modelData.value === "lamb" ? card.modelData.value : ""
                 px: Math.max(0.5, Theme.u / 4)
                 width: implicitWidth
                 height: implicitHeight
@@ -588,6 +588,10 @@ PxPage {
                         {
                             "value": "mini",
                             "label": I18n.t("Малышка 20×21", "Mini 20×21")
+                        },
+                        {
+                            "value": "lamb",
+                            "label": I18n.t("Барашек ⛧", "Lamb ⛧")
                         }
                     ]
                     LookCard {

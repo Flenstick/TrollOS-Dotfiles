@@ -85,7 +85,10 @@ PxPage {
             label: I18n.t("Значок стола", "Desk sprite")
             hint: ({
                     "star": I18n.t("звезда-блёстка ✦: у активного стола мерцает", "A sparkle star ✦: twinkles on the active desk"),
-                    "cd": I18n.t("радужный CD: у активного стола прокручивается", "A rainbow CD: spins on the active desk")
+                    "cd": I18n.t("радужный CD: у активного стола прокручивается", "A rainbow CD: spins on the active desk"),
+                    "cross": I18n.t("перевёрнутый крест ⸸: у пустого стола только контур", "An inverted cross ⸸: an empty desk is its outline"),
+                    "pentagram": I18n.t("перевёрнутая пентаграмма в круге: пустой стол — пустой круг", "An inverted pentagram in its circle: an empty desk is the empty circle"),
+                    "dot": I18n.t("простая точка: у пустого стола только кольцо", "A plain dot: an empty desk is its ring")
                 })[Config.workspaces.sprite] || I18n.t("пиксельное сердечко, как было", "The pixel heart, as before")
             Row {
                 spacing: Theme.u * 3
@@ -102,6 +105,18 @@ PxPage {
                         {
                             "id": "cd",
                             "label": I18n.t("CD-диск", "CD")
+                        },
+                        {
+                            "id": "cross",
+                            "label": I18n.t("Крест ⸸", "Cross ⸸")
+                        },
+                        {
+                            "id": "pentagram",
+                            "label": I18n.t("Пентаграмма", "Pentagram")
+                        },
+                        {
+                            "id": "dot",
+                            "label": I18n.t("Точка", "Dot")
                         }
                     ]
                     PxBox {

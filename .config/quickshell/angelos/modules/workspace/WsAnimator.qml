@@ -390,7 +390,7 @@ Item {
 
     // the sprite's bitmap cells, for the pixel style
     readonly property var heartCells: {
-        const rows = Icons.get(sprite === "star" ? "sparkleStar" : sprite === "cd" ? "cd" : "heart");
+        const rows = Icons.get(sprite === "star" ? "sparkleStar" : sprite === "cd" ? "cd" : sprite === "pentagram" ? "pentagramInv" : sprite === "cross" ? "crossInv" : sprite === "dot" ? "dotRing" : "heart");
         const w = rows[0].length, h = rows.length;
         const colors = {
             "o": a.accent,

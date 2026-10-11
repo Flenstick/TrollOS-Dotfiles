@@ -11,7 +11,7 @@ Flow {
     property var currentValue
     signal activated(var value)
 
-    spacing: Theme.u * 2
+    spacing: Theme.settingsSkinFor(root) === "material" ? Theme.mdPx(4) : Theme.u * 2
     readonly property real natural: {
         let w = 0, n = 0;
         for (const c of children)
@@ -30,6 +30,7 @@ Flow {
             text: modelData.label || ""
             icon: modelData.icon || ""
             checked: root.currentValue === modelData.value
+            outlined: true
             onClicked: {
                 // the owner's binding (currentValue: Config.x, onActivated: Config.x = v)
                 // updates it; assigning here first would break that binding and leave a

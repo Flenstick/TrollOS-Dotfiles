@@ -1,5 +1,6 @@
 import QtQuick
 import qs.config
+import "MaterialIcons.js" as MaterialIcons
 
 // NGO-style window: bevelled frame, gradient title bar, pixel buttons.
 // `hell` (Theme.realm, desktop widgets): the circle's dark frame, a blackletter title, and
@@ -16,7 +17,10 @@ Item {
     property string skin: Config.settingsUi.skin === "windose" ? "windose" : ""
     readonly property bool windose: skin === "windose" && !hell
     readonly property bool streamSkin: skin === "stream" && !hell
-    readonly property string settingsSkin: windose ? "windose" : streamSkin ? "stream" : "classic"
+    // TrollOS: the «Material You» skin (every window while it is on): a rounded surface, Material
+    // 3's title, a symbol for the icon, round icon buttons — and the controls inside follow
+    readonly property bool md: !hell && (skin === "material" || (Theme.materialSkin && skin !== "windose" && skin !== "stream"))
+    readonly property string settingsSkin: md ? "material" : windose ? "windose" : streamSkin ? "stream" : "classic"
     property bool flamesLive: true         // (kept for plugins: hell's rim is still now, HellAmbient moves it)
     property bool trim: true               // hell's rim (a copy drawn over its twin leaves it to it)
 
@@ -32,7 +36,7 @@ Item {
     property bool shadow: Config.appearance.shadows
     property color bodyColor: translucent ? Theme.panel : Theme.face
     property int bodyPadding: Theme.pad
-    readonly property int titleHeight: hell ? Theme.hellPx(Theme.fs) + Theme.u * 3 : compact ? Theme.sizeBody + Theme.u * 5 : Theme.sizeTitle + Theme.u * 5
+    readonly property int titleHeight: md ? Theme.mdPx(compact ? 44 : 56) : hell ? Theme.hellPx(Theme.fs) + Theme.u * 3 : compact ? Theme.sizeBody + Theme.u * 5 : Theme.sizeTitle + Theme.u * 5
     readonly property int chrome: frame.inset + Theme.u
     property alias titleBar: bar
     property alias titleMouse: titleMouse
@@ -44,8 +48,17 @@ Item {
     signal maximizeClicked
     signal titlePressed(var mouse)
 
+    Rectangle {
+        visible: root.md
+        anchors.fill: parent
+        radius: Theme.mdRadius("xl")
+        color: root.translucent ? Theme.md.surfaceContainer : Theme.md.surface
+        border.width: 1
+        border.color: Qt.alpha(Theme.md.outlineVariant, 0.55)
+    }
     PxBox {
         id: frame
+        visible: !root.md
         anchors.fill: parent
         hell: root.hell
         color: root.windose ? Theme.windosePaper : root.streamSkin ? Theme.streamBg : root.hell && root.bodyColor.a > 0 ? Theme.hellPanel : root.bodyColor
@@ -57,13 +70,13 @@ Item {
 
     Rectangle {
         id: bar
-        x: frame.inset + Theme.u
-        y: frame.inset + Theme.u
+        x: root.md ? Theme.mdPx(8) : frame.inset + Theme.u
+        y: root.md ? Theme.mdPx(4) : frame.inset + Theme.u
         width: root.width - 2 * x
         height: root.titleHeight
-        color: root.windose ? Theme.windoseRose : root.streamSkin ? Theme.streamPanel : root.hell ? (root.active ? Theme.mix(Theme.hellFaceAlt, Theme.hellRim, 0.25) : Theme.hellFace) : root.active ? Theme.menuHeader : Theme.faceAlt
+        color: root.md ? "transparent" : root.windose ? Theme.windoseRose : root.streamSkin ? Theme.streamPanel : root.hell ? (root.active ? Theme.mix(Theme.hellFaceAlt, Theme.hellRim, 0.25) : Theme.hellFace) : root.active ? Theme.menuHeader : Theme.faceAlt
         // Windose: the candy gradient from pink to lilac
-        gradient: root.windose ? candy : null
+        gradient: root.windose && !root.md ? candy : null
         Gradient {
             id: candy
             orientation: Gradient.Horizontal
@@ -89,7 +102,16 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             spacing: Theme.u * 3
 
+            MdSymbol {
+                visible: root.md
+                name: MaterialIcons.fromPixel(root.icon) || "apps"
+                size: Theme.mdPx(22)
+                fill: 1
+                color: Theme.md.primary
+                anchors.verticalCenter: parent.verticalCenter
+            }
             PxIcon {
+                visible: !root.md
                 name: root.icon
                 anchors.verticalCenter: parent.verticalCenter
                 ink: root.hell ? Theme.hellEdge : root.windose ? Theme.windoseInk : Theme.edge
@@ -120,10 +142,10 @@ Item {
                 text: root.title
                 kind: root.compact ? "body" : "title"
                 readonly property bool gothic: root.hell && Theme.latin(root.title)
-                font.family: gothic ? Theme.fontHell : root.compact ? Theme.fontBody : Theme.fontTitle
-                font.pixelSize: gothic ? Theme.hellPx(Theme.fs) : root.compact ? Theme.sizeBody : Theme.sizeTitle
+                font.family: root.md ? Theme.mdFont : gothic ? Theme.fontHell : root.compact ? Theme.fontBody : Theme.fontTitle
+                font.pixelSize: root.md ? Theme.mdPx(root.compact ? 16 : 20) : gothic ? Theme.hellPx(Theme.fs) : root.compact ? Theme.sizeBody : Theme.sizeTitle
                 font.bold: root.windose
-                color: root.windose ? Theme.text : root.streamSkin ? Theme.streamText : root.hell ? Theme.hellText : Theme.text
+                color: root.md ? Theme.md.onSurface : root.windose ? Theme.text : root.streamSkin ? Theme.streamText : root.hell ? Theme.hellText : Theme.text
                 style: Text.Normal
                 styleColor: Qt.alpha(Theme.edge, 0.55)
                 anchors.verticalCenter: parent.verticalCenter
@@ -140,7 +162,7 @@ Item {
             spacing: Theme.u * 2
 
             Row {
-                visible: root.decor && !root.compact
+                visible: root.decor && !root.compact && !root.md
                 spacing: Theme.u
                 anchors.verticalCenter: parent.verticalCenter
                 rightPadding: Theme.u * 3
@@ -180,11 +202,26 @@ Item {
                     id: tb
                     required property var modelData
                     visible: modelData.show
-                    width: root.titleHeight - Theme.u * 4
+                    width: root.md ? Theme.mdPx(40) : root.titleHeight - Theme.u * 4
                     height: width
                     anchors.verticalCenter: parent ? parent.verticalCenter : undefined
 
+                    Rectangle {
+                        visible: root.md
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: Theme.md.onSurfaceVariant
+                        opacity: tbMouse.pressed ? 0.12 : tbMouse.containsMouse ? 0.08 : 0
+                    }
+                    MdSymbol {
+                        visible: root.md
+                        anchors.centerIn: parent
+                        name: tb.modelData.id === "close" ? "close" : tb.modelData.id === "min" ? "remove" : "open_in_full"
+                        size: Theme.mdPx(tb.modelData.id === "max" ? 18 : 22)
+                        color: Theme.md.onSurfaceVariant
+                    }
                     PxBox {
+                        visible: !root.md
                         anchors.fill: parent
                         sunken: tbMouse.pressed
                         hell: root.hell
@@ -192,6 +229,7 @@ Item {
                         color: tbMouse.containsMouse && tb.modelData.id === "close" ? (root.hell ? Theme.hellBlood : Theme.danger) : root.windose ? Theme.windoseSticker : root.streamSkin ? Theme.streamBg : root.hell ? Theme.hellFace : Theme.face
                     }
                     PxIcon {
+                        visible: !root.md
                         anchors.centerIn: parent
                         anchors.horizontalCenterOffset: tbMouse.pressed ? Theme.u : 0
                         name: tb.modelData.icon
@@ -225,9 +263,9 @@ Item {
             right: parent.right
             bottom: parent.bottom
             topMargin: root.bodyPadding
-            leftMargin: frame.inset + root.bodyPadding
-            rightMargin: frame.inset + root.bodyPadding
-            bottomMargin: frame.inset + root.bodyPadding
+            leftMargin: (root.md ? Theme.mdPx(8) : frame.inset) + root.bodyPadding
+            rightMargin: (root.md ? Theme.mdPx(8) : frame.inset) + root.bodyPadding
+            bottomMargin: (root.md ? Theme.mdPx(8) : frame.inset) + root.bodyPadding
         }
     }
 

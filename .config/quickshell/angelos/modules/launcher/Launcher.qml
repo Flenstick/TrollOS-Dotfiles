@@ -292,6 +292,9 @@ PanelWindow {
     // ---- the panel: a ribbon, the big field, results and details, the key hints ----
     Item {
         id: dialog
+        // TrollOS: the «Material You» skin — a rounded sheet, a search bar, Material's rows
+        readonly property bool md: Theme.materialSkin
+        readonly property string settingsSkin: md ? "material" : "classic"
         width: Math.min(Theme.u * 320, win.width - Theme.u * 20)
         height: Math.min(Theme.u * 236, win.height - Theme.u * 20)
         x: Math.round((win.width - width) / 2)
@@ -325,7 +328,16 @@ PanelWindow {
             anchors.fill: parent
         }
 
+        Rectangle {
+            visible: dialog.md
+            anchors.fill: parent
+            radius: Theme.mdRadius("xl")
+            color: Theme.md.surfaceContainer
+            border.width: 1
+            border.color: Qt.alpha(Theme.md.outlineVariant, 0.55)
+        }
         PxBox {
+            visible: !dialog.md
             anchors.fill: parent
             color: Theme.panel
             shadow: Config.appearance.shadows
@@ -334,10 +346,11 @@ PanelWindow {
         // the ribbon: the title gradient, a few pixels twinkling along it
         Rectangle {
             id: ribbon
+            visible: !dialog.md
             x: Theme.u * 2
             y: Theme.u * 2
             width: parent.width - Theme.u * 4
-            height: Theme.u * 4
+            height: dialog.md ? 0 : Theme.u * 4
             gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop {
@@ -383,7 +396,21 @@ PanelWindow {
             function focusField() {
                 input.forceActiveFocus();
             }
+            Rectangle {
+                visible: dialog.md
+                anchors.fill: parent
+                radius: Theme.mdRadius("full")
+                color: Theme.md.surfaceContainerHigh
+            }
+            MdSymbol {
+                visible: dialog.md
+                anchors.centerIn: lens
+                name: win.command ? "terminal" : "search"
+                size: Theme.mdPx(26)
+                color: Theme.md.onSurfaceVariant
+            }
             PxBox {
+                visible: !dialog.md
                 anchors.fill: parent
                 sunken: true
                 color: Theme.sunken
@@ -391,6 +418,7 @@ PanelWindow {
             }
             PxIcon {
                 id: lens
+                opacity: dialog.md ? 0 : 1
                 x: Theme.u * 6
                 anchors.verticalCenter: parent.verticalCenter
                 name: win.command ? "terminal" : "search"
@@ -408,9 +436,9 @@ PanelWindow {
                 color: Theme.text
                 selectionColor: Theme.select
                 selectedTextColor: Theme.selectText
-                font.family: Theme.fontTitle
-                font.pixelSize: Theme.sizeBig
-                renderType: Text.NativeRendering
+                font.family: dialog.md ? Theme.mdFont : Theme.fontTitle
+                font.pixelSize: dialog.md ? Theme.mdPx(22) : Theme.sizeBig
+                renderType: dialog.md ? Text.QtRendering : Text.NativeRendering
                 selectByMouse: true
                 onTextEdited: {
                     win.query = text;
@@ -420,8 +448,8 @@ PanelWindow {
                 Keys.onPressed: e => field.keyPressed(e)
                 cursorDelegate: Rectangle {
                     id: caret
-                    width: Theme.u * 2
-                    color: Theme.accent
+                    width: dialog.md ? Theme.mdPx(2) : Theme.u * 2
+                    color: dialog.md ? Theme.md.primary : Theme.accent
                     visible: input.activeFocus
                     SequentialAnimation on opacity {
                         loops: Animation.Infinite
@@ -447,8 +475,8 @@ PanelWindow {
                 verticalAlignment: Text.AlignVCenter
                 text: I18n.t("Что открыть?", "What to open?")
                 dim: true
-                font.family: Theme.fontTitle
-                font.pixelSize: Theme.sizeBig
+                font.family: dialog.md ? Theme.mdFont : Theme.fontTitle
+                font.pixelSize: dialog.md ? Theme.mdPx(22) : Theme.sizeBig
                 elide: Text.ElideRight
             }
             // the mode, and how many results
@@ -458,9 +486,10 @@ PanelWindow {
                 anchors.rightMargin: Theme.u * 5
                 anchors.verticalCenter: parent.verticalCenter
                 width: chipText.implicitWidth + Theme.u * 8
-                height: Theme.u * 11
-                color: win.command ? Theme.mix(Theme.face, Theme.danger, 0.35) : Theme.mix(Theme.face, Theme.accent, 0.3)
-                border.width: Math.max(1, Theme.u / 2)
+                height: dialog.md ? Theme.mdPx(32) : Theme.u * 11
+                radius: dialog.md ? Theme.mdRadius("s") : 0
+                color: dialog.md ? (win.command ? Theme.md.errorContainer : Theme.md.secondaryContainer) : win.command ? Theme.mix(Theme.face, Theme.danger, 0.35) : Theme.mix(Theme.face, Theme.accent, 0.3)
+                border.width: dialog.md ? 0 : Math.max(1, Theme.u / 2)
                 border.color: win.command ? Theme.danger : Theme.accent
                 PxText {
                     id: chipText
@@ -519,11 +548,12 @@ PanelWindow {
                         height: Theme.u * 17
                         Rectangle {
                             anchors.fill: parent
-                            color: Theme.select
+                            radius: dialog.md ? Theme.mdRadius("l") : 0
+                            color: dialog.md ? Theme.md.secondaryContainer : Theme.select
                         }
                         // notched corners: pixel art, not a rounded rect
                         Repeater {
-                            model: 4
+                            model: dialog.md ? 0 : 4
                             Rectangle {
                                 required property int index
                                 width: Theme.u
@@ -534,6 +564,7 @@ PanelWindow {
                             }
                         }
                         PxIcon {
+                            visible: !dialog.md
                             x: Theme.u * 2
                             anchors.verticalCenter: parent.verticalCenter
                             name: "heartSmall"
@@ -555,7 +586,8 @@ PanelWindow {
                         Rectangle {
                             anchors.fill: parent
                             visible: !item.sel && m.containsMouse
-                            color: Theme.mix(Theme.face, Theme.accent, 0.12)
+                            radius: dialog.md ? Theme.mdRadius("l") : 0
+                            color: dialog.md ? Qt.alpha(Theme.md.onSurface, 0.08) : Theme.mix(Theme.face, Theme.accent, 0.12)
                         }
                         Item {
                             id: ico
@@ -579,7 +611,7 @@ PanelWindow {
                                 anchors.centerIn: parent
                                 visible: !item.isApp && !item.r.image && !rowThumb.ok
                                 name: item.r.icon || "sparkle"
-                                ink: item.sel ? Theme.selectText : (Theme.dark ? Theme.text : Theme.edge)
+                                ink: item.sel ? (dialog.md ? Theme.md.onSecondaryContainer : Theme.selectText) : (Theme.dark ? Theme.text : Theme.edge)
                             }
                         }
                         Column {
@@ -592,7 +624,7 @@ PanelWindow {
                                 width: parent.width
                                 text: win.titleOf(item.modelData)
                                 elide: Text.ElideRight
-                                color: item.sel ? Theme.selectText : Theme.text
+                                color: item.sel ? (dialog.md ? Theme.md.onSecondaryContainer : Theme.selectText) : Theme.text
                                 font.bold: item.sel
                             }
                             PxText {
@@ -601,7 +633,7 @@ PanelWindow {
                                 text: win.subtitleOf(item.modelData)
                                 elide: Text.ElideRight
                                 kind: "tiny"
-                                color: item.sel ? Theme.selectText : Theme.textDim
+                                color: item.sel ? (dialog.md ? Theme.md.onSecondaryContainer : Theme.selectText) : Theme.textDim
                             }
                         }
                         PxText {
@@ -611,7 +643,7 @@ PanelWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             kind: "tiny"
                             text: item.isApp ? "" : win.kindOf(item.modelData)
-                            color: item.sel ? Theme.selectText : Theme.textDim
+                            color: item.sel ? (dialog.md ? Theme.md.onSecondaryContainer : Theme.selectText) : Theme.textDim
                         }
                         MouseArea {
                             id: m

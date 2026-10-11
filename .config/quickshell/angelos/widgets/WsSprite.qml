@@ -1,7 +1,7 @@
 import QtQuick
 import qs.config
 
-// A workspace's sprite (Settings → Workspaces → Desk sprite): heart | star | cd.
+// A workspace's sprite (Settings → Workspaces → Desk sprite): heart | star | cd | pentagram.
 // `lit` = the active desk: full colours (the CD's rainbow), and on becoming
 // active the CD spins once in 90° steps and the star twinkles — pixel-exact,
 // no smoothing, nothing runs while it stands still.
@@ -14,7 +14,7 @@ PxIcon {
     property bool playful: true                 // spin / twinkle on activation
     // the hell bar: one tone (fill) for the whole sprite, an outline in the dim text
     property bool barInk: false
-    readonly property string kind: ["heart", "star", "cd"].includes(sprite) ? sprite : "heart"
+    readonly property string kind: ["heart", "star", "cd", "pentagram", "cross", "dot"].includes(sprite) ? sprite : "heart"
     property int turn: 0                        // quarter turns
     property real glint: 0
 
@@ -27,7 +27,7 @@ PxIcon {
     rotation: turn * 90
 
     function iconOf(k) {
-        return k === "star" ? "sparkleStar" : k === "cd" ? "cd" : "heart";
+        return k === "star" ? "sparkleStar" : k === "cd" ? "cd" : k === "pentagram" ? "pentagramInv" : k === "cross" ? "crossInv" : k === "dot" ? "dotRing" : "heart";
     }
     function celebrate() {
         if (!playful)

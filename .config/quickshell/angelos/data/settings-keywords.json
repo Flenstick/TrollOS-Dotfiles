@@ -525,6 +525,49 @@
     "digital wellbeing",
     "time at the computer"
   ],
+  "material/accent": [
+    "акцентный цвет",
+    "акцент",
+    "цвет системы",
+    "material you",
+    "material 3",
+    "андроид",
+    "accent colour",
+    "accent color",
+    "seed"
+  ],
+  "material/icons": [
+    "перекрас значков",
+    "тематические значки",
+    "papirus",
+    "themed icons"
+  ],
+  "presets": [
+    "макеты",
+    "макет",
+    "готовая тема",
+    "сатанинская тема",
+    "satanic",
+    "вампир",
+    "готика",
+    "минимал",
+    "живые обои",
+    "анимированные обои",
+    "desktop looks",
+    "presets",
+    "live wallpaper"
+  ],
+  "wellbeing/weeks": [
+    "по неделям",
+    "за неделю",
+    "все недели",
+    "за всё время",
+    "история экранного времени",
+    "сколько я сижу за неделю",
+    "weekly screen time",
+    "by week",
+    "all time"
+  ],
   "wellbeing/breaks": [
     "перерыв",
     "перерывы",

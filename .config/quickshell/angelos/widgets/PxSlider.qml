@@ -19,6 +19,9 @@ Item {
     // the Golden Gate skin's System Settings: a Mac slider — a thin track, the accent up to a
     // round white knob
     readonly property bool mac: settingsSkin === "goldengate"
+    // TrollOS: the «Material You» skin — Material 3's slider (2024): a thick active track up to
+    // a thin upright handle, gaps around it, the inactive track after, a stop dot at the end
+    readonly property bool md: settingsSkin === "material"
     property real valueScale: 1
     readonly property bool dragging: mouse.pressed
     signal moved(real value)
@@ -40,7 +43,7 @@ Item {
     Accessible.onDecreaseAction: nudge(-1)
 
     implicitWidth: Theme.u * 110
-    implicitHeight: Theme.u * 12
+    implicitHeight: md ? Theme.mdPx(44) : Theme.u * 12
 
     readonly property real frac: to === from ? 0 : Math.max(0, Math.min(1, (value - from) / (to - from)))
     property real _drag: frac
@@ -88,8 +91,48 @@ Item {
             color: GoldenGate.accent
         }
     }
+    Item {
+        visible: root.md
+        x: track.x
+        width: track.width
+        height: Theme.mdPx(16)
+        anchors.verticalCenter: track.verticalCenter
+        readonly property real cx: thumb.x - track.x + thumb.width / 2
+        readonly property real gap: Theme.mdPx(6)
+        Rectangle {
+            width: Math.max(Theme.mdPx(4), parent.cx - parent.gap)
+            height: parent.height
+            radius: Math.min(height / 2, Theme.mdRadius("full"))
+            color: Theme.md.primary
+        }
+        Rectangle {
+            x: parent.cx + parent.gap
+            width: Math.max(0, parent.width - x)
+            height: parent.height
+            radius: Math.min(height / 2, Theme.mdRadius("full"))
+            color: Theme.md.secondaryContainer
+            Rectangle {
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.mdPx(6)
+                anchors.verticalCenter: parent.verticalCenter
+                visible: parent.width > Theme.mdPx(14)
+                width: Theme.mdPx(4)
+                height: width
+                radius: width / 2
+                color: Theme.md.primary
+            }
+        }
+        Rectangle {
+            x: parent.cx - width / 2
+            anchors.verticalCenter: parent.verticalCenter
+            width: Theme.mdPx(mouse.pressed ? 2 : 4)
+            height: Theme.mdPx(44)
+            radius: width / 2
+            color: Theme.md.primary
+        }
+    }
     Rectangle {
-        visible: root.settingsSkin !== "classic" && !root.mac
+        visible: root.settingsSkin !== "classic" && !root.mac && !root.md
         x: track.x
         y: track.y
         width: track.width
@@ -134,7 +177,7 @@ Item {
         border.color: Qt.rgba(0, 0, 0, mouse.pressed ? 0.25 : 0.14)
     }
     Rectangle {
-        visible: root.settingsSkin !== "classic" && !root.mac
+        visible: root.settingsSkin !== "classic" && !root.mac && !root.md
         width: thumb.width
         height: thumb.height
         anchors.verticalCenter: track.verticalCenter

@@ -764,10 +764,10 @@ Scope {
                             layer.effect: AngelSkinFx {
                                 skin: HeavenStars.worn
                             }
-                            use: win.look === "chibi" || win.look === "glitch" || win.look === "ophanim"
+                            use: win.look === "chibi" || win.look === "glitch" || win.look === "ophanim" || win.look === "lamb"
                             // each figure's pictures, both read up front: the swap flips at once
                             // even when the angel's look and the demon's differ
-                            angelVariant: win.angelLook === "glitch" || win.angelLook === "ophanim" ? win.angelLook : ""
+                            angelVariant: win.angelLook === "glitch" || win.angelLook === "ophanim" || win.angelLook === "lamb" ? win.angelLook : ""
                             demonVariant: win.demonLook === "glitch" ? "glitch" : ""
                             // the circle's own demon, once her pictures are cut (sprite-rig.py skins);
                             // the debug panel may stand any circle's demon here

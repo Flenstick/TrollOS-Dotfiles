@@ -484,6 +484,39 @@
       ]
     },
     {
+      "id": "presets",
+      "ru": "Макеты",
+      "en": "Desktop looks",
+      "icon": "sparkle",
+      "tint": "#d3202e",
+      "hintRu": "готовый вид системы: Satanic, Vampire, Void — цвета, курсор, иконки, живые обои (TrollOS)",
+      "hintEn": "a ready look: Satanic, Vampire, Void — colours, cursor, icons, live wallpaper (TrollOS)",
+      "pages": [
+        {
+          "id": "presets",
+          "ru": "Макеты",
+          "en": "Desktop looks",
+          "icon": "sparkle",
+          "hintRu": "готовый вид системы одной кнопкой (TrollOS)",
+          "hintEn": "a ready look in one click (TrollOS)",
+          "blocks": [
+            "presets"
+          ]
+        },
+        {
+          "id": "material",
+          "ru": "Material You",
+          "en": "Material You",
+          "icon": "palette",
+          "hintRu": "акцентный цвет, стиль палитры, углы, шрифт, значки, панель-таблетка, волна у трека",
+          "hintEn": "the accent colour, palette style, corners, font, icons, the pill panel, the track's wave",
+          "blocks": [
+            "material"
+          ]
+        }
+      ]
+    },
+    {
       "id": "layouts",
       "ru": "Раскладки",
       "en": "Layouts",
@@ -920,6 +953,7 @@
           "hintEn": "how long you're at the computer, a limit, the angel's water and break reminders",
           "blocks": [
             "wellbeing/screen-time",
+            "wellbeing/weeks",
             "wellbeing/breaks",
             "wellbeing/limit"
           ],
@@ -1165,6 +1199,12 @@
       "page": "lab",
       "to": "system/development"
     },
+    "presets": {
+      "page": "presets"
+    },
+    "material": {
+      "page": "material"
+    },
     "layouts": {
       "page": "layouts"
     }
@@ -1283,6 +1323,7 @@
             "hintEn": "how long you're at the computer, a limit, the angel's water and break reminders",
             "blocks": [
               "wellbeing/screen-time",
+              "wellbeing/weeks",
               "wellbeing/breaks",
               "wellbeing/limit",
               "wellbeing/quiet",

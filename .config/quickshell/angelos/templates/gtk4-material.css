@@ -1,0 +1,110 @@
+/* angelOS {{flavor}} / {{mode}} (GTK4, Material You) — generated (templates/gtk4-material.css) */
+@import url("angelos-decor.css");
+@define-color accent_color {{accent}};
+@define-color accent_bg_color {{accent}};
+@define-color accent_fg_color {{selectText}};
+@define-color destructive_bg_color {{danger}};
+@define-color destructive_fg_color #ffffff;
+@define-color error_bg_color {{danger}};
+@define-color error_fg_color #ffffff;
+@define-color window_bg_color {{bg}};
+@define-color window_fg_color {{fg}};
+@define-color view_bg_color {{bg}};
+@define-color view_fg_color {{fg}};
+@define-color headerbar_bg_color {{bgAlt}};
+@define-color headerbar_fg_color {{fg}};
+@define-color headerbar_backdrop_color @window_bg_color;
+@define-color popover_bg_color {{bgAlt}};
+@define-color popover_fg_color {{fg}};
+@define-color card_bg_color {{bgAlt}};
+@define-color card_fg_color {{fg}};
+@define-color dialog_bg_color {{bg}};
+@define-color dialog_fg_color {{fg}};
+@define-color sidebar_bg_color {{bgAlt}};
+@define-color sidebar_fg_color {{fg}};
+@define-color theme_selected_bg_color @accent_bg_color;
+@define-color theme_selected_fg_color @accent_fg_color;
+@define-color theme_unfocused_selected_bg_color @accent_bg_color;
+@define-color theme_unfocused_selected_fg_color @accent_fg_color;
+@define-color overview_bg_color {{bgAlt}};
+@define-color overview_fg_color {{fg}};
+@define-color secondary_sidebar_bg_color {{bg}};
+@define-color secondary_sidebar_fg_color {{fg}};
+:root {
+    --accent-color: {{accent}};
+    --accent-bg-color: {{accent}};
+    --accent-fg-color: {{selectText}};
+    --destructive-bg-color: {{danger}};
+    --destructive-fg-color: #ffffff;
+    --error-bg-color: {{danger}};
+    --error-fg-color: #ffffff;
+    --error-color: {{danger}};
+    --window-bg-color: {{bg}};
+    --window-fg-color: {{fg}};
+    --view-bg-color: {{bg}};
+    --view-fg-color: {{fg}};
+    --headerbar-bg-color: {{bgAlt}};
+    --headerbar-fg-color: {{fg}};
+    --popover-bg-color: {{bgAlt}};
+    --popover-fg-color: {{fg}};
+    --card-bg-color: {{bgAlt}};
+    --card-fg-color: {{fg}};
+    --dialog-bg-color: {{bg}};
+    --dialog-fg-color: {{fg}};
+    --sidebar-bg-color: {{bgAlt}};
+    --sidebar-fg-color: {{fg}};
+    --success-color: {{ok}};
+    --warning-color: {{accent3}};
+    --window-radius: 16px;
+}
+
+
+/* TrollOS Material You: libadwaita's own shapes, a little rounder — Material 3's pills for the
+   buttons, 16 px cards and lists, 12 px fields; niri rounds the windows by 16 px
+   (templates/niri-material.kdl). The colours above are the scheme's (config/MaterialColor.js). */
+window {
+    --window-radius: 16px;
+}
+button:not(.flat):not(.titlebutton):not(.circular):not(.image-button),
+splitbutton > button,
+menubutton:not(.flat) > button,
+button.suggested-action,
+button.destructive-action,
+button.pill {
+    border-radius: 9999px;
+    min-height: 36px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+entry,
+spinbutton,
+searchbar > revealer > box > entry,
+dropdown > button,
+combobox > box > button {
+    border-radius: 12px;
+}
+list.boxed-list,
+.boxed-list,
+.card,
+preferencesgroup > box > list {
+    border-radius: 16px;
+}
+popover > contents,
+popover.menu > contents {
+    border-radius: 16px;
+}
+popover.menu modelbutton,
+list > row,
+.navigation-sidebar > row {
+    border-radius: 9999px;
+}
+switch {
+    border-radius: 9999px;
+}
+switch > slider {
+    border-radius: 9999px;
+}
+tooltip,
+tooltip.background {
+    border-radius: 8px;
+}

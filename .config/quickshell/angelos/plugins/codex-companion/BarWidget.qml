@@ -44,7 +44,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: root.label
             readonly property real remaining: root.mode === "week" ? CodexState.weekLeft : CodexState.fiveLeft
-            color: root.mac ? (CodexState.hasLimits && root.mode !== "today" && remaining >= 0 && remaining < 20 ? Skin.danger : Skin.ink(root.screenName)) : CodexState.hasLimits && root.mode !== "today" ? CodexState.colorFor(remaining, Theme) : Theme.text
+            color: root.mac ? (CodexState.hasLimits && root.mode !== "today" && remaining >= 0 && remaining < 20 ? Skin.danger : Skin.ink(root.screenName)) : CodexState.hasLimits && root.mode !== "today" && Theme.infernoLook && remaining >= 0 ? (remaining < 20 ? Theme.accent : remaining < 50 ? Theme.accent2 : Theme.text) : CodexState.hasLimits && root.mode !== "today" ? CodexState.colorFor(remaining, Theme) : Theme.text
             font.bold: !root.mac
         }
     }

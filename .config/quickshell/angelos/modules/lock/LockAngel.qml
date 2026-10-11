@@ -52,7 +52,7 @@ Item {
     SpriteRig {
         id: rig
         who: Angel.demon ? "demon" : "angel"
-        angelVariant: Angel.angelLook === "glitch" || Angel.angelLook === "ophanim" ? Angel.angelLook : ""
+        angelVariant: Angel.angelLook === "glitch" || Angel.angelLook === "ophanim" || Angel.angelLook === "lamb" ? Angel.angelLook : ""
         demonVariant: (Config.y2k.demonLook || "glitch") === "glitch" ? "glitch" : ""
         tick: root.tick
         px: root.px

@@ -88,6 +88,7 @@ JsonAdapter {
         property bool taskHoverClose: false // × on the hovered window button
         // TrollOS
         property bool floating: false       // taskbar: a floating panel with gaps around it
+        property bool inferno: false        // TrollOS: the hell bar (stone, re-inked content) without the demon
         property string layoutPreset: "default" // Settings → Раскладки: default | macos | win11 | compact | ubuntu | classic | chromeos | elementary | cinnamon
         property var layoutSaved: ({})      // the user's own layout, kept while a preset is on
     }
@@ -154,6 +155,11 @@ JsonAdapter {
         property bool liveEvents: true      // now and then: a glint over a ring, a pebble, a gust
         property int liveFps: 24            // 0: every frame of the screen
         property var liveOverrides: ({})   // path -> {sky, water: "on"|"off", axis: 0..1}
+        // TrollOS: live wallpapers drawn by a shader (modules/background/ShaderWalls): while one of
+        // data/wallshaders/stills/<id>.jpg is the wallpaper, its shader plays over it (desk empty,
+        // unlocked, no fullscreen, no eco mode). Off: the picture stays a picture
+        property bool shaders: true
+        property int shaderFps: 30
         // the release's name, small and see-through in a free corner (widgets/ReleaseMark)
         property bool releaseMark: false    // TrollOS: off (it names the angelOS release)
         property string releaseMarkCorner: "auto"   // auto | bottom-right | bottom-left | top-right | top-left
@@ -534,19 +540,36 @@ JsonAdapter {
     // Wellbeing (services/Wellbeing; Settings → Wellbeing), like GNOME's: how long you sit at the
     // computer (~/.local/state/angelos/screen-time.json), a daily limit, and breaks the angel
     // (the demon) reminds you of — the eyes, a stretch, water
+    // TrollOS: Material You (the «Material You» desktop look; Settings → Material You).
+    // The palette "material" is built from `seed` (config/MaterialColor.js); the skin "material"
+    // (Config.settingsUi.skin) draws the shell's controls, the panel and the popups as Material 3
+    property JsonObject material: JsonObject {
+        property string seed: "#6750a4"     // the accent the whole scheme grows from
+        property bool fromWallpaper: false  // the seed is the wallpaper's most colourful colour
+        property string variant: "tonalSpot" // tonalSpot | vibrant | expressive | neutral | monochrome | fidelity
+        property string corners: "round"    // round (Material 3's) | soft | square
+        property string font: "Roboto Flex" // the UI font, Material 3's own ("" = the system's); Google Sans Flex has no Cyrillic
+        property string icons: "themed"     // themed (every icon in the scheme's tones) | colored (Papirus, folders in the accent) | off
+        property string symbols: "rounded"  // Material Symbols: rounded | outlined | sharp
+        property bool filledIcons: true     // the symbols filled on what is on / picked
+        property bool wavy: true            // the playing track's progress as a wave (the panel, Dynamic Island)
+        property bool pillBar: true         // the panel floats as a rounded pill with gaps
+        property bool tonalSurfaces: true   // surfaces lean to the seed's hue (off: plain greys)
+    }
+
     property JsonObject wellbeing: JsonObject {
         property bool track: true           // count the screen time (input within the last 2 minutes, unlocked)
         property bool apps: true            // …and per app (the focused window's app id)
         property int dailyLimit: 0          // minutes a day; 0 = no limit
         property bool limitWarn: true       // at the limit: the angel says so (and again after "15 more minutes")
-        property bool breaks: true          // the reminders at all
+        property bool breaks: false         // the reminders at all (TrollOS: off until you turn them on)
         property string via: "angel"        // angel (a notification when she's not around) | notify
-        property bool eyes: true            // look into the distance (20-20-20)
+        property bool eyes: false           // look into the distance (20-20-20) (TrollOS: opt-in)
         property int eyesEvery: 20          // minutes of use
         property bool move: true            // get up and stretch
         property int moveEvery: 60
         property int moveLength: 5          // minutes away from the computer that count as the break
-        property bool water: true           // a glass of water
+        property bool water: false          // a glass of water (TrollOS: opt-in)
         property int waterEvery: 60
         property int waterGoal: 8           // glasses a day
         property bool quietFullscreen: true // a game or a video fills the screen: the reminder waits

@@ -775,6 +775,62 @@ PxPage {
                         {
                             "value": "chrome",
                             "label": "Y2K Chrome"
+                        },
+                        {
+                            "value": "infernoGothic",
+                            "label": I18n.t("Готика кровью", "Blood gothic")
+                        },
+                        {
+                            "value": "silverGothic",
+                            "label": I18n.t("Готика серебром", "Silver gothic")
+                        },
+                        {
+                            "value": "infernoDrip",
+                            "label": I18n.t("Готика с каплями", "Dripping gothic")
+                        },
+                        {
+                            "value": "infernoCaps",
+                            "label": I18n.t("TROLL ⛧ OS", "TROLL ⛧ OS")
+                        },
+                        {
+                            "value": "infernoNeon",
+                            "label": I18n.t("Красный неон", "Red neon")
+                        },
+                        {
+                            "value": "infernoHorns",
+                            "label": I18n.t("С рожками", "With horns")
+                        },
+                        {
+                            "value": "infernoEmo",
+                            "label": "†rollos"
+                        },
+                        {
+                            "value": "infernoBone",
+                            "label": I18n.t("Готика цвета кости", "Bone gothic")
+                        },
+                        {
+                            "value": "infernoWord",
+                            "label": I18n.t("Inferno (готика)", "Inferno (gothic)")
+                        },
+                        {
+                            "value": "inferno666",
+                            "label": "666"
+                        },
+                        {
+                            "value": "vampireWord",
+                            "label": I18n.t("Vampire (серебро)", "Vampire (silver)")
+                        },
+                        {
+                            "value": "vampireNocturne",
+                            "label": I18n.t("Nocturne (серебро)", "Nocturne (silver)")
+                        },
+                        {
+                            "value": "voidWord",
+                            "label": "void"
+                        },
+                        {
+                            "value": "voidCaps",
+                            "label": "V O I D"
                         }
                     ].filter(v => v.value !== "hell" || Angel.hellShown || (Config.bar.logoStyle === "hell" && Angel.hellAllowed))
                     PxButton {
@@ -834,6 +890,38 @@ PxPage {
                         {
                             "value": "kitty",
                             "label": I18n.t("Котик", "Kitty")
+                        },
+                        {
+                            "value": "pentagram",
+                            "label": I18n.t("Пентаграмма", "Pentagram")
+                        },
+                        {
+                            "value": "pentagramRed",
+                            "label": I18n.t("Пентаграмма ✦ красная", "Pentagram ✦ red")
+                        },
+                        {
+                            "value": "cross",
+                            "label": I18n.t("Крест ⸸", "Cross ⸸")
+                        },
+                        {
+                            "value": "baphomet",
+                            "label": I18n.t("Бафомет", "Baphomet")
+                        },
+                        {
+                            "value": "bat",
+                            "label": I18n.t("Летучая мышь", "Bat")
+                        },
+                        {
+                            "value": "moon",
+                            "label": I18n.t("Полумесяц", "Crescent")
+                        },
+                        {
+                            "value": "ring",
+                            "label": I18n.t("Кольцо", "Ring")
+                        },
+                        {
+                            "value": "eclipse",
+                            "label": I18n.t("Затмение", "Eclipse")
                         }
                     ]
                     PxButton {

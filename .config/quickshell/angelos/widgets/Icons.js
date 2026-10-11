@@ -755,6 +755,44 @@ const icons = {
         "..##...##..",
         "...#####..."
     ],
+    // TrollOS Inferno: the inverted pentagram in its circle (the desk sprite; hollow = the empty circle)
+    // TrollOS Inferno: the inverted cross (the desk sprite "cross"; hollow = its outline)
+    // TrollOS Void: a plain dot (the desk sprite "dot"; hollow = the ring of an empty desk)
+    dotRing: [
+        "..###..",
+        ".#ooo#.",
+        "#ooooo#",
+        "#ooooo#",
+        "#ooooo#",
+        ".#ooo#.",
+        "..###.."
+    ],
+    crossInv: [
+        "..###..",
+        "..#o#..",
+        "..#o#..",
+        "..#o#..",
+        "###o###",
+        "#ooooo#",
+        "###o###",
+        "..#o#..",
+        "..###.."
+    ],
+    pentagramInv: [
+        "....#####....",
+        "..##.....##..",
+        ".##o.....o##.",
+        ".#.ooo.ooo.#.",
+        "#...ooooo...#",
+        "#...o...o...#",
+        "#.ooo...ooo.#",
+        "#ooooooooooo#",
+        "#....o.o....#",
+        ".#...o.o...#.",
+        ".##...o...##.",
+        "..##..o..##..",
+        "....#####...."
+    ],
     ghost: [
         "..#####..",
         ".#fffff#.",

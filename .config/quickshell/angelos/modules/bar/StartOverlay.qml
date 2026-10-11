@@ -212,6 +212,8 @@ Variants {
         }
         Loader {
             id: body
+            // TrollOS: the «Material You» skin dresses the menu inside (Theme.settingsSkinFor)
+            readonly property string settingsSkin: Theme.materialSkin && !win.hellSkin ? "material" : "classic"
             active: keep.alive
             // the room the look has on this screen, before its own zoom: a look taller than that
             // (big fonts, a big art pixel, a small or 2× screen) fits itself in (`room` of the

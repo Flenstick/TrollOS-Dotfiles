@@ -25,6 +25,9 @@ Item {
     Accessible.onToggleAction: flip()
     // the Golden Gate skin's System Settings: a Mac checkbox (rounded, the accent with a ✓)
     readonly property bool mac: Theme.settingsSkinFor(root.parent) === "goldengate"
+    // TrollOS: the «Material You» skin — Material 3's checkbox: an outlined 18 dp square, filled
+    // primary with a check when on
+    readonly property bool md: Theme.settingsSkinFor(root.parent) === "material"
 
     implicitWidth: box.width + (text !== "" ? label.implicitWidth + Theme.u * 4 : 0)
     implicitHeight: Math.max(box.height, label.implicitHeight)
@@ -46,10 +49,26 @@ Item {
             color: "#ffffff"
         }
     }
+    Rectangle {
+        visible: root.md
+        anchors.fill: box
+        radius: Theme.mdRadius("xs") / 2
+        color: root.checked ? Theme.md.primary : "transparent"
+        border.width: root.checked ? 0 : Theme.mdPx(2)
+        border.color: Theme.md.onSurfaceVariant
+        MdSymbol {
+            visible: root.checked
+            anchors.centerIn: parent
+            name: "check"
+            size: parent.width
+            weight: 700
+            color: Theme.md.onPrimary
+        }
+    }
     PxBox {
         id: box
-        opacity: root.mac ? 0 : 1
-        width: root.mac ? GoldenGate.px(16) : Theme.u * 10
+        opacity: root.mac || root.md ? 0 : 1
+        width: root.md ? Theme.mdPx(18) : root.mac ? GoldenGate.px(16) : Theme.u * 10
         height: width
         sunken: true
         color: Theme.sunken
@@ -66,7 +85,7 @@ Item {
         id: label
         text: root.text
         anchors.left: box.right
-        anchors.leftMargin: Theme.u * 4
+        anchors.leftMargin: root.md ? Theme.mdPx(12) : Theme.u * 4
         anchors.verticalCenter: parent.verticalCenter
     }
     MouseArea {

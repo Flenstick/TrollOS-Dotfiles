@@ -156,7 +156,7 @@ PxScroll {
                 }
             }
             PxText {
-                visible: root.settingsSkin !== "classic" && root.settingsSkin !== "goldengate"
+                visible: root.settingsSkin !== "classic" && root.settingsSkin !== "goldengate" && root.settingsSkin !== "material"
                 text: root.settingsSkin === "stream" ? "● LIVE  /  angelOS" : "▸ " + I18n.exe("settings") + " / angelOS"
                 kind: "tiny"
                 color: root.settingsSkin === "stream" ? Theme.streamLive : Theme.windoseLavender
@@ -172,7 +172,7 @@ PxScroll {
                 color: root.headingColor
             }
             Rectangle {
-                visible: root.settingsSkin !== "classic" && root.settingsSkin !== "goldengate"
+                visible: root.settingsSkin !== "classic" && root.settingsSkin !== "goldengate" && root.settingsSkin !== "material"
                 width: parent.width
                 height: Theme.u * (root.settingsSkin === "stream" ? 2 : 1)
                 color: root.settingsSkin === "stream" ? Theme.streamLive : Theme.windoseRose
@@ -192,7 +192,7 @@ PxScroll {
             visible: root.links.length > 0
             width: parent.width
             height: links.implicitHeight + inset * 2
-            color: root.settingsSkin === "classic" ? Theme.mix(Theme.face, Theme.faceAlt, 0.35) : root.settingsSkin === "stream" ? Theme.streamPanel : Theme.windosePaper
+            color: root.settingsSkin === "material" ? Theme.md.surfaceContainerHigh : root.settingsSkin === "classic" ? Theme.mix(Theme.face, Theme.faceAlt, 0.35) : root.settingsSkin === "stream" ? Theme.streamPanel : Theme.windosePaper
             Column {
                 id: links
                 width: parent.width

@@ -87,7 +87,7 @@ Item {
         panelId: "panel-shooter"
         anchorItem: root
         above: Config.bar.style === "taskbar"
-        title: I18n.exe(I18n.t("тир", "range"))
+        title: I18n.t("тир.exe", "range.exe")
         icon: "gamepad"
         contentWidth: Theme.u * 140
         contentHeight: Theme.u * 130

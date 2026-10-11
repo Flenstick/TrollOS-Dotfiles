@@ -9,6 +9,9 @@ Item {
     property bool hell: false
     readonly property string settingsSkin: hell ? "classic" : Theme.settingsSkinFor(root.parent)
     property color color: hell ? Theme.hellFace : Theme.face
+    // TrollOS: the «Material You» skin — no bevels: a rounded box in its colour (Material 3's
+    // medium shape), a hairline only around wells (sunken)
+    readonly property bool md: settingsSkin === "material"
     property int bevel: settingsSkin === "windose" ? Math.max(1, Math.floor(Theme.u / 2)) : Theme.u
     property bool sunken: false
     property bool outline: true
@@ -18,13 +21,13 @@ Item {
     property color hiColor: hell ? Theme.hellHi : settingsSkin === "windose" ? Theme.windoseLine : Theme.hi
     property color loColor: hell ? Theme.hellLo : settingsSkin === "windose" ? Theme.windoseLine : Theme.lo
     property color edgeColor: hell ? Theme.hellEdge : settingsSkin === "windose" ? Theme.windoseLine : Theme.edge
-    readonly property int ob: outline ? bevel : 0
-    readonly property int inset: ob + (flat ? 0 : bevel)
+    readonly property int ob: md ? 0 : outline ? bevel : 0
+    readonly property int inset: md ? 0 : ob + (flat ? 0 : bevel)
     default property alias content: inner.data
 
     // hard pixel shadow (right + bottom strips so translucent boxes stay clean)
     Rectangle {
-        visible: root.shadow
+        visible: root.shadow && !root.md
         x: root.width
         y: root.shadowSize
         width: root.shadowSize
@@ -32,7 +35,7 @@ Item {
         color: Qt.alpha(Theme.shadow, Theme.dark ? 0.55 : 0.35)
     }
     Rectangle {
-        visible: root.shadow
+        visible: root.shadow && !root.md
         x: root.shadowSize
         y: root.height
         width: root.width
@@ -42,12 +45,13 @@ Item {
 
     Rectangle {
         anchors.fill: parent
+        radius: root.md ? Theme.mdRadius(root.sunken ? "s" : "m") : 0
         color: root.color
-        border.width: root.ob
-        border.color: root.edgeColor
+        border.width: root.md ? (root.sunken ? 1 : 0) : root.ob
+        border.color: root.md ? Theme.md.outlineVariant : root.edgeColor
     }
     Rectangle {
-        visible: !root.flat
+        visible: !root.flat && !root.md
         x: root.ob
         y: root.ob
         width: root.width - 2 * root.ob
@@ -55,7 +59,7 @@ Item {
         color: root.sunken ? root.loColor : root.hiColor
     }
     Rectangle {
-        visible: !root.flat
+        visible: !root.flat && !root.md
         x: root.ob
         y: root.ob
         width: root.bevel
@@ -63,7 +67,7 @@ Item {
         color: root.sunken ? root.loColor : root.hiColor
     }
     Rectangle {
-        visible: !root.flat
+        visible: !root.flat && !root.md
         x: root.ob + root.bevel
         y: root.height - root.ob - root.bevel
         width: root.width - 2 * root.ob - root.bevel
@@ -71,7 +75,7 @@ Item {
         color: root.sunken ? root.hiColor : root.loColor
     }
     Rectangle {
-        visible: !root.flat
+        visible: !root.flat && !root.md
         x: root.width - root.ob - root.bevel
         y: root.ob + root.bevel
         width: root.bevel

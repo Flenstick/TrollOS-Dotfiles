@@ -1,0 +1,10 @@
+{
+  "id": "layout-fx",
+  "name": "Раскладка: печать",
+  "version": "1.0.0",
+  "author": "flen",
+  "description": "Красивая смена раскладки вместо плашки OSD: красная печать с готической буквой переворачивается как монета (или переключатель RU ⇄ EN с пентаграммой). IPC: qs -c angelos ipc call layoutfx test [seal|toggle] | style <seal|toggle>",
+  "icon": "keyboard",
+  "enabledByDefault": true,
+  "main": "Main.qml"
+}

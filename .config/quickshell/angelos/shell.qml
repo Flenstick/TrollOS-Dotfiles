@@ -40,6 +40,7 @@ ShellRoot {
     settings.watchFiles: Quickshell.env("ANGELOS_DEV") === "1"
 
     Background {}
+    ShaderWalls {} // TrollOS: live wallpapers drawn by a shader (the desktop layouts)
     Bar {}
     MacDesktop {}
     // TrollOS: the Windows 11 layout's Alt+Tab and edge resize
@@ -155,5 +156,7 @@ ShellRoot {
         Gestures.status; // the touchpad's own gestures (scripts/gesture-watch.py)
         Wellbeing.loaded; // screen time and the breaks the angel reminds of (Settings → Wellbeing)
         Cobweb.enabled; // cobwebs on windows nobody moved for a while (Settings → Windows → Cobwebs)
+        DesktopPresets.current; // TrollOS: desktop layouts (Settings → Макеты), `angelos presets`
+        MaterialYou.on; // TrollOS: Material You's icons, fonts and wallpaper seed (Settings → Material You)
     }
 }

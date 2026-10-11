@@ -2,6 +2,7 @@ import QtQuick
 import qs.config
 import qs.services
 import "MacIcons.js" as MacIcons
+import "MaterialIcons.js" as MaterialIcons
 import "A11y.js" as A11y
 
 Item {
@@ -29,9 +30,20 @@ Item {
     // it is the default or picked), line icons where angelOS's pixel ones have a match
     readonly property bool mac: settingsSkin === "goldengate" && !root.barInk
     readonly property string macIcon: mac && icon !== "" ? MacIcons.fromPixel(icon) : ""
+    // TrollOS: the «Material You» skin — Material 3's buttons: `accent` filled, a plain one tonal
+    // (secondary container), `flat` a text button, an icon alone an icon button; a pill, a state
+    // layer for hover and press; a Material Symbol where angelOS's pixel icon has one
+    readonly property bool md: settingsSkin === "material" && !root.barInk && !root.hell
+    property bool outlined: false          // Material 3's outlined button (PxSegmented's segments)
+    readonly property string mdIcon: md && icon !== "" ? MaterialIcons.fromPixel(icon) : ""
+    readonly property bool mdIconOnly: md && text === ""
+    readonly property color mdBg: !md ? "transparent" : root.accent ? Theme.md.primary : root.danger ? Theme.md.errorContainer : root.checked ? Theme.md.secondaryContainer : root.flat || root.mdIconOnly || root.outlined ? "transparent" : Theme.md.secondaryContainer
+    readonly property color mdFg: !md ? Theme.text : root.accent ? Theme.md.onPrimary : root.danger ? Theme.md.onErrorContainer : root.checked ? Theme.md.onSecondaryContainer : root.flat ? Theme.md.primary : root.outlined ? Theme.md.onSurface : root.mdIconOnly ? Theme.md.onSurfaceVariant : Theme.md.onSecondaryContainer
     property int iconPixel: Theme.u
     property bool middleButton: false      // also report middle clicks (task buttons close windows with them)
     property string kind: "body"
+    // the pixel icon itself, for widgets that animate it (bar Bell: «не беспокоить»)
+    readonly property alias iconItem: pxIcon
     property alias hovered: mouse.containsMouse
     property alias pressed: mouse.pressed
     readonly property bool down: mouse.pressed || checked
@@ -55,8 +67,8 @@ Item {
 
     // left + right padding; -1 = by `compact` (the bar's dense right side sets it)
     property real hpad: -1
-    implicitWidth: row.implicitWidth + (hpad >= 0 ? hpad : mac ? GoldenGate.px(compact ? 16 : 24) : compact ? Theme.u * 6 : Theme.pad * 2 + Theme.u * 2)
-    implicitHeight: mac ? Math.max(row.implicitHeight + GoldenGate.px(10), GoldenGate.px(compact ? 24 : 28)) : Math.max(row.implicitHeight + Theme.u * (compact ? 5 : 8), Theme.u * (compact ? 11 : 15))
+    implicitWidth: md && mdIconOnly ? Math.max(row.implicitWidth + Theme.mdPx(16), Theme.mdPx(compact ? 32 : 40)) : row.implicitWidth + (hpad >= 0 ? hpad : md ? Theme.mdPx(compact ? 24 : (root.icon !== "" ? 40 : 48)) : mac ? GoldenGate.px(compact ? 16 : 24) : compact ? Theme.u * 6 : Theme.pad * 2 + Theme.u * 2)
+    implicitHeight: md ? Theme.mdPx(compact ? 32 : 40) : mac ? Math.max(row.implicitHeight + GoldenGate.px(10), GoldenGate.px(compact ? 24 : 28)) : Math.max(row.implicitHeight + Theme.u * (compact ? 5 : 8), Theme.u * (compact ? 11 : 15))
     opacity: enabled ? 1 : 0.45
 
     Rectangle {
@@ -72,6 +84,26 @@ Item {
         color: root.down && root.downColor.a > 0 && !root.hell && !root.accent && !root.danger ? root.downColor : root.hell ? (root.accent ? (mouse.containsMouse ? Qt.lighter(Theme.hellBlood, 1.15) : Theme.hellBlood) : root.checked ? Theme.mix(Theme.hellFace, Theme.hellBlood, 0.45) : mouse.containsMouse ? Theme.mix(Theme.hellFace, Theme.hellEmber, 0.2) : Theme.hellFace) : root.accent ? (mouse.containsMouse ? Qt.lighter(Theme.accent, 1.08) : Theme.accent) : root.danger && mouse.containsMouse ? Theme.danger : root.checked ? Theme.mix(Theme.face, Theme.accent, Theme.dark ? 0.4 : 0.3) : mouse.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.12) : Theme.face
     }
 
+    // the Material 3 container and its state layer (8 % on hover, 12 % pressed)
+    Rectangle {
+        visible: root.md
+        anchors.fill: parent
+        radius: Theme.mdRadius("full")
+        color: root.mdBg
+        border.width: root.outlined ? Theme.mdPx(1) : 0
+        border.color: Theme.md.outline
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: root.mdFg
+            opacity: mouse.pressed ? 0.12 : mouse.containsMouse ? 0.08 : 0
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Motion.ms(120)
+                }
+            }
+        }
+    }
     Rectangle {
         visible: root.mac && (!root.flat || mouse.containsMouse || root.checked)
         anchors.fill: parent
@@ -119,9 +151,18 @@ Item {
     Row {
         id: row
         anchors.centerIn: parent
-        anchors.horizontalCenterOffset: root.down && !root.barInk && !root.mac ? Theme.u : 0
-        anchors.verticalCenterOffset: root.down && !root.barInk && !root.mac ? Theme.u : 0
-        spacing: root.mac ? GoldenGate.px(6) : Theme.u * 3
+        anchors.horizontalCenterOffset: root.down && !root.barInk && !root.mac && !root.md ? Theme.u : 0
+        anchors.verticalCenterOffset: root.down && !root.barInk && !root.mac && !root.md ? Theme.u : 0
+        spacing: root.md ? Theme.mdPx(8) : root.mac ? GoldenGate.px(6) : Theme.u * 3
+
+        MdSymbol {
+            visible: root.mdIcon !== ""
+            name: root.mdIcon
+            size: Theme.mdPx(root.mdIconOnly && !root.compact ? 24 : 18)
+            fill: (root.checked || root.accent) && (!Config.ready || Config.material.filledIcons) ? 1 : 0
+            anchors.verticalCenter: parent.verticalCenter
+            color: root.mdFg
+        }
 
         MacIcon {
             visible: root.macIcon !== ""
@@ -132,7 +173,8 @@ Item {
             color: root.accent || root.checked ? "#ffffff" : root.danger ? GoldenGate.lights[0] : GoldenGate.label
         }
         PxIcon {
-            visible: root.icon !== "" && root.macIcon === ""
+            id: pxIcon
+            visible: root.icon !== "" && root.macIcon === "" && root.mdIcon === ""
             name: root.icon || "heart"
             pixel: root.iconPixel
             anchors.verticalCenter: parent.verticalCenter
@@ -152,8 +194,8 @@ Item {
             text: root.text
             kind: root.kind
             anchors.verticalCenter: parent.verticalCenter
-            color: root.barInk ? (root.checked ? Theme.hellAccent : Theme.hellText) : root.hell ? Theme.hellText : root.mac ? (root.accent || root.checked ? "#ffffff" : root.danger ? GoldenGate.lights[0] : GoldenGate.label) : root.settingsSkin !== "classic" ? (root.danger ? "#ffffff" : root.accent || root.checked ? Theme.selectText : Theme.text) : root.accent ? Theme.selectText : root.danger && mouse.containsMouse ? "#ffffff" : Theme.text
-            font.bold: root.checked && !root.mac
+            color: root.md ? root.mdFg : root.barInk ? (root.checked ? Theme.hellAccent : Theme.hellText) : root.hell ? Theme.hellText : root.mac ? (root.accent || root.checked ? "#ffffff" : root.danger ? GoldenGate.lights[0] : GoldenGate.label) : root.settingsSkin !== "classic" ? (root.danger ? "#ffffff" : root.accent || root.checked ? Theme.selectText : Theme.text) : root.accent ? Theme.selectText : root.danger && mouse.containsMouse ? "#ffffff" : Theme.text
+            font.weight: root.md ? Font.Medium : (root.checked && !root.mac ? Font.Bold : Font.Normal)
         }
     }
 

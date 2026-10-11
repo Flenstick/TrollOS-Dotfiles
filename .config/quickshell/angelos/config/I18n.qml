@@ -489,6 +489,9 @@ Singleton {
     readonly property var suffixes: ["exe", "sh", "bin"]
     readonly property string suffix: suffixes.includes(Config.desktop.titleSuffix) ? Config.desktop.titleSuffix : "exe"
     function exe(name) {
+        // TrollOS: the «Material You» skin has no Win98 file names
+        if (Config.ready && Config.settingsUi.skin === "material")
+            return String(name || "").replace(/\.(exe|sh|bin)$/i, "");
         return String(name || "").replace(/\.(exe|sh|bin)$/i, "") + "." + suffix;
     }
 }

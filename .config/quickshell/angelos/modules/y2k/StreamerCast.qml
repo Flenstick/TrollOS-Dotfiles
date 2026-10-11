@@ -198,8 +198,8 @@ Scope {
                     blink: win.blinking
                     talk: win.mouthOpen
                     tears: !stage.demonArt && Story.angelFallen && !Motion.still
-                    use: stage.look === "chibi" || stage.look === "glitch" || stage.look === "ophanim"
-                    angelVariant: stage.angelLook === "glitch" || stage.angelLook === "ophanim" ? stage.angelLook : ""
+                    use: stage.look === "chibi" || stage.look === "glitch" || stage.look === "ophanim" || stage.look === "lamb"
+                    angelVariant: stage.angelLook === "glitch" || stage.angelLook === "ophanim" || stage.angelLook === "lamb" ? stage.angelLook : ""
                     demonVariant: stage.demonLook === "glitch" ? "glitch" : ""
                     skin: !stage.demonArt ? "" : GameDebug.skin === "-" ? "" : GameDebug.skin || (Story.inHell ? HellLook.circle : "")
                     px: ready ? win.pxFor(rig.size[1]) : 1

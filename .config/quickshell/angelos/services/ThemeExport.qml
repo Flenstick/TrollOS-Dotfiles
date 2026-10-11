@@ -73,7 +73,9 @@ Singleton {
     function macPalette() {
         if (!GoldenGate.on || Angel.demon)
             return {
-                "skin": ""
+                // TrollOS: the «Material You» skin picks the templates' Material variants
+                // (gtk3-material.css, gtk4-material.css, niri-material.kdl)
+                "skin": Theme.materialSkin && !Angel.demon ? "material" : ""
             };
         const d = Theme.dark;
         const h = c => Theme.hex(c);
@@ -285,6 +287,7 @@ Singleton {
     function fontPalette() {
         return {
             "fontTitle": Theme.fontTitle,
+            "mdFont": Theme.materialSkin ? Config.material.font || "Roboto Flex" : "",
             "fontBody": Theme.fontBody,
             "fontMono": Theme.fontMono,
             "sizeBody": Theme.sizeBody

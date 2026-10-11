@@ -15,7 +15,7 @@ import "../widgets/Logos.js" as Logos
 Singleton {
     id: root
 
-    readonly property string emblem: ["splat", "heart", "pill", "star", "cd", "kitty"].includes(Config.bar.logoEmblem) ? Config.bar.logoEmblem : "heart"
+    readonly property string emblem: ["splat", "heart", "pill", "star", "cd", "kitty", "pentagram", "pentagramRed", "cross"].includes(Config.bar.logoEmblem) ? Config.bar.logoEmblem : "heart"
     // the styles (Settings → System → fastfetch, the setup wizard's step): every one with a
     // picture shows the gear with its price — people giggle at the prices, never hide them
     readonly property var styles: [

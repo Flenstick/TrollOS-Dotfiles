@@ -1,0 +1,11 @@
+{
+  "id": "bandage-cat",
+  "name": "Котик в бинтах",
+  "version": "1.0.0",
+  "author": "flen (по мотивам плагина «Котик» angelOS)",
+  "description": "Чёрный котик в бинтах на панели (как вязаная игрушка): спит, перебирает лапками или скачет — в зависимости от загрузки процессора. Клик — котик покрупнее.",
+  "icon": "heart",
+  "enabledByDefault": true,
+  "barWidget": "BarWidget.qml",
+  "settings": "Settings.qml"
+}

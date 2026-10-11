@@ -108,9 +108,10 @@ Item {
     // Classic stays the default; Windose and Stream are optional settings skins. Golden Gate is
     // the whole desktop's skin (services/GoldenGate): here it is macOS's System Settings — its
     // own view (views/MacView.qml), the Windows 11 look's cards drawn as a Mac's grouped rows
-    readonly property string skin: ["classic", "windose", "stream", "goldengate"].includes(Config.settingsUi.skin) ? Config.settingsUi.skin : "classic"
+    readonly property string skin: ["classic", "windose", "stream", "goldengate", "material"].includes(Config.settingsUi.skin) ? Config.settingsUi.skin : "classic"
     readonly property bool mac: skin === "goldengate" && !hellDress
-    readonly property string settingsSkin: hellDress ? "classic" : mac ? "goldengate" : fluent ? "classic" : skin
+    // TrollOS: «Material You» draws its own even in the cards view
+    readonly property string settingsSkin: hellDress ? "classic" : mac ? "goldengate" : skin === "material" ? "material" : fluent ? "classic" : skin
     readonly property var macHost: mac ? win.Window.window : null
     // (there is no simple view or Expert any more: every page is a click away)
     readonly property bool expert: true

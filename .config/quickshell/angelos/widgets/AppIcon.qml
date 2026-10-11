@@ -37,7 +37,9 @@ Item {
     readonly property bool winIcons: Config.bar.style === "windows" && Config.win.icons === "windows"
     property string winTried: ""
     readonly property string winPath: winIcons && name && !!WinExtras.winIconSet[name] && winTried !== name ? "file://" + Quickshell.env("HOME") + "/.local/share/icons/Win11/apps/scalable/" + name + ".svg" : ""
-    readonly property string resolved: winPath || themed
+    // TrollOS: Material You's recoloured icons, straight from their folder (services/MaterialYou)
+    readonly property string mdPath: MaterialYou.useIcons && name && !!MaterialYou.iconSet[name] ? "file://" + MaterialYou.iconDir + name + ".svg?" + MaterialYou.iconRev : ""
+    readonly property string resolved: winPath || mdPath || themed
 
     implicitWidth: size
     implicitHeight: size

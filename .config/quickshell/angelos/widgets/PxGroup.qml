@@ -2,6 +2,7 @@ import QtQuick
 import qs.config
 import qs.services
 import "MacIcons.js" as MacIcons
+import "MaterialIcons.js" as MaterialIcons
 
 // A group of settings. Classic: like macOS's System Settings — a caption above a raised
 // pixel card that holds the rows (SettingRow draws the hairlines between them); Windose
@@ -24,6 +25,9 @@ Item {
     readonly property bool fluent: Theme.fluentFor(root.parent)
     // the Golden Gate skin's System Settings: the rows in one rounded box, a shade off the page
     readonly property bool mac: settingsSkin === "goldengate"
+    // TrollOS: the «Material You» skin — no box of its own (the rows are cards), the caption in
+    // primary; a sub-page folds into a surfaceContainer card
+    readonly property bool md: settingsSkin === "material"
     property bool unfolded: false
     readonly property bool folded: fluent && advanced && !unfolded && openSub !== title
     property int spacing: Theme.u * 5
@@ -77,9 +81,9 @@ Item {
         y: root.advanced ? fold.y : head.height + Theme.u * 2
         width: root.width
         height: root.height - y
-        radius: root.mac ? Theme.u * 5 : 0
-        color: root.mac ? (Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.035)) : Theme.mix(Theme.face, Theme.sunken, Theme.dark ? 0.45 : 0.3)
-        border.width: root.mac ? 0 : Math.max(1, Theme.u / 2)
+        radius: root.mac ? Theme.u * 5 : root.md ? Theme.mdRadius("l") : 0
+        color: root.md ? "transparent" : root.mac ? (Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.035)) : Theme.mix(Theme.face, Theme.sunken, Theme.dark ? 0.45 : 0.3)
+        border.width: root.mac || root.md ? 0 : Math.max(1, Theme.u / 2)
         border.color: Qt.alpha(Theme.lo, Theme.dark ? 0.85 : 0.45)
     }
     Rectangle {
@@ -87,9 +91,9 @@ Item {
         visible: root.fluent && root.advanced
         width: root.width
         height: Math.max(Theme.fit(22), foldText.implicitHeight + Theme.u * 8)
-        radius: root.mac ? Theme.u * 5 : 0
-        color: root.mac ? (foldMouse.containsMouse ? (Theme.dark ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(0, 0, 0, 0.06)) : (Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.035))) : foldMouse.containsMouse ? Theme.mix(Theme.faceAlt, Theme.accent, 0.12) : Theme.mix(Theme.face, Theme.faceAlt, 0.55)
-        border.width: root.mac ? 0 : Math.max(1, Theme.u / 2)
+        radius: root.mac ? Theme.u * 5 : root.md ? Theme.mdRadius("l") : 0
+        color: root.md ? (foldMouse.containsMouse ? Theme.mix(Theme.md.surfaceContainerHigh, Theme.md.onSurface, 0.08) : Theme.md.surfaceContainerHigh) : root.mac ? (foldMouse.containsMouse ? (Theme.dark ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(0, 0, 0, 0.06)) : (Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.035))) : foldMouse.containsMouse ? Theme.mix(Theme.faceAlt, Theme.accent, 0.12) : Theme.mix(Theme.face, Theme.faceAlt, 0.55)
+        border.width: root.mac || root.md ? 0 : Math.max(1, Theme.u / 2)
         border.color: Qt.alpha(Theme.lo, Theme.dark ? 0.9 : 0.5)
         SettingsTile {
             id: foldTile
@@ -97,7 +101,22 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             icon: root.icon || "gear"
             tint: Theme.mix(Theme.accent, Theme.face, 0.25)
-            opacity: root.mac ? 0 : 1
+            opacity: root.mac || root.md ? 0 : 1
+        }
+        // …Material: a symbol in a primaryContainer circle
+        Rectangle {
+            visible: root.md
+            anchors.centerIn: foldTile
+            width: Theme.mdPx(36)
+            height: width
+            radius: width / 2
+            color: Theme.md.primaryContainer
+            MdSymbol {
+                anchors.centerIn: parent
+                name: MaterialIcons.fromPixel(root.icon || "gear") || "settings"
+                size: Theme.mdPx(20)
+                color: Theme.md.onPrimaryContainer
+            }
         }
         // …a Mac's coloured icon square instead
         Rectangle {
@@ -142,7 +161,7 @@ Item {
             anchors.right: parent.right
             anchors.rightMargin: Theme.u * 5
             anchors.verticalCenter: parent.verticalCenter
-            text: root.mac ? (root.folded ? "›" : "⌄") : root.folded ? "▾" : "▴"
+            text: root.mac ? (root.folded ? "›" : "⌄") : root.md ? "" : root.folded ? "▾" : "▴"
             kind: "title"
             dim: true
         }
@@ -172,7 +191,7 @@ Item {
 
     // ---- Windose / Stream ----
     Rectangle {
-        visible: !root.classic && !root.fluent
+        visible: !root.classic && !root.fluent && !root.md
         anchors.fill: parent
         radius: root.settingsSkin === "stream" ? Theme.u * 3 : 0
         color: root.settingsSkin === "stream" ? Theme.streamPanel : Theme.windosePaper
@@ -180,7 +199,7 @@ Item {
         border.color: root.settingsSkin === "stream" ? Theme.mix(Theme.streamLive, Theme.streamPanel, 0.38) : Theme.windoseLine
     }
     Rectangle {
-        visible: !root.classic && !root.fluent
+        visible: !root.classic && !root.fluent && !root.md
         x: Theme.u
         y: Theme.u
         width: root.width - Theme.u * 2
@@ -211,7 +230,7 @@ Item {
         rightPadding: Theme.u * 2
         // the Golden Gate skin: no icon by a group's caption, as in System Settings
         PxIcon {
-            visible: root.icon !== "" && !root.mac
+            visible: root.icon !== "" && !root.mac && !root.md
             name: root.icon || "heart"
             anchors.verticalCenter: parent.verticalCenter
             pixel: root.classic ? Math.max(1, Theme.u - 1) : Theme.u
@@ -220,8 +239,8 @@ Item {
         PxText {
             text: root.title
             kind: root.classic || root.fluent ? "body" : "title"
-            color: root.settingsSkin === "stream" ? Theme.streamText : root.settingsSkin === "windose" ? Theme.windoseInk : Theme.textDim
-            font.bold: true
+            color: root.md ? Theme.md.primary : root.settingsSkin === "stream" ? Theme.streamText : root.settingsSkin === "windose" ? Theme.windoseInk : Theme.textDim
+            font.weight: root.md ? Font.Medium : Font.Bold
             anchors.verticalCenter: parent.verticalCenter
         }
         // a group new since you last looked (services/SettingsNews)

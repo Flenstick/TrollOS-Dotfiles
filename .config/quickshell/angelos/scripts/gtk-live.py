@@ -193,15 +193,67 @@ def interface_defaults():
                 gsettings("org.gnome.desktop.interface", "cursor-size", size)
 
 
+MD_FONT_STATE = HOME / ".local/state/angelos/material-font-before.json"
+
+
+def material_font(pal):
+    """TrollOS Material You (palette skin "material"): GTK's font becomes the look's (mdFont);
+    the one before is kept in MD_FONT_STATE and comes back when the look goes."""
+    import configparser
+    md = pal.get("skin") == "material" and pal.get("mdFont")
+    inis = [GTK3 / "settings.ini", GTK4 / "settings.ini"]
+
+    def ini_font(path, value=None):
+        cp = configparser.ConfigParser(interpolation=None)
+        cp.optionxform = str
+        try:
+            cp.read(path)
+        except configparser.Error:
+            return None
+        if value is None:
+            return cp.get("Settings", "gtk-font-name", fallback=None)
+        if not cp.has_section("Settings"):
+            return None
+        cp.set("Settings", "gtk-font-name", value)
+        with open(path, "w") as f:
+            cp.write(f, space_around_delimiters=False)
+        return value
+
+    if md:
+        want = "%s %d" % (pal["mdFont"], 11)
+        if not MD_FONT_STATE.exists():
+            MD_FONT_STATE.parent.mkdir(parents=True, exist_ok=True)
+            MD_FONT_STATE.write_text(json.dumps({"gs": gsettings("org.gnome.desktop.interface", "font-name"),
+                                                 "ini": {str(p): ini_font(p) for p in inis if p.exists()}}))
+        if gsettings("org.gnome.desktop.interface", "font-name") != want:
+            gsettings("org.gnome.desktop.interface", "font-name", want)
+        for p in inis:
+            if p.exists() and ini_font(p) != want:
+                ini_font(p, want)
+    elif MD_FONT_STATE.exists():
+        try:
+            before = json.loads(MD_FONT_STATE.read_text())
+        except ValueError:
+            before = {}
+        if before.get("gs"):
+            gsettings("org.gnome.desktop.interface", "font-name", before["gs"])
+        for p, v in (before.get("ini") or {}).items():
+            if v and Path(p).exists():
+                ini_font(Path(p), v)
+        MD_FONT_STATE.unlink()
+
+
 def main():
     pal = json.loads(Path(sys.argv[1]).read_text())
     interface_defaults()
+    material_font(pal)
     suffix = "-dark" if pal.get("mode") == "dark" else ""
     base = "adw-gtk3" + suffix
     base_dir = next((d / base for d in (HOME / ".local/share/themes", HOME / ".themes", Path("/usr/share/themes")) if (d / base / "gtk-3.0/gtk.css").exists()), None)
     current = gsettings("org.gnome.desktop.interface", "gtk-theme")
     mac = pal.get("skin") == "goldengate"
-    on = bool(pal.get("decorGtk")) or mac
+    # TrollOS Material You: libadwaita's own window buttons, not the pixel ones
+    on = (bool(pal.get("decorGtk")) and pal.get("skin") != "material") or mac
     decor3_tpl = SHELL / ("templates/gtk3-decor-mac.css" if mac else "templates/gtk3-decor.css")
     decor4_tpl = SHELL / ("templates/gtk4-decor-mac.css" if mac else "templates/gtk4-decor.css")
     # the palette CSS's frames, next to it, in the apps' colours (hell's while the demon rules)

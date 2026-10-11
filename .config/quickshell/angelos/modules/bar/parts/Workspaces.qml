@@ -19,6 +19,9 @@ Item {
     // a taskbar on the left or the right edge (BarItem): the hearts in a column, no name badge
     // beside them (it would run off the bar)
     property bool vertical: false
+    // TrollOS: the «Material You» skin — Material's page indicator: the active desk a primary
+    // pill that grows out of its dot, a desk with windows a dot, an empty one a faint dot
+    readonly property bool md: Theme.settingsSkinFor(root) === "material" && !barInk
 
     // the badge only takes room while it is shown: the slot opens, then closes again
     readonly property real badgeWidth: Math.min(Theme.u * 64, badgeMetrics.advanceWidth("✧ " + flashText) + Theme.u * 10)
@@ -65,12 +68,46 @@ Item {
                 readonly property bool showIcons: style !== "hearts" && occupied
                 readonly property bool showHeart: style !== "icons" || !occupied
                 readonly property var icons: wins.slice(0, Math.max(1, Config.bar.workspaceIcons))
-                width: (showHeart ? heart.width : 0) + (showIcons ? iconRow.width + (showHeart ? Theme.u * 2 : 0) : 0) + Theme.u * 4
-                height: Math.max(heart.height, Theme.u * 9) + Theme.u * 4
+                width: root.md ? (showHeart ? mdDot.width : 0) + (showIcons ? iconRow.width + (showHeart ? Theme.mdPx(6) : 0) : 0) + Theme.mdPx(showIcons ? 16 : 8) : (showHeart ? heart.width : 0) + (showIcons ? iconRow.width + (showHeart ? Theme.u * 2 : 0) : 0) + Theme.u * 4
+                height: root.md ? Theme.mdPx(32) : Math.max(heart.height, Theme.u * 9) + Theme.u * 4
 
                 // active workspace gets a soft plate when icons are shown
                 Rectangle {
-                    visible: cell.showIcons
+                    visible: root.md
+                    anchors.fill: parent
+                    radius: Theme.mdRadius("full")
+                    color: cell.showIcons && cell.lit ? Theme.md.secondaryContainer : "transparent"
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: parent.radius
+                        color: Theme.md.onSurface
+                        opacity: mouse.containsMouse ? 0.08 : 0
+                    }
+                }
+                Rectangle {
+                    id: mdDot
+                    visible: root.md && cell.showHeart
+                    x: Theme.mdPx(4) + (cell.showIcons ? Theme.mdPx(4) : 0)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: cell.active ? Theme.mdPx(24) : Theme.mdPx(cell.occupied ? 9 : 7)
+                    height: Theme.mdPx(cell.active ? 9 : cell.occupied ? 9 : 7)
+                    radius: height / 2
+                    color: cell.modelData.is_urgent ? Theme.md.error : cell.active ? Theme.md.primary : cell.occupied ? Theme.md.onSurfaceVariant : Theme.md.outline
+                    Behavior on width {
+                        NumberAnimation {
+                            duration: Motion.ms(260)
+                            easing.type: Easing.OutBack
+                            easing.overshoot: 1.4
+                        }
+                    }
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: Motion.ms(200)
+                        }
+                    }
+                }
+                Rectangle {
+                    visible: cell.showIcons && !root.md
                     anchors.fill: parent
                     anchors.topMargin: Theme.u
                     anchors.bottomMargin: Theme.u
@@ -82,14 +119,14 @@ Item {
                     id: iconRow
                     visible: cell.showIcons
                     anchors.verticalCenter: parent.verticalCenter
-                    x: (cell.showHeart ? heart.x + heart.width + Theme.u * 2 : Theme.u * 2)
+                    x: root.md ? (cell.showHeart ? mdDot.x + mdDot.width + Theme.mdPx(6) : Theme.mdPx(8)) : (cell.showHeart ? heart.x + heart.width + Theme.u * 2 : Theme.u * 2)
                     spacing: Theme.u
                     Repeater {
                         model: cell.showIcons ? cell.icons : []
                         AppIcon {
                             required property var modelData
                             appId: modelData.app_id || ""
-                            size: Theme.u * 8
+                            size: root.md ? Theme.mdPx(20) : Theme.u * 8
                             opacity: cell.lit || root.barInk ? 1 : 0.7
                             tint: Config.bar.tintTasks && !cell.lit ? Config.bar.trayTint : "off"
                             hellBar: root.barInk
@@ -106,7 +143,7 @@ Item {
 
                 WsSprite {
                     id: heart
-                    visible: cell.showHeart
+                    visible: cell.showHeart && !root.md
                     x: Theme.u * 2
                     anchors.verticalCenter: parent.verticalCenter
                     pixel: Theme.u
@@ -163,12 +200,13 @@ Item {
     Connections {
         target: Shell
         function onHeartDemo(from, to) {
-            if (from >= 0 && to >= 0 && from < root.list.length && to < root.list.length)
+            if (!root.md && from >= 0 && to >= 0 && from < root.list.length && to < root.list.length)
                 anim.play(from, to);
         }
     }
     WsAnimator {
         id: anim
+        visible: !root.md
         x: row.x
         y: row.y
         width: row.width
@@ -197,7 +235,8 @@ Item {
         function onWorkspaceActivated(ws, focused) {
             if (ws.output !== root.screenName)
                 return;
-            anim.play(root.previousIndex, root.list.findIndex(w => w.id === ws.id));
+            if (!root.md)
+                anim.play(root.previousIndex, root.list.findIndex(w => w.id === ws.id));
             if (Config.workspaces.popupMode !== "bar" || root.vertical)
                 return;
             const names = Config.workspaces.names || {};

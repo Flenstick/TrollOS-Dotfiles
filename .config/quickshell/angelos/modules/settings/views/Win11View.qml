@@ -4,6 +4,7 @@ import QtQuick
 import qs.config
 import qs.services
 import qs.widgets
+import "../../../widgets/MaterialIcons.js" as MaterialIcons
 import qs.modules.settings.views
 
 // Settings view "win11" (Config.settingsUi.view, the default), laid out like Windows 11's
@@ -17,6 +18,8 @@ import qs.modules.settings.views
 // of a category, ← goes back up to it.
 Item {
     id: root
+    // TrollOS: the «Material You» skin — the categories as Material 3's navigation drawer
+    readonly property bool md: Theme.settingsSkinFor(root) === "material"
 
     required property var view              // SettingsView
     readonly property alias searchSlot: searchSlot
@@ -101,9 +104,11 @@ Item {
             readonly property bool sel: root.view.sectionOf(root.view.settingsNav.settingsPage) === "account"
             width: parent.width
             height: root.rail ? Theme.fit(20) : Theme.fit(26)
-            color: sel ? Theme.mix(Theme.face, Theme.accent, 0.2) : youMouse.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.1) : "transparent"
+            radius: root.md ? Theme.mdRadius("full") : 0
+            color: root.md ? (sel ? Theme.md.secondaryContainer : youMouse.containsMouse ? Qt.alpha(Theme.md.onSurface, 0.08) : "transparent") : sel ? Theme.mix(Theme.face, Theme.accent, 0.2) : youMouse.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.1) : "transparent"
             PxBox {
                 id: face
+                opacity: root.md ? 0 : 1
                 x: root.rail ? (parent.width - width) / 2 : Theme.u * 2
                 anchors.verticalCenter: parent.verticalCenter
                 width: Theme.u * (root.rail ? 16 : 20)
@@ -125,6 +130,30 @@ Item {
                     anchors.centerIn: parent
                     name: "heart"
                     fill: "#ffffff"
+                }
+            }
+            // Material: a round avatar
+            Rectangle {
+                visible: root.md
+                anchors.fill: face
+                radius: width / 2
+                color: Theme.md.primaryContainer
+                clip: true
+                Image {
+                    anchors.fill: parent
+                    source: StartPrefs.avatarUrl
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    sourceSize: Qt.size(width * 2, height * 2)
+                    visible: status === Image.Ready
+                    layer.enabled: true
+                }
+                MdSymbol {
+                    anchors.centerIn: parent
+                    visible: avatarPic.status !== Image.Ready
+                    name: "person"
+                    fill: 1
+                    color: Theme.md.onPrimaryContainer
                 }
             }
             Column {
@@ -203,13 +232,14 @@ Item {
                         required property var modelData
                         readonly property bool sel: root.view.sectionOf(root.view.settingsNav.settingsPage) === modelData.id
                         width: catCol.width
-                        height: Theme.fit(16)
-                        color: sel ? Theme.mix(Theme.face, Theme.accent, 0.2) : catMouse.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.1) : "transparent"
-                        border.width: sel && root.view.navActive ? Math.max(1, Theme.u / 2) : 0
+                        height: root.md ? Theme.mdPx(48) : Theme.fit(16)
+                        radius: root.md ? Theme.mdRadius("full") : 0
+                        color: root.md ? (sel ? Theme.md.secondaryContainer : catMouse.containsMouse ? Qt.alpha(Theme.md.onSurface, 0.08) : "transparent") : sel ? Theme.mix(Theme.face, Theme.accent, 0.2) : catMouse.containsMouse ? Theme.mix(Theme.face, Theme.accent, 0.1) : "transparent"
+                        border.width: sel && root.view.navActive && !root.md ? Math.max(1, Theme.u / 2) : 0
                         border.color: Theme.accent
                         // the picked one: a short accent bar on the left, like Windows 11
                         Rectangle {
-                            visible: cat.sel
+                            visible: cat.sel && !root.md
                             x: 0
                             anchors.verticalCenter: parent.verticalCenter
                             width: Theme.u * 2
@@ -221,9 +251,18 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Theme.u * 4
                             SettingsTile {
+                                visible: !root.md
                                 anchors.verticalCenter: parent.verticalCenter
                                 icon: cat.modelData.icon
                                 tint: cat.modelData.tint
+                            }
+                            MdSymbol {
+                                visible: root.md
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Theme.mdPx(24)
+                                name: MaterialIcons.fromPixel(cat.modelData.icon) || "settings"
+                                fill: cat.sel ? 1 : 0
+                                color: cat.sel ? Theme.md.onSecondaryContainer : Theme.md.onSurfaceVariant
                             }
                             PxText {
                                 visible: !root.rail
@@ -231,7 +270,8 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 elide: Text.ElideRight
                                 text: cat.modelData.label
-                                font.bold: cat.sel
+                                font.weight: root.md ? Font.Medium : (cat.sel ? Font.Bold : Font.Normal)
+                                color: root.md ? (cat.sel ? Theme.md.onSecondaryContainer : Theme.md.onSurfaceVariant) : Theme.text
                             }
                         }
                         // something new in it (services/SettingsNews); on the rail, on the tile's corner

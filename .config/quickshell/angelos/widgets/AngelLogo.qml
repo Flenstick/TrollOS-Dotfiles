@@ -16,8 +16,8 @@ Item {
     property bool emblemOnly: false
     property bool hell: false
     property int pixel: Theme.u
-    readonly property var variants: ["classic", "angel", "windose", "hell", "chrome"]
-    readonly property var emblemNames: ["splat", "heart", "pill", "star", "cd", "kitty"]
+    readonly property var variants: ["classic", "angel", "windose", "hell", "chrome", "infernoDrip", "infernoGothic", "infernoCaps", "infernoNeon", "infernoHorns", "infernoEmo", "infernoBone", "silverGothic", "infernoWord", "inferno666", "vampireWord", "vampireNocturne", "voidWord", "voidCaps"]
+    readonly property var emblemNames: ["splat", "heart", "pill", "star", "cd", "kitty", "pentagram", "pentagramRed", "cross", "bat", "baphomet", "moon", "ring", "eclipse"]
     // the Hell wordmark is hell's own: in heaven only once the portal is open (Angel.hellAllowed)
     property string variant: hell ? "hell" : !variants.includes(Config.bar.logoStyle) || (Config.bar.logoStyle === "hell" && !Angel.hellAllowed) ? "classic" : Config.bar.logoStyle
     property string emblemName: emblemNames.includes(Config.bar.logoEmblem) ? Config.bar.logoEmblem : "splat"
@@ -26,14 +26,18 @@ Item {
     // whole (crisp), so the letters match "angel" set in it (scripts/wordmark-art.py)
     property int wordPixel: Math.max(1, Math.round(fontSize / 9))
     readonly property bool angel: variant === "angel"
-    readonly property var wordArt: Logos.wordmark(variant)
+    // TrollOS: «Готика серебром» (the Vampire layout) is the blood gothic's letters in silver
+    readonly property string artId: variant === "silverGothic" ? "infernoGothic" : variant
+    readonly property var wordArt: Logos.wordmark(artId)
     // the demon rules — or, in heaven, the pact signed down there left its mark (Story.marked)
     property bool horns: Angel.demon || Story.marked
 
     readonly property var emblemRows: Logos.emblem(emblemName, horns)
+    // TrollOS: the «Material You» skin — the emblem a filled symbol in the primary colour
+    readonly property bool md: Theme.settingsSkinFor(root) === "material" && !hell
     readonly property bool redStar: horns && !Logos.emblemHasHalo(emblemName)
 
-    implicitWidth: emblemOnly ? emblem.width : row.implicitWidth
+    implicitWidth: emblemOnly ? (md ? Theme.mdPx(22) : emblem.width) : row.implicitWidth
     implicitHeight: Math.max(emblem.height, emblemOnly ? 0 : wordArt ? art.height : wordmark.implicitHeight)
 
     Row {
@@ -41,8 +45,17 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: root.pixel * 4
 
+        MdSymbol {
+            visible: root.md
+            anchors.verticalCenter: parent.verticalCenter
+            name: "auto_awesome"
+            fill: 1
+            size: Theme.mdPx(22)
+            color: Theme.md.primary
+        }
         PxIcon {
             id: emblem
+            visible: !root.md
             anchors.verticalCenter: parent.verticalCenter
             bitmap: root.emblemRows
             pixel: root.pixel
@@ -67,7 +80,7 @@ Item {
             visible: !root.emblemOnly && !!root.wordArt
             anchors.verticalCenter: parent.verticalCenter
             bitmap: root.wordArt || []
-            pixel: Math.max(1, Math.round(root.wordPixel * Logos.wordmarkScale(root.variant)))
+            pixel: Math.max(1, Math.round(root.wordPixel * Logos.wordmarkScale(root.artId)))
             ink: Theme.dark ? Theme.mix(Theme.accent, Theme.edge, 0.55) : Theme.edge
             fill: Theme.accent
             fill2: Theme.accent2
@@ -80,6 +93,24 @@ Item {
                 "d": Theme.hex(Theme.hellRim),
                 "k": Theme.hex(Theme.hellEdge),
                 "e": Theme.hex(Theme.hellTextDim)
+            } : root.variant.startsWith("void") ? {
+                "r": Theme.hex(Theme.text),
+                "d": Theme.hex(Theme.mix(Theme.text, Theme.edge, 0.6)),
+                "k": Theme.hex(Theme.edge),
+                "e": "#ffffff",
+                "s": Theme.hex(Theme.text)
+            } : root.variant === "silverGothic" || root.variant.startsWith("vampire") ? {
+                "r": Theme.hex(Theme.mix(Theme.accent2, "#ffffff", 0.25)),
+                "d": Theme.hex(Theme.mix(Theme.accent2, Theme.edge, 0.6)),
+                "k": Theme.hex(Theme.edge),
+                "e": Theme.hex(Theme.mix(Theme.accent2, "#ffffff", 0.7)),
+                "s": Theme.hex(Theme.accent)
+            } : root.variant.startsWith("inferno") ? {
+                "r": Theme.hex(Theme.mix(Theme.accent, "#ff2a3a", 0.5)),
+                "d": Theme.hex(Theme.mix(Theme.accent, Theme.edge, 0.55)),
+                "k": Theme.hex(Theme.edge),
+                "e": Theme.hex(Theme.mix(Theme.accent, "#ffffff", 0.35)),
+                "s": Theme.hex(Theme.text)
             } : root.variant === "hell" ? {
                 "r": "#e0203a",
                 "d": "#7a0a1e",

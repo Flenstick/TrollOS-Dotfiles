@@ -323,6 +323,13 @@ case "$1" in
     # screen time and breaks: status | water | unwater | test eyes|move|water|limit | clear
     shift
     exec qs -c angelos ipc call angelos wellbeing "$*" ;;
+  presets)
+    # TrollOS desktop layouts (Settings → Макеты): list | apply <id> [still] | restore | status
+    case "${2:-status}" in
+      list|restore|status) exec qs -c angelos ipc call presets "${2:-status}" ;;
+      apply) exec qs -c angelos ipc call presets apply "${3:-}" "${4:-}" ;;
+      *) echo "angelos presets list | apply <id> [still] | restore | status" >&2; exit 2 ;;
+    esac ;;
   diary)
     # the Angel's diary: open [page] | close | list | validate | status | watch
     # (+ owner/dev: read-reset, preview on|off, away [min], back, trust [reset])

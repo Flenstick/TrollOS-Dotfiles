@@ -85,7 +85,7 @@ Item {
     }
     RigFile {
         id: angelRig
-        name: root.angelVariant === "glitch" || root.angelVariant === "ophanim" ? "angel-" + root.angelVariant : "angel"
+        name: root.angelVariant === "glitch" || root.angelVariant === "ophanim" || root.angelVariant === "lamb" ? "angel-" + root.angelVariant : "angel"
     }
     RigFile {
         id: demonRig

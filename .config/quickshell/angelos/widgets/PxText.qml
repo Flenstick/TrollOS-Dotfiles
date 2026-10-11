@@ -11,14 +11,17 @@ Text {
     property bool dim: false
     readonly property bool script: Theme.scriptWindows.length > 0 && Theme.scriptWindows.includes(Window.window) && kind !== "mono"
     readonly property bool mac: (Theme.macWindow !== null && Window.window === Theme.macWindow) || Theme.settingsSkinFor(parent) === "goldengate"
-    readonly property int basePx: mac ? Math.round(Theme.fs * (kind === "tiny" ? 11 : kind === "mono" ? 12 : kind === "title" ? 15 : kind === "big" ? 22 : kind === "huge" ? 26 : 13)) : kind === "tiny" ? Theme.sizeTiny : kind === "mono" ? Theme.sizeMono : kind === "title" ? Theme.sizeTitle : kind === "big" ? Theme.sizeBig : kind === "huge" ? Theme.sizeHuge : Theme.sizeBody
+    // TrollOS: the «Material You» skin — Material 3's type scale in its font: body 14, label 12,
+    // title 16 (medium), headline 24, display 32
+    readonly property bool md: !mac && !script && Theme.settingsSkinFor(parent) === "material"
+    readonly property int basePx: md ? Theme.mdPx(kind === "tiny" ? 12 : kind === "mono" ? 13 : kind === "title" ? 16 : kind === "big" ? 24 : kind === "huge" ? 32 : 14) : mac ? Math.round(Theme.fs * (kind === "tiny" ? 11 : kind === "mono" ? 12 : kind === "title" ? 15 : kind === "big" ? 22 : kind === "huge" ? 26 : 13)) : kind === "tiny" ? Theme.sizeTiny : kind === "mono" ? Theme.sizeMono : kind === "title" ? Theme.sizeTitle : kind === "big" ? Theme.sizeBig : kind === "huge" ? Theme.sizeHuge : Theme.sizeBody
 
     color: dim ? Theme.textDim : Theme.text
-    font.family: script ? Theme.fontScript : mac ? (kind === "mono" ? Theme.macMono : Theme.macFont) : kind === "body" ? Theme.fontBody : kind === "mono" ? Theme.fontMono : Theme.fontTitle
+    font.family: script ? Theme.fontScript : md ? (kind === "mono" ? Theme.fontMono : Theme.mdFont) : mac ? (kind === "mono" ? Theme.macMono : Theme.macFont) : kind === "body" ? Theme.fontBody : kind === "mono" ? Theme.fontMono : Theme.fontTitle
     font.pixelSize: script ? Theme.scriptPx(Math.max(basePx, Theme.sizeTiny + 2)) : basePx
-    font.weight: mac && (kind === "title" || kind === "big" || kind === "huge") ? Font.Bold : Font.Normal
-    font.hintingPreference: mac ? Font.PreferVerticalHinting : Font.PreferFullHinting
-    renderType: script || mac ? Text.QtRendering : Text.NativeRendering
+    font.weight: md ? (kind === "title" ? Font.Medium : Font.Normal) : mac && (kind === "title" || kind === "big" || kind === "huge") ? Font.Bold : Font.Normal
+    font.hintingPreference: mac || md ? Font.PreferVerticalHinting : Font.PreferFullHinting
+    renderType: script || mac || md ? Text.QtRendering : Text.NativeRendering
     verticalAlignment: Text.AlignVCenter
     // AutoText would render HTML found in window titles, track names or the
     // clipboard (<img src=…> even fetches remote images). Opt in per use.

@@ -54,10 +54,14 @@ PanelWindow {
     readonly property int peek: Math.max(2, Theme.u)
 
     readonly property bool hell: BarLayout.hell
-    readonly property int barHeight: Theme.barHeight
+    // TrollOS: the «Material You» skin — a floating pill on surfaceContainer, 8 dp off the edges
+    // (Settings → Material You → «Панель-таблетка»; off: edge to edge), the controls Material 3's
+    readonly property bool md: Theme.materialSkin && !hell
+    readonly property int gap: md && Config.material.pillBar ? Theme.mdPx(8) : 0
+    readonly property int barHeight: md ? Theme.mdPx(56) : Theme.barHeight
     // how deep the bar is from its edge: its height across, its width upright (room for the
     // icons, the clock and the tray's arrow)
-    readonly property int thick: vertical ? Theme.u * 36 : barHeight
+    readonly property int thick: (vertical ? (md ? Theme.mdPx(64) : Theme.u * 36) : barHeight) + gap
     // how far it has slid off its edge, towards the outside
     readonly property real slide: Math.round(tucked * (thick - peek))
 
@@ -108,19 +112,42 @@ PanelWindow {
             Pointer.left("bar", win.modelData.name)
     }
 
+    // the controls inside read the look from here (Theme.settingsSkinFor)
+    Item {
+        id: skinHost
+        anchors.fill: parent
+        readonly property string settingsSkin: win.md ? "material" : "classic"
+    }
+    Rectangle {
+        visible: win.md
+        parent: skinHost
+        x: box.x
+        y: box.y
+        width: box.width
+        height: box.height
+        radius: win.gap > 0 ? Theme.mdRadius("full") : 0
+        color: Theme.md.surfaceContainer
+        opacity: Config.appearance.blur ? 0.92 : 1
+        border.width: win.gap > 0 ? 1 : 0
+        border.color: Qt.alpha(Theme.md.outlineVariant, 0.5)
+    }
     PxBox {
         id: box
-        width: win.vertical ? win.thick : parent.width
-        height: win.vertical ? parent.height : win.thick
-        x: win.edge === "left" ? -win.slide : win.edge === "right" ? win.slide : 0
-        y: win.edge === "bottom" ? win.slide : win.edge === "top" ? -win.slide : 0
-        color: win.hell ? "transparent" : Theme.panel
+        parent: skinHost
+        z: 1
+        readonly property int g: win.gap
+        // the gap is on the screen's edge and along the sides; windows start right above it
+        width: win.vertical ? win.thick - g : parent.width - g * 2
+        height: win.vertical ? parent.height - g * 2 : win.thick - g
+        x: (win.vertical ? (win.edge === "left" ? g : 0) : g) + (win.edge === "left" ? -win.slide : win.edge === "right" ? win.slide : 0)
+        y: (win.vertical ? g : (win.edge === "top" ? g : 0)) + (win.edge === "bottom" ? win.slide : win.edge === "top" ? -win.slide : 0)
+        color: win.hell || win.md ? "transparent" : Theme.panel
         hell: win.hell
         outline: false
 
         Rectangle {
             // the highlight line like the original taskbar, on the side facing the desktop
-            visible: !win.hell
+            visible: !win.hell && !win.md
             width: win.vertical ? Theme.u : parent.width
             height: win.vertical ? parent.height : Theme.u
             x: win.edge === "left" ? box.width - box.inset - Theme.u : -box.inset
@@ -141,14 +168,14 @@ PanelWindow {
         BarContent {
             id: taskbarContent
             anchors.fill: parent
-            anchors.leftMargin: win.vertical ? 0 : Theme.u
-            anchors.rightMargin: win.vertical ? 0 : Theme.u
+            anchors.leftMargin: win.vertical ? 0 : win.md ? Theme.mdPx(8) : Theme.u
+            anchors.rightMargin: win.vertical ? 0 : win.md ? Theme.mdPx(8) : Theme.u
             screenName: win.modelData.name
             barWindow: win
             style: "taskbar"
             vertical: win.vertical
             compact: win.compact || win.vertical
-            itemHeight: Theme.fit(15)
+            itemHeight: win.md ? Theme.mdPx(40) : Theme.fit(15)
         }
     }
 

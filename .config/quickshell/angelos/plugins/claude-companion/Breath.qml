@@ -50,7 +50,7 @@ Item {
     // the demon rules: horns where the halo was (on the bar too); on the desktop in
     // hell (Theme.hell) a mask in the circle's colours — the state shows only as a faint
     // tint and in the two embers of its eyes
-    property bool horns: Angel.demon || Theme.hell
+    property bool horns: Angel.demon || Theme.hell || Theme.infernoLook   // TrollOS: always under Inferno
     property bool hellLook: Theme.hell
     // on the hell bar: the mask drawn like the bar's icons — its outline and horns in the
     // icon colour, no fill — and its eyes tell the state: the accent only when it wants you

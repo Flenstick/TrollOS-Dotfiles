@@ -64,7 +64,7 @@ Singleton {
     // her look (Settings → Y2K → Looks): the pick, unless the story changed her past cold
     // (story/game.json → angel.fallen) — then that one, whatever is picked; the pick is kept
     // the looks past the glitch girl are heaven's things (services/Heaven): earned, or the glitch one
-    readonly property string angelLook: Story.angelFallen ? Story.fallenLook : ["glitch", "chibi", "adult", "mini"].includes(Config.y2k.angelLook) && Heaven.lookOk(Config.y2k.angelLook) ? Config.y2k.angelLook : "glitch"
+    readonly property string angelLook: Story.angelFallen ? Story.fallenLook : ["glitch", "chibi", "adult", "mini", "lamb"].includes(Config.y2k.angelLook) && Heaven.lookOk(Config.y2k.angelLook) ? Config.y2k.angelLook : "glitch"
     // on stream (services/StreamAngel) she sits on the streamed screen's taskbar (AngelHelper)
     readonly property bool streamer: StreamAngel.shown && !!StreamAngel.screen
     // the main screen, her own one (Y2K → Screen; unplugged → the main one), or where the focus is

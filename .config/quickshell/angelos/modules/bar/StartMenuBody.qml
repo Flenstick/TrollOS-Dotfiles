@@ -13,6 +13,8 @@ PxBox {
     property int current: -1
     // Settings → Bar → Start → Fine-tune (services/StartPrefs)
     readonly property var prefs: StartPrefs.of("classic")
+    // TrollOS: the «Material You» skin (the Loader in StartOverlay says so)
+    readonly property bool md: settingsSkin === "material"
 
     readonly property var entries: [
         {
@@ -170,7 +172,7 @@ PxBox {
         const it = col.children[current];
         colView.contentY = Math.max(0, Math.min(colView.contentHeight - colView.height, it.y < colView.contentY ? it.y : it.y + it.height > colView.contentY + colView.height ? it.y + it.height - colView.height : colView.contentY));
     }
-    color: Qt.alpha(Theme.menuSurface, prefs.alpha)
+    color: md ? Qt.alpha(Theme.md.surfaceContainer, prefs.alpha) : Qt.alpha(Theme.menuSurface, prefs.alpha)
     edgeColor: Theme.menuBorder
     flat: true
     shadow: Config.appearance.shadows && prefs.shadow
@@ -179,15 +181,16 @@ PxBox {
         id: brand
         width: parent.width
         height: Theme.fit(27)
-        color: root.prefs.accent ? Theme.mix(Theme.menuHeader, root.prefs.accentColor, 0.45) : Theme.menuHeader
+        radius: root.md ? Theme.mdRadius("m") : 0
+        color: root.md ? "transparent" : root.prefs.accent ? Theme.mix(Theme.menuHeader, root.prefs.accentColor, 0.45) : Theme.menuHeader
         AngelLogo {
             anchors.centerIn: parent
         }
         Rectangle {
             anchors.bottom: parent.bottom
             width: parent.width
-            height: Theme.u
-            color: Theme.menuBorder
+            height: root.md ? 1 : Theme.u
+            color: root.md ? Theme.md.outlineVariant : Theme.menuBorder
         }
     }
 
@@ -210,8 +213,8 @@ PxBox {
             anchors.bottom: parent.bottom
             x: Theme.u * 4
             width: parent.width - Theme.u * 8
-            height: Math.max(1, Theme.u / 2)
-            color: Theme.menuBorder
+            height: root.md ? 1 : Math.max(1, Theme.u / 2)
+            color: root.md ? Theme.md.outlineVariant : Theme.menuBorder
         }
     }
 

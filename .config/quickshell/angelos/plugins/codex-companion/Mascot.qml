@@ -13,7 +13,7 @@ Item {
     property string state: CodexState.state
     // the demon rules: two little horns on the bubble (on the bar too); on the desktop
     // in hell (Theme.hell) the circle's dark colours, the state in its one accent
-    property bool horns: Angel.demon || Theme.hell
+    property bool horns: Angel.demon || Theme.hell || Theme.infernoLook   // TrollOS: always under Inferno
     property bool hellLook: Theme.hell
     readonly property var rows: horns ? hornRows : haloRows
     readonly property var hornRows: [
@@ -88,10 +88,12 @@ Item {
         y: root.bob * root.pixel
         bitmap: root.rows
         pixel: root.pixel
-        ink: root.hellLook ? Theme.hellRim : (Theme.dark ? Theme.text : Theme.edge)
-        fill2: root.hellLook ? CodexState.hellStateColor(root.state, Theme) : root.state === "none" ? Theme.textDim : CodexState.stateColor(root.state, Theme)
-        light: root.hellLook ? Theme.hellFaceAlt : Theme.dark ? Theme.face : "#ffffff"
-        bad: root.hellLook ? Theme.hellTextDim : "#e0203a"
-        opacity: root.state === "none" ? 0.7 : 1
+        // TrollOS Inferno: a dark middle, a red ring, «>_» and the outline red-hot; at work the
+        // middle is the state's colour. Any other palette: angelOS's own look
+        ink: root.hellLook ? Theme.hellRim : Theme.infernoLook ? Theme.mix(Theme.accent, "#ffffff", 0.45) : (Theme.dark ? Theme.text : Theme.edge)
+        fill2: root.hellLook ? CodexState.hellStateColor(root.state, Theme) : Theme.infernoLook ? (root.state === "none" || root.state === "idle" ? Theme.mix(Theme.desk, Theme.accent, 0.18) : Theme.mix(CodexState.stateColor(root.state, Theme), Theme.desk, 0.45)) : root.state === "none" ? Theme.textDim : CodexState.stateColor(root.state, Theme)
+        light: root.hellLook ? Theme.hellFaceAlt : Theme.infernoLook ? Theme.accent : Theme.dark ? Theme.face : "#ffffff"
+        bad: root.hellLook ? Theme.hellTextDim : Theme.infernoLook ? Theme.accent : "#e0203a"
+        opacity: Theme.infernoLook || root.state !== "none" ? 1 : 0.7
     }
 }

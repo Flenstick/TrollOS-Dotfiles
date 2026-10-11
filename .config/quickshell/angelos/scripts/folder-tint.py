@@ -26,7 +26,7 @@ ICONS = Path(os.environ.get("XDG_DATA_HOME") or HOME / ".local/share") / "icons"
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config")
 INIS = [CONFIG / "gtk-3.0/settings.ini", CONFIG / "gtk-4.0/settings.ini"]
 OURS = ("angelos-folders-a", "angelos-folders-b")
-BASES = ("pixora", "pixora-dark")
+BASES = ("pixora", "pixora-dark", "pixora-inferno")   # TrollOS: pixora-inferno — ~/Projects/inferno-icons
 BODY, SHADE = "E3C896", "AB947A"
 SHADES = ("A48875", "A48675", "9E7C71")   # the few in-between pixels of some folders
 CONTEXTS = ("places",)
@@ -138,7 +138,8 @@ def apply(palette):
         return "Golden Gate's icons: folders left alone"
     cur = current()
     base = base_of(cur)
-    if base not in BASES or not theme_dirs(base):
+    # TrollOS: any Pixora recolour (pixora-<layout>, scripts/preset-assets.py) is a base too
+    if (base not in BASES and not base.startswith("pixora-")) or not theme_dirs(base):
         return f"icon theme {cur or '?'} is not Pixora: folders left alone"
     tint = palette.get("folderTint") or "pixora"
     if tint == "pixora":

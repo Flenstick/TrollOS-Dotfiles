@@ -9,7 +9,9 @@ PxIcon {
 
     property string tip: I18n.t("Новое", "New")
     // a small five-point star (a plus-like sparkle read as "+" this small)
-    bitmap: ["...o...", "..ooo..", "ooowooo", ".ooooo.", "..ooo..", ".oo.oo.", ".o...o."]
+    // TrollOS: the «Material You» skin — Material's small badge, a dot
+    readonly property bool md: Theme.settingsSkinFor(root) === "material"
+    bitmap: md ? ["..ooo..", ".ooooo.", "ooooooo", "ooooooo", "ooooooo", ".ooooo.", "..ooo.."] : ["...o...", "..ooo..", "ooowooo", ".ooooo.", "..ooo..", ".oo.oo.", ".o...o."]
     pixel: Math.max(1, Math.round(Theme.u * 0.75))
     ink: Theme.accent
     fill: Theme.accent

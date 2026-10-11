@@ -14,6 +14,8 @@ Item {
     readonly property string settingsSkin: Theme.settingsSkinFor(root.parent)
     // the Golden Gate skin's System Settings: a Mac pop-up button (the value and ⌃⌄), a glass menu
     readonly property bool mac: settingsSkin === "goldengate"
+    // TrollOS: the «Material You» skin — an outlined field with ▾, its menu on surfaceContainer
+    readonly property bool md: settingsSkin === "material"
     signal activated(var value)
 
     Accessible.role: Accessible.ComboBox
@@ -30,7 +32,7 @@ Item {
     readonly property string currentLabel: currentIndex >= 0 ? items[currentIndex].label : placeholder
 
     implicitWidth: Theme.u * 100
-    implicitHeight: mac ? GoldenGate.px(28) : Theme.sizeBody + Theme.u * 10
+    implicitHeight: md ? Theme.mdPx(44) : mac ? GoldenGate.px(28) : Theme.sizeBody + Theme.u * 10
 
     PxBox {
         anchors.fill: parent
@@ -65,7 +67,23 @@ Item {
         }
     }
     Rectangle {
-        visible: root.settingsSkin !== "classic" && !root.mac
+        visible: root.md
+        anchors.fill: parent
+        radius: Theme.mdRadius("xs")
+        color: mouse.containsMouse ? Qt.alpha(Theme.md.onSurface, 0.06) : "transparent"
+        border.width: Theme.mdPx(popup.opened ? 2 : 1)
+        border.color: popup.opened ? Theme.md.primary : Theme.md.outline
+        MdSymbol {
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.mdPx(10)
+            anchors.verticalCenter: parent.verticalCenter
+            name: popup.opened ? "arrow_drop_up" : "arrow_drop_down"
+            size: Theme.mdPx(24)
+            color: Theme.md.onSurfaceVariant
+        }
+    }
+    Rectangle {
+        visible: root.settingsSkin !== "classic" && !root.mac && !root.md
         anchors.fill: parent
         radius: root.settingsSkin === "stream" ? Theme.u * 2 : 0
         color: root.settingsSkin === "stream" ? Theme.streamPanel : Theme.windoseSticker
@@ -75,7 +93,7 @@ Item {
     PxText {
         anchors.left: parent.left
         anchors.right: arrow.left
-        anchors.leftMargin: Theme.u * 5
+        anchors.leftMargin: root.md ? Theme.mdPx(16) : Theme.u * 5
         anchors.verticalCenter: parent.verticalCenter
         text: root.currentLabel
         elide: Text.ElideRight
@@ -96,7 +114,7 @@ Item {
         }
     }
     PxIcon {
-        visible: root.settingsSkin !== "classic" && !root.mac
+        visible: root.settingsSkin !== "classic" && !root.mac && !root.md
         anchors.centerIn: arrow
         name: "arrowDown"
         ink: root.settingsSkin === "stream" ? Theme.streamLive : Theme.windoseInk
@@ -104,6 +122,7 @@ Item {
     MouseArea {
         id: mouse
         anchors.fill: parent
+        hoverEnabled: root.md
         cursorShape: Qt.PointingHandCursor
         onClicked: popup.opened ? popup.close() : popup.open()
     }
@@ -121,9 +140,17 @@ Item {
         background: Item {
             PxBox {
                 anchors.fill: parent
-                visible: !root.mac
+                visible: !root.mac && !root.md
                 color: Theme.face
                 shadow: true
+            }
+            Rectangle {
+                anchors.fill: parent
+                visible: root.md
+                radius: Theme.mdRadius("xs")
+                color: Theme.md.surfaceContainer
+                border.width: 1
+                border.color: Qt.alpha(Theme.md.outlineVariant, 0.6)
             }
             MacGlass {
                 anchors.fill: parent
@@ -134,6 +161,8 @@ Item {
         }
         contentItem: ListView {
             id: list
+            // the menu lives in the window's overlay, out of the page's chain: the look goes along
+            readonly property string settingsSkin: root.settingsSkin
             clip: true
             model: root.items
             boundsBehavior: Flickable.StopAtBounds
@@ -142,9 +171,9 @@ Item {
                 required property var modelData
                 required property int index
                 width: list.width
-                height: Theme.sizeBody + Theme.u * 7
+                height: root.md ? Theme.mdPx(44) : Theme.sizeBody + Theme.u * 7
                 radius: root.mac ? GoldenGate.px(6) : 0
-                color: optMouse.containsMouse ? (root.mac ? GoldenGate.accent : Theme.select) : index === root.currentIndex && !root.mac ? Theme.faceAlt : "transparent"
+                color: root.md ? (optMouse.containsMouse ? Qt.alpha(Theme.md.onSurface, 0.08) : index === root.currentIndex ? Theme.md.secondaryContainer : "transparent") : optMouse.containsMouse ? (root.mac ? GoldenGate.accent : Theme.select) : index === root.currentIndex && !root.mac ? Theme.faceAlt : "transparent"
                 Row {
                     anchors.left: parent.left
                     anchors.leftMargin: Theme.u * 4
@@ -157,7 +186,7 @@ Item {
                     }
                     PxText {
                         text: opt.modelData.label
-                        color: optMouse.containsMouse ? Theme.selectText : Theme.text
+                        color: root.md ? (opt.index === root.currentIndex ? Theme.md.onSecondaryContainer : Theme.md.onSurface) : optMouse.containsMouse ? Theme.selectText : Theme.text
                     }
                 }
                 MouseArea {

@@ -11,6 +11,9 @@ plugin close-confirm
 plugin dynamic-island
 plugin friend-runner
 plugin panel-shooter
+# TrollOS: the «Satanic» desktop layout turns these on (services/DesktopPresets)
+plugin layout-fx
+plugin bandage-cat
 
 bin angelos-shot
 bin angelos-snip

@@ -11,6 +11,8 @@ Item {
     property string text: ""
     readonly property string settingsSkin: Theme.settingsSkinFor(root.parent)
     readonly property bool mac: settingsSkin === "goldengate"
+    // TrollOS: the «Material You» skin — Material 3's switch
+    readonly property bool md: settingsSkin === "material"
     signal toggled(bool checked)
 
     function flip() {
@@ -80,8 +82,8 @@ Item {
     PxBox {
         id: track
         visible: root.settingsSkin === "classic"
-        width: root.mac ? GoldenGate.px(38) : Theme.u * 26
-        height: root.mac ? GoldenGate.px(22) : Theme.u * 13
+        width: root.md ? Theme.mdPx(52) : root.mac ? GoldenGate.px(38) : Theme.u * 26
+        height: root.md ? Theme.mdPx(32) : root.mac ? GoldenGate.px(22) : Theme.u * 13
         anchors.verticalCenter: parent.verticalCenter
         sunken: true
         color: root.checked ? Theme.mix(Theme.sunken, Theme.accent, 0.55) : Theme.sunken
@@ -109,8 +111,65 @@ Item {
         }
     }
 
+    // Material 3: off — an outlined track with a small outline-coloured thumb; on — the primary
+    // track, a big onPrimary thumb with a check; the thumb grows while pressed
     Rectangle {
-        visible: root.settingsSkin !== "classic" && !root.mac
+        id: mdTrack
+        visible: root.md
+        width: track.width
+        height: track.height
+        anchors.verticalCenter: parent.verticalCenter
+        radius: Theme.mdRadius("full")
+        color: root.checked ? Theme.md.primary : Theme.md.surfaceContainerHighest
+        border.width: root.checked ? 0 : Theme.mdPx(2)
+        border.color: Theme.md.outline
+        Behavior on color {
+            ColorAnimation {
+                duration: Motion.ms(150)
+            }
+        }
+        Rectangle {
+            id: mdThumb
+            readonly property real d: mdMouse.pressed ? Theme.mdPx(28) : root.checked ? Theme.mdPx(24) : Theme.mdPx(16)
+            width: d
+            height: d
+            radius: Math.min(d / 2, Theme.mdRadius("full"))
+            anchors.verticalCenter: parent.verticalCenter
+            x: root.checked ? parent.width - Theme.mdPx(4) - d : Theme.mdPx(root.checked ? 4 : 8) - (d - Theme.mdPx(16)) / 2
+            color: root.checked ? Theme.md.onPrimary : Theme.md.outline
+            Behavior on x {
+                NumberAnimation {
+                    duration: Motion.ms(180)
+                    easing.type: Easing.OutCubic
+                }
+            }
+            Behavior on width {
+                NumberAnimation {
+                    duration: Motion.ms(120)
+                }
+            }
+            // the state layer around the thumb
+            Rectangle {
+                anchors.centerIn: parent
+                width: Theme.mdPx(40)
+                height: width
+                radius: width / 2
+                color: root.checked ? Theme.md.primary : Theme.md.onSurface
+                opacity: mdMouse.pressed ? 0.12 : mdMouse.containsMouse ? 0.08 : 0
+                z: -1
+            }
+            MdSymbol {
+                anchors.centerIn: parent
+                visible: root.checked
+                name: "check"
+                size: Theme.mdPx(16)
+                weight: 600
+                color: Theme.md.primary
+            }
+        }
+    }
+    Rectangle {
+        visible: root.settingsSkin !== "classic" && !root.mac && !root.md
         width: track.width
         height: track.height
         anchors.verticalCenter: parent.verticalCenter
@@ -150,7 +209,9 @@ Item {
     }
 
     MouseArea {
+        id: mdMouse
         anchors.fill: parent
+        hoverEnabled: root.md
         cursorShape: Qt.PointingHandCursor
         onClicked: root.flip()
     }

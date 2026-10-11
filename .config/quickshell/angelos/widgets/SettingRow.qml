@@ -18,6 +18,9 @@ Item {
     // the Golden Gate skin's System Settings: no card of its own — a row of its group's box with
     // a hairline between rows, the label regular
     readonly property bool mac: settingsSkin === "goldengate"
+    // TrollOS: the «Material You» skin — every row a rounded card on surfaceContainer (Android's
+    // settings), the label in the body type, the hint in onSurfaceVariant
+    readonly property bool md: settingsSkin === "material"
     property int labelWidth: streamLayout ? width - Theme.u * 10 : Math.min(Theme.u * 120, width * 0.45)
     default property alias control: slot.data
     property string preview: ""
@@ -66,7 +69,14 @@ Item {
         color: Theme.dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.07)
     }
     Rectangle {
-        visible: root.fluent && !root.mac
+        visible: root.md
+        width: parent.width
+        height: root.rowHeight
+        radius: Theme.mdRadius("l")
+        color: Theme.md.surfaceContainerHigh
+    }
+    Rectangle {
+        visible: root.fluent && !root.mac && !root.md
         width: parent.width
         height: root.rowHeight
         color: Theme.mix(Theme.face, Theme.faceAlt, 0.55)
@@ -82,7 +92,7 @@ Item {
         color: Qt.alpha(Theme.lo, Theme.dark ? 0.9 : 0.55)
     }
     Rectangle {
-        visible: root.settingsSkin !== "classic" && !root.mac
+        visible: root.settingsSkin !== "classic" && !root.mac && !root.md
         width: parent.width
         height: root.rowHeight
         radius: root.streamLayout ? Theme.u * 3 : 0
@@ -91,7 +101,7 @@ Item {
         border.color: root.streamLayout ? Theme.mix(Theme.streamLive, Theme.streamPanel, 0.55) : Theme.mix(Theme.windoseInk, Theme.windosePaper, 0.55)
     }
     Rectangle {
-        visible: root.settingsSkin !== "classic" && !root.mac
+        visible: root.settingsSkin !== "classic" && !root.mac && !root.md
         width: root.streamLayout ? Theme.u * 2 : Theme.u * 3
         height: root.rowHeight - Theme.u * 2
         x: Theme.u
@@ -110,7 +120,7 @@ Item {
             width: parent.width - (root.isNew ? newStar.width + Theme.u * 3 : 0)
             text: root.label
             wrapMode: Text.Wrap
-            font.bold: root.settingsSkin !== "classic" && !root.mac
+            font.bold: root.settingsSkin !== "classic" && !root.mac && !root.md
             NewStar {
                 id: newStar
                 visible: root.isNew

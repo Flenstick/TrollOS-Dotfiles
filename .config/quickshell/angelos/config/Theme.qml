@@ -6,6 +6,7 @@ import qs.config
 
 // Pixel pink palette in the spirit of NEEDY GIRL OVERDOSE.
 // Light = "angel" (pastel win98), dark = "overdose" (night stream).
+import "MaterialColor.js" as MaterialColor
 Singleton {
     id: root
 
@@ -279,6 +280,163 @@ Singleton {
                     title2: "#5b1a8f"
                 }
             },
+            // TrollOS: «Inferno» — чёрный с кровью, кость и ритуальное золото (в тон GRUB Inferno).
+            // `more` перекрывает производные тона (тени, ANSI, danger/ok) — см. base
+            inferno: {
+                name: "Inferno ⛧",
+                dark: {
+                    desk: "#0b0607",
+                    face: "#150a0b",
+                    faceAlt: "#200f11",
+                    text: "#ecdccb",
+                    textDim: "#a38a7f",
+                    accent: "#d3202e",
+                    accent2: "#c9a24a",
+                    title1: "#9b0618",
+                    title2: "#2b070b",
+                    more: {
+                        sunken: "#070304",
+                        hi: "#2e1517",
+                        lo: "#050203",
+                        edge: "#030102",
+                        accent3: "#e2703f",
+                        accent4: "#c9a24a",
+                        danger: "#ff3b3b",
+                        ok: "#8fae6e",
+                        selectText: "#0b0607",
+                        shadow: "#000000",
+                        ansi: ["#1a0d0e", "#d3202e", "#7fa36b", "#d9a441", "#7a6fb0", "#b0306a", "#6fa3a0", "#d9c8b8", "#5a4544", "#ff4d4d", "#9cc488", "#f0c766", "#9a90d0", "#e0508a", "#8fc5c0", "#f5e9dc"]
+                    }
+                },
+                light: {
+                    desk: "#e6d7bf",
+                    face: "#f3e9d6",
+                    faceAlt: "#eadbc2",
+                    text: "#2a0f10",
+                    textDim: "#6e5048",
+                    accent: "#a3101e",
+                    accent2: "#8a6a2a",
+                    title1: "#8b0012",
+                    title2: "#4a0a0e",
+                    more: {
+                        accent3: "#b4501f",
+                        accent4: "#8a6a2a",
+                        danger: "#c4001a",
+                        ok: "#4f7a3a",
+                        ansi: ["#2a0f10", "#a3101e", "#4f7a3a", "#8a6a2a", "#4b4280", "#8a1d4f", "#3e7370", "#d9c8b8", "#6e5048", "#d3202e", "#6a944f", "#b08a3a", "#6a60a0", "#b0306a", "#5a9590", "#f3e9d6"]
+                    }
+                }
+            },
+            // TrollOS: «Vampire» (макет «Готика») — ночь, вино и серебро
+            vampire: {
+                name: "Vampire 🦇",
+                dark: {
+                    desk: "#0d0a12",
+                    face: "#15101c",
+                    faceAlt: "#1e1628",
+                    text: "#e6e1ef",
+                    textDim: "#968ea8",
+                    accent: "#b0285f",
+                    accent2: "#c8c3d6",
+                    title1: "#5e1438",
+                    title2: "#1a1024",
+                    more: {
+                        sunken: "#08060c",
+                        hi: "#2c2238",
+                        lo: "#060409",
+                        edge: "#030205",
+                        accent3: "#8a5cc8",
+                        accent4: "#c8c3d6",
+                        danger: "#ff4d6d",
+                        ok: "#8fb8a0",
+                        selectText: "#0d0a12",
+                        shadow: "#000000",
+                        ansi: ["#1a1422", "#c2305e", "#7fae94", "#c9a86a", "#7a6fc0", "#a04d9c", "#6fa0b0", "#d8d2e4", "#4e465c", "#ef4d7d", "#9ccfb2", "#e6c88c", "#9a90e0", "#c46cc0", "#8fc4d4", "#f2eef8"]
+                    }
+                },
+                light: {
+                    desk: "#e4dfe9",
+                    face: "#f2eff6",
+                    faceAlt: "#e8e2ef",
+                    text: "#1d1424",
+                    textDim: "#5e5470",
+                    accent: "#8e1d4c",
+                    accent2: "#5c5670",
+                    title1: "#7a1a44",
+                    title2: "#2a1c38",
+                    more: {
+                        accent3: "#6a3fa8",
+                        accent4: "#5c5670",
+                        danger: "#c2002f",
+                        ok: "#3e7a5a",
+                        ansi: ["#1d1424", "#8e1d4c", "#3e7a5a", "#8a6a2a", "#4b4290", "#7a2a70", "#2e6a7a", "#d8d2e4", "#5e5470", "#b0285f", "#5a9a76", "#a88a3a", "#6a60b0", "#9a3a90", "#4a8a9a", "#f2eff6"]
+                    }
+                }
+            },
+            // TrollOS: «Void» (макет «Минимал») — чёрное и белое, один тихий акцент
+            void: {
+                name: "Void ◯",
+                dark: {
+                    desk: "#0a0a0a",
+                    face: "#121212",
+                    faceAlt: "#1a1a1a",
+                    text: "#e8e8e8",
+                    textDim: "#8a8a8a",
+                    accent: "#d0d0d0",
+                    accent2: "#7aa2c8",
+                    title1: "#2a2a2a",
+                    title2: "#161616",
+                    more: {
+                        sunken: "#060606",
+                        hi: "#2a2a2a",
+                        lo: "#040404",
+                        edge: "#000000",
+                        accent3: "#a0a0a0",
+                        accent4: "#7aa2c8",
+                        danger: "#e05555",
+                        ok: "#8ab48a",
+                        selectText: "#0a0a0a",
+                        shadow: "#000000",
+                        ansi: ["#1a1a1a", "#d06a6a", "#8ab48a", "#c8b07a", "#7aa2c8", "#a08ab8", "#7ab4b4", "#d0d0d0", "#5a5a5a", "#e88a8a", "#a8d0a8", "#e0cc98", "#9cc0e0", "#c0a8d8", "#9cd0d0", "#f4f4f4"]
+                    }
+                },
+                light: {
+                    desk: "#e6e6e6",
+                    face: "#f6f6f6",
+                    faceAlt: "#ececec",
+                    text: "#141414",
+                    textDim: "#6a6a6a",
+                    accent: "#2a2a2a",
+                    accent2: "#3a6a98",
+                    title1: "#d8d8d8",
+                    title2: "#bcbcbc",
+                    more: {
+                        accent3: "#555555",
+                        accent4: "#3a6a98",
+                        danger: "#b02a2a",
+                        ok: "#3a7a3a",
+                        selectText: "#f6f6f6",
+                        ansi: ["#141414", "#b02a2a", "#3a7a3a", "#8a6a1a", "#3a6a98", "#6a4a90", "#2a7a7a", "#d8d8d8", "#6a6a6a", "#d04a4a", "#5a9a5a", "#aa8a3a", "#5a8ab8", "#8a6ab0", "#4a9a9a", "#f6f6f6"]
+                    }
+                }
+            },
+            // TrollOS: Material You — the colours come from Config.material.seed (materialFlavor);
+            // these are only what the list and its swatches show
+            material: {
+                name: "Material You",
+                dark: {
+                    accent: "#d0bcff",
+                    accent2: "#efb8c8",
+                    title1: "#4f378b",
+                    title2: "#4a4458"
+                },
+                light: {
+                    accent: "#6750a4",
+                    accent2: "#7d5260",
+                    title1: "#eaddff",
+                    title2: "#e8def8"
+                }
+            },
             cyberangel: {
                 name: "Cyber Angel",
                 light: {
@@ -341,7 +499,15 @@ Singleton {
         const f = (flavors[Config.appearance.flavor] || flavors.overdose)[isDark ? "dark" : "light"];
         return f.desk ? f : Object.assign({}, legacyFor(isDark), f);
     }
-    readonly property var flavor: (flavors[Config.appearance.flavor] || flavors.overdose)[dark ? "dark" : "light"]
+    readonly property var flavor: Config.appearance.flavor === "material" ? materialFlavor : (flavors[Config.appearance.flavor] || flavors.overdose)[dark ? "dark" : "light"]
+    // TrollOS: Material You — the palette grown from one seed (config/MaterialColor.js), and the
+    // Material 3 roles themselves for the skin's controls (Theme.md.primary, .surfaceContainer …)
+    readonly property bool materialOn: Config.ready && Config.appearance.flavor === "material"
+    readonly property string materialSeed: Config.ready ? (Config.material.fromWallpaper && wallpaperSeed ? wallpaperSeed : Config.material.seed || "#6750a4") : "#6750a4"
+    property string wallpaperSeed: ""      // services/MaterialYou sets it from the wallpaper
+    readonly property string materialVariant: Config.ready && Config.material.tonalSurfaces === false && Config.material.variant === "tonalSpot" ? "neutral" : Config.ready ? Config.material.variant : "tonalSpot"
+    readonly property var md: MaterialColor.scheme(materialSeed, materialVariant, dark)
+    readonly property var materialFlavor: MaterialColor.flavor(materialSeed, materialVariant, dark)
 
     // ---- the Golden Gate skin (Config.settingsUi.skin "goldengate"): macOS 27's colours ----
     // While the skin is on and the demon doesn't rule, the palette is a Mac's — light or dark,
@@ -421,7 +587,7 @@ Singleton {
             accent3: flavor.accent2,
             accent4: flavor.accent2,
             ansi: [flavor.desk, "#e36b78", "#8eaf73", "#d8b56b", flavor.accent2, flavor.accent, "#72b7b0", flavor.text, flavor.textDim, "#f58b98", "#aacf93", "#efd18b", flavor.accent2, flavor.accent, "#92d7d0", flavor.text]
-        });
+        }, flavor.more || {});
     }
     readonly property color menuSurface: mix(face, accent, dark ? 0.08 : 0.04)
     readonly property color menuHeader: mix(faceAlt, accent, dark ? 0.16 : 0.10)
@@ -433,6 +599,9 @@ Singleton {
     readonly property color faceAlt: base.faceAlt
     readonly property color sunken: base.sunken
     // Accessibility → Contrast: text toward black or white, dim text nearly as strong, crisper edges
+    // TrollOS: the Inferno palette is on (the «Satanic» layout): the pentagram on today in the
+    // calendar, horns on the companions, Codex red-hot — everyone else keeps the plain look
+    readonly property bool infernoLook: Config.ready && Config.appearance.flavor === "inferno"
     readonly property bool highContrast: Config.ready && !!Config.appearance.highContrast
     readonly property color text: highContrast ? mix(base.text, dark ? "#ffffff" : "#000000", 0.6) : base.text
     readonly property color textDim: highContrast ? mix(base.textDim, text, 0.7) : base.textDim
@@ -607,6 +776,44 @@ Singleton {
     readonly property int u: Math.max(1, Config.appearance.px)   // one art pixel
     // the font scale: ×1, ×1.25 … ×2 (fontPx keeps every size on its font's pixel grid)
     readonly property real fs: Math.max(1, Math.min(3, Config.appearance.fontScale || 1))
+
+    // ---- TrollOS: the «Material You» skin (Config.settingsUi.skin "material") ----
+    // Controls under settingsSkin "material" draw as Material 3: these are its shared tokens
+    readonly property bool materialSkin: Config.ready && Config.settingsUi.skin === "material"
+    readonly property string mdFont: Config.ready && Config.material.font ? Config.material.font : "sans-serif"
+    readonly property string mdSymbolFont: !Config.ready || Config.material.symbols === "rounded" ? "Material Symbols Rounded" : Config.material.symbols === "sharp" ? "Material Symbols Sharp" : "Material Symbols Outlined"
+    // Material 3's shape scale (dp): xs 4, s 8, m 12, l 16, xl 28, full (a pill); Settings →
+    // Material You → Corners makes it softer or square
+    function mdRadius(level) {
+        const c = Config.ready ? Config.material.corners : "round";
+        const t = c === "square" ? ({
+                "xs": 0,
+                "s": 2,
+                "m": 3,
+                "l": 4,
+                "xl": 6,
+                "full": 6
+            }) : c === "soft" ? ({
+                "xs": 2,
+                "s": 4,
+                "m": 8,
+                "l": 10,
+                "xl": 16,
+                "full": 14
+            }) : ({
+                "xs": 4,
+                "s": 8,
+                "m": 12,
+                "l": 16,
+                "xl": 28,
+                "full": 9999
+            });
+        return t[level] !== undefined ? t[level] : 8;
+    }
+    // a size in dp at the user's font scale
+    function mdPx(v) {
+        return Math.round(v * fs);
+    }
     readonly property int gap: u * 4
     readonly property int pad: u * 5
     // How much the text has outgrown the art pixel. Rows, bars and title strips were drawn for
