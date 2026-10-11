@@ -42,6 +42,10 @@ Singleton {
             ids.push(app.id);
         Config.bar.startPinned = ids;
     }
+    // the Start menu's pinned grid dragged into a new order: the order shown becomes the pins
+    function setOrder(ids) {
+        Config.bar.startPinned = ids.filter(id => !!id);
+    }
     function score(app, q) {
         const name = (app.name || "").toLowerCase();
         if (!q)

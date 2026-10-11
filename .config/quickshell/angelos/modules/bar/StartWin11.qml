@@ -150,30 +150,156 @@ PxBox {
     flat: true
     shadow: Config.appearance.shadows && prefs.shadow
 
+    // the pinned grid: a ListModel of indexes into gridSrc, so a drag moves the tiles
+    // themselves (the others slide aside) instead of rebuilding the grid
+    property var gridSrc: []
+    property int dragIdx: -1          // the tile being dragged, -1 none
+    ListModel {
+        id: pinModel
+    }
+    function syncGrid() {
+        if (dragIdx >= 0)
+            return;
+        const src = grid.visible ? shown : [];
+        const same = src.length === pinModel.count && src.every((a, i) => gridSrc[pinModel.get(i).k] === a);
+        gridSrc = src;
+        if (same) {
+            for (let i = 0; i < pinModel.count; i++)
+                pinModel.setProperty(i, "k", i);
+            return;
+        }
+        pinModel.clear();
+        for (let i = 0; i < src.length; i++)
+            pinModel.append({
+                "k": i
+            });
+    }
+    onShownChanged: Qt.callLater(syncGrid)
+    Component.onCompleted: syncGrid()
+    function saveOrder() {
+        const ids = [];
+        for (let i = 0; i < pinModel.count; i++)
+            ids.push((gridSrc[pinModel.get(i).k] || {}).id);
+        StartApps.setOrder(ids);
+    }
+
     component Tile: Item {
         id: tile
-        required property var modelData
+        required property int k
         required property int index
+        readonly property var modelData: root.gridSrc[k] || ({})
         readonly property bool sel: root.current === index
+        readonly property bool dragging: root.dragIdx === index && tm.dragged
+        readonly property bool canDrag: !root.searching && !root.showAll && root.prefs.pinned
         width: grid.cellWidth
         height: grid.cellHeight
+        z: dragging || drop.running ? 10 : 0
+
+        // where the pointer took the tile, and how far it is from its slot now
+        property point grab
+        property real dx: 0
+        property real dy: 0
+        property real lift: 0          // 0..1 поднята
+        property real wob: 0           // покачивание в руке
+        function slotX(i) {
+            return (i % root.columns) * grid.cellWidth;
+        }
+        function slotY(i) {
+            return Math.floor(i / root.columns) * grid.cellHeight;
+        }
+        transform: [
+            Translate {
+                x: tile.dx
+                y: tile.dy
+            },
+            Rotation {
+                origin.x: tile.width / 2
+                origin.y: tile.height / 2
+                angle: tile.lift * Math.sin(tile.wob) * 4
+            }
+        ]
+        Behavior on lift {
+            NumberAnimation {
+                duration: Motion.ms(160)
+                easing.type: Easing.OutBack
+                easing.overshoot: 2.5
+            }
+        }
+        NumberAnimation on wob {
+            running: tile.dragging
+            from: 0
+            to: Math.PI * 2
+            duration: 520
+            loops: Animation.Infinite
+        }
+        ParallelAnimation {
+            id: drop
+            NumberAnimation {
+                target: tile
+                property: "dx"
+                to: 0
+                duration: Motion.ms(260)
+                easing.type: Easing.OutBack
+                easing.overshoot: 1.4
+            }
+            NumberAnimation {
+                target: tile
+                property: "dy"
+                to: 0
+                duration: Motion.ms(260)
+                easing.type: Easing.OutBack
+                easing.overshoot: 1.4
+            }
+            SequentialAnimation {
+                PauseAnimation {
+                    duration: Motion.ms(160)
+                }
+                // встала на место: короткий «кивок»
+                NumberAnimation {
+                    target: tile
+                    property: "scale"
+                    to: 0.92
+                    duration: Motion.ms(70)
+                }
+                NumberAnimation {
+                    target: tile
+                    property: "scale"
+                    to: 1
+                    duration: Motion.ms(180)
+                    easing.type: Easing.OutBack
+                    easing.overshoot: 3
+                }
+            }
+        }
+        // тень под поднятой плиткой
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: Theme.u * 2
+            anchors.topMargin: Theme.u * 2 + tile.lift * Theme.u * 3
+            anchors.leftMargin: Theme.u * 2 + tile.lift * Theme.u * 2
+            anchors.rightMargin: Theme.u * 2 - tile.lift * Theme.u * 2
+            anchors.bottomMargin: Theme.u * 2 - tile.lift * Theme.u * 3
+            color: Qt.alpha(Theme.shadow, 0.45 * tile.lift)
+            visible: tile.lift > 0.01
+        }
         Rectangle {
             anchors.fill: parent
             anchors.margins: Theme.u
-            color: tile.sel ? Qt.alpha(root.accentColor, 0.3) : tm.containsMouse ? Qt.alpha(root.accentColor, 0.14) : "transparent"
-            border.width: tile.sel ? Math.max(1, Theme.u / 2) : 0
+            color: tile.lift > 0.01 ? Qt.alpha(Theme.mix(Theme.menuSurface, root.accentColor, 0.35), 0.92 * tile.lift) : tile.sel ? Qt.alpha(root.accentColor, 0.3) : tm.containsMouse ? Qt.alpha(root.accentColor, 0.14) : "transparent"
+            border.width: tile.sel || tile.lift > 0.01 ? Math.max(1, Theme.u / 2) : 0
             border.color: root.accentColor
         }
         Column {
             anchors.centerIn: parent
             width: parent.width - Theme.u * 4
             spacing: Theme.u * 2
+            scale: 1 + tile.lift * 0.12
             AppIcon {
                 anchors.horizontalCenter: parent.horizontalCenter
                 iconName: tile.modelData.icon || ""
                 appId: tile.modelData.id || ""
                 size: Math.round(Theme.u * 15 * root.prefs.icons)
-                scale: tm.pressed ? 0.88 : 1
+                scale: tm.pressed && !tm.dragged ? 0.88 : 1
                 Behavior on scale {
                     NumberAnimation {
                         duration: Motion.ms(90)
@@ -184,14 +310,14 @@ PxBox {
                 visible: root.prefs.labels
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
-                text: tile.modelData.name
+                text: tile.modelData.name || ""
                 kind: "tiny"
                 elide: Text.ElideRight
                 maximumLineCount: 1
             }
         }
         PxIcon {
-            visible: StartApps.isPinned(tile.modelData) && !root.query
+            visible: StartApps.isPinned(tile.modelData) && !root.query && tm.containsMouse && root.dragIdx < 0
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: Theme.u * 2
@@ -200,13 +326,73 @@ PxBox {
         }
         MouseArea {
             id: tm
+            // зажми и тащи — плитка поднимается, остальные расступаются
+            property bool dragged: false
             anchors.fill: parent
             hoverEnabled: true
+            preventStealing: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton
-            cursorShape: Qt.PointingHandCursor
-            onEntered: root.current = tile.index
-            onClicked: m => m.button === Qt.RightButton ? StartApps.togglePin(tile.modelData) : root.run(tile.modelData)
+            cursorShape: dragged ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+            onEntered: if (root.dragIdx < 0)
+                root.current = tile.index
+            onPressed: m => {
+                dragged = false;
+                tile.grab = mapToItem(grid.contentItem, m.x, m.y);
+                drop.stop();
+            }
+            onPositionChanged: m => {
+                if (!pressed || !(pressedButtons & Qt.LeftButton) || !tile.canDrag)
+                    return;
+                const p = mapToItem(grid.contentItem, m.x, m.y);
+                if (!dragged) {
+                    if (Math.hypot(p.x - tile.grab.x, p.y - tile.grab.y) < Theme.u * 4)
+                        return;
+                    dragged = true;
+                    root.dragIdx = tile.index;
+                    root.current = -1;
+                    tile.lift = 1;
+                    // grab stays relative to the tile's slot
+                    tile.grab = Qt.point(tile.grab.x - tile.slotX(tile.index), tile.grab.y - tile.slotY(tile.index));
+                }
+                // the slot under the pointer
+                const col = Math.max(0, Math.min(root.columns - 1, Math.floor(p.x / grid.cellWidth)));
+                const row = Math.max(0, Math.floor(p.y / grid.cellHeight));
+                const to = Math.max(0, Math.min(pinModel.count - 1, row * root.columns + col));
+                if (to !== tile.index) {
+                    pinModel.move(tile.index, to, 1);
+                    root.dragIdx = to;
+                }
+                // by the slot's maths: the grid lays the moved tile out a frame later
+                tile.dx = p.x - tile.grab.x - tile.slotX(root.dragIdx);
+                tile.dy = p.y - tile.grab.y - tile.slotY(root.dragIdx);
+            }
+            onReleased: {
+                if (!dragged)
+                    return;
+                tile.lift = 0;
+                drop.restart();
+                root.dragIdx = -1;
+                root.saveOrder();
+            }
+            onCanceled: {
+                if (dragged) {
+                    tile.lift = 0;
+                    drop.restart();
+                    root.dragIdx = -1;
+                    root.saveOrder();
+                }
+                dragged = false;
+            }
+            onClicked: m => {
+                if (dragged) {
+                    dragged = false;
+                    return;
+                }
+                m.button === Qt.RightButton ? StartApps.togglePin(tile.modelData) : root.run(tile.modelData);
+            }
         }
+        onIndexChanged: if (tm.dragged && root.dragIdx >= 0 && root.dragIdx !== index)
+            root.dragIdx = index
     }
 
     Column {
@@ -358,10 +544,20 @@ PxBox {
             height: cellHeight * Math.max(1, Math.min(root.rows, Math.ceil(count / root.columns)))
             cellWidth: width / root.columns
             cellHeight: Math.round(Theme.u * 22 * Math.max(0.8, root.prefs.icons)) + (root.prefs.labels ? Theme.fit(8) : 0)
-            interactive: count > root.columns * root.rows
+            interactive: count > root.columns * root.rows && root.dragIdx < 0
             clip: true
-            model: grid.visible ? root.shown : []
+            model: pinModel
             delegate: Tile {}
+            onVisibleChanged: root.syncGrid()
+            // расступаются плавно
+            displaced: Transition {
+                NumberAnimation {
+                    properties: "x,y"
+                    duration: Motion.ms(220)
+                    easing.type: Easing.OutCubic
+                }
+            }
+            move: Transition {}
         }
 
         // all apps, alphabetical with letter headers
