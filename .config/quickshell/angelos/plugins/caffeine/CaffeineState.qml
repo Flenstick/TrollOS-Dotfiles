@@ -12,6 +12,7 @@ Singleton {
     id: root
 
     property bool active: false
+    signal toggled(bool on)   // только руками (клик, Mod+Alt+C), не при восстановлении
     // переживает перезагрузку оболочки, но не ПК: /run/user очищается при выключении
     readonly property string flag: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/angelos-caffeine"
 
@@ -24,6 +25,7 @@ Singleton {
 
     function toggle() {
         active = !active;
+        toggled(active);
         Quickshell.execDetached(active ? ["touch", flag] : ["rm", "-f", flag]);
         const icon = Qt.resolvedUrl(active ? "cup-on.png" : "cup-off.png").toString().replace("file://", "");
         Quickshell.execDetached(["notify-send", "-a", "angelOS", "-t", "2000", "-i", icon,

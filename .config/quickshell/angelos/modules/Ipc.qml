@@ -633,7 +633,7 @@ IpcHandler {
     }
     // what Settings wear: `angelos settingsSkin windose` (no argument: which one)
     function settingsSkin(skin: string): string {
-        const skins = ["classic", "windose", "stream", "goldengate"];
+        const skins = ["classic", "windose", "stream", "goldengate", "material"];
         const s = String(skin || "").trim().toLowerCase();
         if (s === "")
             return Config.settingsUi.skin + "  (" + skins.join(" | ") + ")";
@@ -999,6 +999,14 @@ IpcHandler {
         Config.bar.style = style;
     }
     // TrollOS: Windows 11 copy options: winSet gradient false | icons angelos | align left …
+    // «Не беспокоить»: on | off | toggle (пусто — узнать)
+    function dnd(state: string): string {
+        if (state === "on" || state === "off")
+            Config.notifications.dnd = state === "on";
+        else if (state === "toggle")
+            Config.notifications.dnd = !Config.notifications.dnd;
+        return Config.notifications.dnd ? "on" : "off";
+    }
     function winSet(key: string, value: string): string {
         if (!(key in Config.win))
             return "keys: accent align search taskView lyrics recommended gradient icons snip offered";
@@ -1168,6 +1176,10 @@ IpcHandler {
     }
     function plugins(): void {
         Plugins.reload();
+    }
+    // включить / выключить плагин, как переключатель в Настройках → Плагины
+    function pluginEnable(id: string, on: bool): void {
+        Plugins.setEnabled(id, on);
     }
     function reload(): void {
         Quickshell.reload(true);
