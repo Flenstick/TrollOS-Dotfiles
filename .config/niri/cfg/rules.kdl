@@ -143,8 +143,7 @@ window-rule {
         border { off; }
         focus-ring { off; }
         shadow { off; }
-        default-column-width { fixed 1040; }
-        default-window-height { fixed 740; }
+        // TrollOS: no fixed size — the settings window picks 1040×740 or less on a small laptop screen
     }
     // angelOS dev instances (ANGELOS_DEV=1): keep test windows off the stream monitor
     window-rule {

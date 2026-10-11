@@ -18,8 +18,11 @@ FloatingWindow {
     title: Shell.appTitle + " · " + I18n.t("Настройки", "Settings") + (nav === Shell || !view.currentPage ? "" : " — " + view.currentPage.label)
     visible: nav.settingsOpen
     color: "transparent"
-    implicitWidth: 1040
-    implicitHeight: 740
+    // TrollOS: 1040×740, but never past a small laptop screen (1280×720 at niri's scale): the
+    // bottom went under the panel. niri's window rule no longer fixes the size, the window asks
+    readonly property var fitScreen: Shell.focusedScreen
+    implicitWidth: fitScreen ? Math.min(1040, fitScreen.width - 48) : 1040
+    implicitHeight: fitScreen ? Math.min(740, fitScreen.height - 96) : 740
     minimumSize: Qt.size(720, 480)
     onClosed: nav.settingsOpen = false
     onVisibleChanged: if (!visible)
