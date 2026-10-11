@@ -68,6 +68,51 @@ Singleton {
         }
         return out;
     }
+    // TrollOS: the days from..to (Dates), oldest first: [{key, date, s}]
+    function range(from, to) {
+        rev;
+        const out = [];
+        for (let d = new Date(from.getFullYear(), from.getMonth(), from.getDate()); d <= to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+            const k = dayKey(d);
+            out.push({
+                "key": k,
+                "date": d,
+                "s": days[k] ? days[k].s || 0 : 0
+            });
+        }
+        return out;
+    }
+    // the Monday of the week of d, offset weeks away
+    function weekStart(d, offset) {
+        d = d || new Date();
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() + 6) % 7 + 7 * (offset || 0));
+    }
+    // TrollOS: every week (Mon–Sun) since the first counted day, oldest first:
+    // [{from, to, s, used (days with time), offset (0: this week, -1: the one before…)}]
+    readonly property var weeks: {
+        rev;
+        const ks = Object.keys(days).filter(k => (days[k].s || 0) > 0).sort();
+        const now = weekStart();
+        let first = now;
+        if (ks.length) {
+            const p = ks[0].split("-");
+            first = weekStart(new Date(+p[0], +p[1] - 1, +p[2]));
+        }
+        const out = [];
+        for (let w = first; w <= now; w = new Date(w.getFullYear(), w.getMonth(), w.getDate() + 7)) {
+            const to = new Date(w.getFullYear(), w.getMonth(), w.getDate() + 6);
+            const list = range(w, to);
+            out.push({
+                "from": w,
+                "to": to,
+                "s": list.reduce((a, d) => a + d.s, 0),
+                "used": list.filter(d => d.s > 60).length
+            });
+        }
+        out.forEach((w, i) => w.offset = i - (out.length - 1));
+        return out;
+    }
+    readonly property real totalSeconds: weeks.reduce((a, w) => a + w.s, 0)
     // the average of the days before today that have any time (up to n of them)
     function average(n) {
         const list = lastDays(n + 1).slice(0, -1).filter(d => d.s > 60);
@@ -98,9 +143,11 @@ Singleton {
         const e = DesktopEntries.heuristicLookup(id);
         return e && e.name ? e.name : String(id).replace(/^.*\./, "");
     }
-    // 3725 → "1 ч 2 мин"; under a minute → "0 мин"
+    // 3725 → "1 ч 2 мин"; under a minute → "0 мин"; 100 hours and more → "123 ч"
     function fmt(s) {
         const m = Math.floor((s || 0) / 60), h = Math.floor(m / 60), r = m % 60;
+        if (h >= 100)
+            return I18n.t(h + " ч", h + " h");
         if (!h)
             return I18n.t(r + " мин", r + " min");
         return r ? I18n.t(h + " ч " + r + " мин", h + " h " + r + " min") : I18n.t(h + " ч", h + " h");

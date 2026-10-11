@@ -18,9 +18,25 @@ PxPage {
     readonly property bool hell: Angel.demon
     readonly property string who: hell ? I18n.t("демоница", "the demon") : I18n.t("ангел", "the angel")
     readonly property var wd: I18n.english ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["вс", "пн", "вт", "ср", "чт", "пт", "сб"]
-    readonly property var week: Wellbeing.lastDays(7)
+    readonly property var mon: I18n.english ? ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] : ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+    // TrollOS: the chart is a calendar week (Mon–Sun) and the arrows go back through all of them
+    property int weekOffset: 0               // 0: this week, -1: the one before…
+    readonly property date weekFrom: Wellbeing.weekStart(null, weekOffset)
+    readonly property var week: Wellbeing.range(weekFrom, new Date(weekFrom.getFullYear(), weekFrom.getMonth(), weekFrom.getDate() + 6))
+    readonly property real weekTotal: week.reduce((a, d) => a + d.s, 0)
+    readonly property int weekUsed: week.filter(d => d.s > 60).length
+    readonly property string todayKey: Wellbeing.dayKey()
     readonly property int avg: Wellbeing.average(7)
     readonly property real weekMax: Math.max(3600, w.dailyLimit * 60, ...week.map(d => d.s))
+    readonly property var allWeeks: Wellbeing.weeks
+    readonly property real weeksMax: Math.max(3600, ...allWeeks.map(x => x.s))
+    property bool allWeeksList: false        // the list under the chart: the last 8 or every week
+    function span(from, to) {
+        return from.getMonth() === to.getMonth() ? from.getDate() + "–" + to.getDate() + " " + mon[to.getMonth()] : from.getDate() + " " + mon[from.getMonth()] + " – " + to.getDate() + " " + mon[to.getMonth()];
+    }
+    function weekTitle(offset, from) {
+        return offset === 0 ? I18n.t("Эта неделя", "This week") : offset === -1 ? I18n.t("Прошлая неделя", "Last week") : span(from, new Date(from.getFullYear(), from.getMonth(), from.getDate() + 6)) + (from.getFullYear() !== new Date().getFullYear() ? " " + from.getFullYear() : "");
+    }
     readonly property var hourly: Wellbeing.hours()
     readonly property real hourMax: Math.max(600, ...hourly)
     readonly property var apps: Wellbeing.topApps("", 5)
@@ -48,6 +64,41 @@ PxPage {
             }
         }
 
+        // the week: its name, the arrows, the total
+        Item {
+            width: chart.width
+            height: weekNav.height
+            Column {
+                anchors.verticalCenter: parent.verticalCenter
+                PxText {
+                    text: page.weekTitle(page.weekOffset, page.weekFrom)
+                    kind: "title"
+                }
+                PxText {
+                    text: I18n.t("всего ", "total ") + Wellbeing.fmt(page.weekTotal) + (page.weekUsed > 0 ? I18n.t(" · в среднем ", " · on average ") + Wellbeing.fmt(page.weekTotal / page.weekUsed) + I18n.t(" в день", " a day") : "")
+                    kind: "tiny"
+                    dim: true
+                }
+            }
+            Row {
+                id: weekNav
+                anchors.right: parent.right
+                spacing: Theme.u * 2
+                PxButton {
+                    compact: true
+                    icon: "arrowLeft"
+                    enabled: page.allWeeks.length > 0 && page.weekOffset > page.allWeeks[0].offset
+                    onClicked: page.weekOffset--
+                }
+                PxButton {
+                    compact: true
+                    icon: "arrowRight"
+                    enabled: page.weekOffset < 0
+                    onClicked: page.weekOffset++
+                }
+            }
+        }
+
         // the week: a bar a day, today in the accent; the limit as a line across
         Item {
             id: chart
@@ -64,7 +115,7 @@ PxPage {
                         id: col
                         required property var modelData
                         required property int index
-                        readonly property bool today: index === page.week.length - 1
+                        readonly property bool today: modelData.key === page.todayKey
                         width: (bars.width - bars.spacing * 6) / 7
                         height: bars.height
                         Rectangle {
@@ -221,6 +272,141 @@ PxPage {
             PxToggle {
                 checked: page.w.apps
                 onToggled: v => page.w.apps = v
+            }
+        }
+    }
+
+    // TrollOS: every week since the counting began — a bar each, the total of all time and a list
+    PxGroup {
+        name: "weeks"
+        title: I18n.t("По неделям", "By week")
+        icon: "calendar"
+        width: parent.width
+        visible: page.w.track || Wellbeing.totalSeconds > 0
+
+        Column {
+            PxText {
+                text: Wellbeing.fmt(Wellbeing.totalSeconds)
+                kind: "huge"
+            }
+            PxText {
+                readonly property int n: page.allWeeks.length
+                text: I18n.t("за всё время · ", "all time · ") + n + I18n.t(n % 10 === 1 && n % 100 !== 11 ? " неделя" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? " недели" : " недель", n === 1 ? " week" : " weeks") + (n > 0 ? I18n.t(" · в среднем ", " · on average ") + Wellbeing.fmt(Wellbeing.totalSeconds / n) + I18n.t(" в неделю", " a week") : "")
+                dim: true
+            }
+        }
+
+        // a bar a week, newest on the right; a click opens it in the chart above
+        Flickable {
+            id: weeksFlick
+            readonly property real barW: Theme.u * 9
+            readonly property real gap: Theme.u * 2
+            width: Math.min(parent.width, Theme.u * 180)
+            height: Theme.u * 44
+            contentWidth: Math.max(width, page.allWeeks.length * (barW + gap))
+            contentHeight: height
+            flickableDirection: Flickable.HorizontalFlick
+            boundsBehavior: Flickable.StopAtBounds
+            clip: true
+            onContentWidthChanged: contentX = Math.max(0, contentWidth - width)
+            readonly property real barArea: height - Theme.u * 8
+            Row {
+                x: weeksFlick.contentWidth - width
+                height: weeksFlick.height
+                spacing: weeksFlick.gap
+                Repeater {
+                    model: page.allWeeks
+                    delegate: Item {
+                        id: wk
+                        required property var modelData
+                        readonly property bool shown: modelData.offset === page.weekOffset
+                        width: weeksFlick.barW
+                        height: parent.height
+                        Rectangle {
+                            id: wbar
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            y: weeksFlick.barArea - height
+                            width: parent.width * 0.7
+                            height: Math.max(Theme.u, weeksFlick.barArea * wk.modelData.s / page.weeksMax)
+                            radius: Theme.fluentFor(page) ? Theme.u : 0
+                            color: wk.shown ? Theme.accent : page.barColor
+                            opacity: wkHover.containsMouse || wk.shown ? 1 : 0.85
+                        }
+                        PxText {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: wbar.top
+                            anchors.bottomMargin: Theme.u
+                            visible: (wk.shown || wkHover.containsMouse) && wk.modelData.s >= 60
+                            text: Wellbeing.fmt(wk.modelData.s)
+                            kind: "tiny"
+                        }
+                        PxText {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            text: wk.modelData.from.getDate() + "." + String(wk.modelData.from.getMonth() + 1).padStart(2, "0")
+                            kind: "tiny"
+                            dim: !wk.shown
+                        }
+                        MouseArea {
+                            id: wkHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: page.weekOffset = wk.modelData.offset
+                        }
+                    }
+                }
+            }
+        }
+
+        // the weeks as a list, newest first: dates — total — a day on average
+        Column {
+            width: weeksFlick.width
+            spacing: Theme.u * 2
+            Repeater {
+                model: {
+                    const l = page.allWeeks.slice().reverse();
+                    return page.allWeeksList ? l : l.slice(0, 8);
+                }
+                delegate: Item {
+                    id: wrow
+                    required property var modelData
+                    width: parent.width
+                    height: Theme.u * 7
+                    PxText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Theme.u * 50
+                        elide: Text.ElideRight
+                        text: page.weekTitle(wrow.modelData.offset, wrow.modelData.from)
+                        dim: wrow.modelData.offset !== page.weekOffset
+                    }
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: Theme.u * 52
+                        width: Math.max(Theme.u, (wrow.width - Theme.u * 104) * wrow.modelData.s / page.weeksMax)
+                        height: Theme.u * 2
+                        color: wrow.modelData.offset === page.weekOffset ? Theme.accent : page.barColor
+                    }
+                    PxText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        width: Theme.u * 50
+                        horizontalAlignment: Text.AlignRight
+                        text: Wellbeing.fmt(wrow.modelData.s) + (wrow.modelData.used > 0 ? I18n.t(" · ~", " · ~") + Wellbeing.fmt(wrow.modelData.s / wrow.modelData.used) + I18n.t("/день", "/day") : "")
+                        kind: "tiny"
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: page.weekOffset = wrow.modelData.offset
+                    }
+                }
+            }
+            PxButton {
+                visible: page.allWeeks.length > 8
+                text: page.allWeeksList ? I18n.t("Свернуть", "Show less") : I18n.t("Все недели (", "All weeks (") + page.allWeeks.length + ")"
+                compact: true
+                onClicked: page.allWeeksList = !page.allWeeksList
             }
         }
     }
